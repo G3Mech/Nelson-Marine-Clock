@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<style>
+  :root{
+    --ink:#0f2438; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
+    --go:#1c6e4a; --go-dark:#154f37; --pause-blue:#1565a8; --amber:#a5690a; --amber-bg:#fbf1de;
+    --slip-accent:#1c4f72; --slip-bg:#eaf2f7; --yard-accent:#8a5a2b; --yard-bg:#f7f0e4;
+    --danger:#a5342a; --danger-bg:#fbeceb; --cust-bg:#eaf2f7;
+  }
+  *{box-sizing:border-box;}
+  body{ font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; margin:0; background:var(--paper); color:var(--ink); }
+  .topbar{ background:var(--ink); color:var(--white); padding:14px 22px; font-weight:700; font-size:15px; }
+  .tabs{ display:flex; background:var(--white); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tab-btn{ flex:1; padding:13px 0; text-align:center; font-size:13px; font-weight:700; color:var(--slate); background:none; border:none; cursor:pointer; border-bottom:3px solid transparent; min-width:110px; }
+  .tab-btn.active{ color:var(--ink); border-bottom-color:var(--go); }
+  .panel{ display:none; padding:20px 24px 30px; }
+  .panel.show{ display:block; }
+  h2{ font-size:17px; margin:0 0 4px; }
+  .subtext{ color:var(--slate); font-size:13px; margin:0 0 18px; }
+
+  label{ display:block; font-size:12.5px; font-weight:700; color:var(--slate); margin:14px 0 5px; }
+  label:first-of-type{ margin-top:0; }
+  input[type="text"], select, textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit;
+  }
+  textarea{ resize:vertical; line-height:1.5; }
+
+  .btn{ padding:10px 18px; border-radius:10px; font-size:13.5px; font-weight:700; cursor:pointer; border:1px solid var(--line); background:var(--white); color:var(--ink); margin-right:8px; }
+  .btn.primary{ background:var(--go); color:var(--white); border-color:var(--go); }
+  .btn.danger{ background:var(--white); color:var(--danger); border-color:var(--danger); }
+  .btn.small{ padding:5px 11px; font-size:11.5px; border-radius:14px; margin-right:5px; }
+  .btn.big{ width:100%; padding:15px 0; font-size:15px; margin-top:18px; }
+
+  .review-box{ margin-top:18px; border:1.5px solid var(--pause-blue); border-radius:10px; padding:16px 18px; background:#f3f8fb; }
+  .review-box .warn{ color:var(--danger); font-weight:700; font-size:13.5px; background:var(--danger-bg); padding:9px 12px; border-radius:8px; margin-bottom:12px; }
+  .review-box p{ margin:6px 0; font-size:13.5px; }
+  .review-box ul{ margin:6px 0 14px; padding-left:20px; font-size:13.5px; }
+
+  .filters{ display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .filters select, .filters input{ width:auto; padding:8px 10px; font-size:13px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--slate); padding:8px 10px; border-bottom:2px solid var(--line); }
+  td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tr:hover td{ background:#fafcfc; }
+
+  .summary-row{ margin-top:14px; font-size:13px; color:var(--slate); }
+  .summary-row b{ color:var(--ink); }
+
+  .loc-card{ border:1px solid var(--line); border-radius:10px; margin-bottom:16px; overflow:hidden; }
+  .loc-head{ padding:12px 16px; display:flex; justify-content:space-between; align-items:center; border-left:4px solid var(--slate); }
+  .loc-head.slip{ border-left-color:var(--slip-accent); background:var(--slip-bg); }
+  .loc-head.yard{ border-left-color:var(--yard-accent); background:var(--yard-bg); }
+  .loc-head.customer{ border-left-color:var(--pause-blue); background:var(--cust-bg); }
+  .loc-title{ font-weight:700; font-size:14.5px; }
+  .loc-sub{ font-size:12px; color:var(--slate); margin-top:2px; line-height:1.5; }
+  .loc-body{ padding:12px 16px; }
+  .task-line{ display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px dashed var(--line); font-size:13px; }
+  .task-line:last-child{ border-bottom:none; }
+  .task-line .name{ flex:1; }
+  .status-tag{ font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:8px; }
+  .status-tag.pending{ background:var(--paper); color:var(--slate); }
+  .status-tag.active{ background:var(--go); color:var(--white); }
+  .status-tag.paused{ background:var(--amber-bg); color:var(--amber); }
+  .status-tag.done{ background:#e3f2ea; color:var(--go); }
+
+  .add-row{ display:flex; gap:8px; margin-top:10px; }
+  .add-row input{ flex:1; }
+
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:4px; }
+  .empty-note{ color:var(--slate); font-size:13px; padding:10px 0; }
+  .loading{ color:var(--slate); font-size:13px; padding:20px 0; }
+  hr.divider{ border:none; border-top:1px solid var(--line); margin:26px 0; }
+</style>
+</head>
+<body>
+
+<div class="topbar">Nelson Marine — Admin Dashboard</div>
+<div class="tabs">
+  <button class="tab-btn active" data-tab="assign">Assign Work Order</button>
+  <button class="tab-btn" data-tab="log">Today's Log</button>
+  <button class="tab-btn" data-tab="boats">Boats &amp; Slips</button>
+  <button class="tab-btn" data-tab="customers">Customers</button>
+  <button class="tab-btn" data-tab="employees">Employees</button>
+</div>
+
+<!-- ASSIGN WORK ORDER -->
+<div class="panel show" id="panel-assign">
+  <h2>Assign a Work Order</h2>
+  <p class="subtext">Pick the customer and boat (or add new ones on the spot), pick the slip, then paste the task list — one line per task. Review before it saves.</p>
+
+  <label>Customer</label>
+  <select id="assignCustomerSelect" onchange="onCustomerChange()"></select>
+  <div id="newCustomerFields" style="display:none;padding:12px;background:var(--cust-bg);border-radius:8px;margin-top:8px;">
+    <label>Customer Name</label><input type="text" id="newCustName">
+    <label>Phone</label><input type="text" id="newCustPhone">
+    <label>Email</label><input type="text" id="newCustEmail">
+    <label>Address</label><input type="text" id="newCustAddress">
+  </div>
+
+  <label>Boat</label>
+  <select id="assignBoatSelect" onchange="onBoatChange()"></select>
+  <div id="newBoatFields" style="display:none;padding:12px;background:var(--cust-bg);border-radius:8px;margin-top:8px;">
+    <label>Boat Model</label><input type="text" id="newBoatModel" placeholder="e.g. Sea Ray 240 Sundancer">
+    <label>Boat Name (optional)</label><input type="text" id="newBoatName" placeholder="e.g. Salt Life">
+  </div>
+
+  <label>Slip / Stand</label>
+  <select id="assignLoc"></select>
+
+  <label>Work Order #</label>
+  <input type="text" id="assignWO" placeholder="e.g. WO #4471">
+
+  <label>Tasks — one per line</label>
+  <textarea id="assignTasks" rows="7" placeholder="Impeller replacement
+Oil &amp; filter change
+Check shaft packing"></textarea>
+
+  <button class="btn primary big" onclick="reviewAssign()">Review &amp; Save</button>
+  <div id="assignReview"></div>
+</div>
+
+<!-- LOG -->
+<div class="panel" id="panel-log">
+  <h2>Hours Log</h2>
+  <div class="filters">
+    <input type="date" id="dateFilter">
+    <select id="empFilter"><option value="">All employees</option></select>
+    <select id="locFilter"><option value="">All boats</option></select>
+  </div>
+  <div id="logTableWrap" class="loading">Loading…</div>
+  <div class="summary-row" id="summaryRow"></div>
+</div>
+
+<!-- BOATS & SLIPS -->
+<div class="panel" id="panel-boats">
+  <h2>Boats Currently Assigned</h2>
+  <p class="subtext">Spot-fix a task here. To swap in a whole new boat and task list, use "Assign Work Order" instead.</p>
+  <div id="boatsWrap" class="loading">Loading…</div>
+  <hr class="divider">
+  <h2>Add a New Physical Slip / Stand</h2>
+  <p class="subtext">For permanently expanding the yard — a new dock or stand that didn't exist before. Day-to-day boat changes belong on "Assign Work Order."</p>
+  <div class="form-grid">
+    <input type="text" id="newLocId" placeholder="ID (e.g. slip23 — no spaces)">
+    <select id="newLocType"><option value="slip">Slip — In Water</option><option value="yard">Yard — On Stands</option></select>
+    <input type="text" id="newLocLabel" placeholder="Label (e.g. Slip 23 — In Water)">
+  </div>
+  <button class="btn primary" style="margin-top:10px;" onclick="addLocation()">Add Slip / Stand</button>
+</div>
+
+<!-- CUSTOMERS -->
+<div class="panel" id="panel-customers">
+  <h2>Customers</h2>
+  <p class="subtext">Each customer can have more than one boat on file — add as many as they own underneath their entry.</p>
+  <div id="customersWrap" class="loading">Loading…</div>
+  <hr class="divider">
+  <h2>Add a New Customer</h2>
+  <div class="form-grid">
+    <input type="text" id="custName" placeholder="Customer name">
+    <input type="text" id="custPhone" placeholder="Phone number">
+    <input type="text" id="custEmail" placeholder="Email">
+    <input type="text" id="custAddress" placeholder="Address">
+  </div>
+  <button class="btn primary" style="margin-top:10px;" onclick="addCustomerTab()">Add Customer</button>
+</div>
+
+<!-- EMPLOYEES -->
+<div class="panel" id="panel-employees">
+  <h2>Employees</h2>
+  <div id="empWrap" class="loading">Loading…</div>
+  <div class="add-row" style="margin-top:16px;">
+    <input type="text" id="newEmpName" placeholder="New employee name">
+    <button class="btn primary" onclick="addEmployee()">Add</button>
+  </div>
+</div>
+
+<script>
+let DATA = { locations: [], tasks: [], employees: [], entries: [], customers: [], boats: [] };
+
+function run(fnName, ...args){
+  return new Promise((resolve, reject)=>{
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fnName](...args);
+  });
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('show'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('show');
+  });
+});
+
+async function loadAll(){
+  DATA = await run('adminGetAllData');
+  populateFilters();
+  populateAssignCustomerSelect();
+  populateAssignLocSelect();
+  renderLog();
+  renderBoats();
+  renderCustomers();
+  renderEmployees();
+}
+
+// ---------- lookups ----------
+function boatById(id){ return DATA.boats.find(b=>b.id===id); }
+function customerById(id){ return DATA.customers.find(c=>c.id===id); }
+function describeLocation(loc){
+  const boat = boatById(loc.boatId);
+  if (!boat) return { customerName:'— empty —', model:'', boatName:'' };
+  const cust = customerById(boat.customerId);
+  return { customerName: cust ? cust.name : '—', model: boat.model, boatName: boat.boatName };
+}
+
+function populateFilters(){
+  const empFilter = document.getElementById('empFilter');
+  const locFilter = document.getElementById('locFilter');
+  empFilter.innerHTML = '<option value="">All employees</option>' +
+    DATA.employees.map(n=>'<option value="'+n+'">'+n+'</option>').join('');
+  locFilter.innerHTML = '<option value="">All boats</option>' +
+    DATA.locations.map(l=>{ const d=describeLocation(l); return '<option value="'+l.id+'">'+d.customerName+' — '+d.model+'</option>'; }).join('');
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('dateFilter').value = today;
+}
+document.getElementById('dateFilter').addEventListener('change', renderLog);
+document.getElementById('empFilter').addEventListener('change', renderLog);
+document.getElementById('locFilter').addEventListener('change', renderLog);
+
+function fmtDT(iso){
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+// ================== ASSIGN WORK ORDER ==================
+
+function populateAssignCustomerSelect(){
+  const sel = document.getElementById('assignCustomerSelect');
+  sel.innerHTML = '<option value="">— Select customer —</option>' +
+    DATA.customers.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('') +
+    '<option value="__new__">+ New Customer</option>';
+}
+function onCustomerChange(){
+  const val = document.getElementById('assignCustomerSelect').value;
+  document.getElementById('newCustomerFields').style.display = (val === '__new__') ? 'block' : 'none';
+  populateAssignBoatSelect(val);
+}
+function populateAssignBoatSelect(customerId){
+  const sel = document.getElementById('assignBoatSelect');
+  document.getElementById('newBoatFields').style.display = 'none';
+  if (!customerId){
+    sel.innerHTML = '<option value="">— Select a customer first —</option>';
+    return;
+  }
+  if (customerId === '__new__'){
+    sel.innerHTML = '<option value="__new__" selected>+ New Boat</option>';
+    document.getElementById('newBoatFields').style.display = 'block';
+    return;
+  }
+  const boats = DATA.boats.filter(b => b.customerId === customerId);
+  sel.innerHTML = '<option value="">— Select boat —</option>' +
+    boats.map(b=>'<option value="'+b.id+'">'+b.model+(b.boatName?' — "'+b.boatName+'"':'')+'</option>').join('') +
+    '<option value="__new__">+ New Boat</option>';
+}
+function onBoatChange(){
+  const val = document.getElementById('assignBoatSelect').value;
+  document.getElementById('newBoatFields').style.display = (val === '__new__') ? 'block' : 'none';
+}
+
+function populateAssignLocSelect(){
+  const sel = document.getElementById('assignLoc');
+  const prevVal = sel.value;
+  sel.innerHTML = DATA.locations.map(l => {
+    const d = describeLocation(l);
+    return '<option value="'+l.id+'">'+l.label+' — currently '+d.customerName+(d.model?' / '+d.model:'')+'</option>';
+  }).join('');
+  if (prevVal) sel.value = prevVal;
+}
+
+function reviewAssign(){
+  const locId = document.getElementById('assignLoc').value;
+  const custSel = document.getElementById('assignCustomerSelect').value;
+  const boatSel = document.getElementById('assignBoatSelect').value;
+  const wo = document.getElementById('assignWO').value.trim();
+  const lines = document.getElementById('assignTasks').value.split('\n').map(s=>s.trim()).filter(Boolean);
+
+  if (!locId){ alert('Pick a slip or stand first.'); return; }
+  if (!custSel){ alert('Pick or add a customer.'); return; }
+  if (!boatSel){ alert('Pick or add a boat.'); return; }
+  if (!wo){ alert('Work order # is required.'); return; }
+  if (lines.length === 0){ alert('Add at least one task, one per line.'); return; }
+
+  let custName;
+  if (custSel === '__new__'){
+    custName = document.getElementById('newCustName').value.trim();
+    if (!custName){ alert('The new customer needs at least a name.'); return; }
+  } else {
+    custName = customerById(custSel).name;
+  }
+
+  let boatModel, boatName;
+  if (boatSel === '__new__'){
+    boatModel = document.getElementById('newBoatModel').value.trim();
+    boatName = document.getElementById('newBoatName').value.trim();
+    if (!boatModel){ alert('The new boat needs at least a model.'); return; }
+  } else {
+    const b = boatById(boatSel);
+    boatModel = b.model; boatName = b.boatName;
+  }
+
+  const loc = DATA.locations.find(l => l.id === locId);
+  const unfinished = DATA.tasks.filter(t => t.locationId === locId && t.status !== 'done');
+  let warnHtml = '';
+  if (unfinished.length > 0){
+    const d = describeLocation(loc);
+    warnHtml = '<div class="warn">This slip still has ' + unfinished.length + ' unfinished task(s) for ' +
+      d.customerName + ' (' + d.model + '). Saving will remove them.</div>';
+  }
+
+  document.getElementById('assignReview').innerHTML =
+    '<div class="review-box">' + warnHtml +
+    '<p><b>' + loc.label + '</b> will be set to:</p>' +
+    '<p>' + custName + ' — ' + boatModel + (boatName ? ' "' + boatName + '"' : '') + ' (' + wo + ')</p>' +
+    '<p>' + lines.length + ' task(s):</p>' +
+    '<ul>' + lines.map(l => '<li>' + l + '</li>').join('') + '</ul>' +
+    '<button class="btn primary big" onclick="confirmAssign()">Yes — Save This Work Order</button>' +
+    '<button class="btn" style="width:100%;margin-top:8px;" onclick="cancelAssign()">Cancel, Go Back</button>' +
+    '</div>';
+}
+
+async function confirmAssign(){
+  const locationId = document.getElementById('assignLoc').value;
+  const workOrder = document.getElementById('assignWO').value.trim();
+  const taskLines = document.getElementById('assignTasks').value.split('\n').map(s=>s.trim()).filter(Boolean);
+
+  let customerId = document.getElementById('assignCustomerSelect').value;
+  if (customerId === '__new__'){
+    const res = await run('adminAddCustomer', {
+      name: document.getElementById('newCustName').value.trim(),
+      phone: document.getElementById('newCustPhone').value.trim(),
+      email: document.getElementById('newCustEmail').value.trim(),
+      address: document.getElementById('newCustAddress').value.trim()
+    });
+    customerId = res.id;
+  }
+
+  let boatId = document.getElementById('assignBoatSelect').value;
+  if (boatId === '__new__'){
+    const res = await run('adminAddBoat', {
+      customerId: customerId,
+      model: document.getElementById('newBoatModel').value.trim(),
+      boatName: document.getElementById('newBoatName').value.trim()
+    });
+    boatId = res.id;
+  }
+
+  await run('adminAssignWorkOrder', { locationId, boatId, workOrder, taskLines });
+
+  ['newCustName','newCustPhone','newCustEmail','newCustAddress','newBoatModel','newBoatName','assignWO','assignTasks'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('newCustomerFields').style.display = 'none';
+  document.getElementById('newBoatFields').style.display = 'none';
+  document.getElementById('assignReview').innerHTML = '';
+  await loadAll();
+  alert('Saved — the slip is set up with the new work order.');
+}
+function cancelAssign(){ document.getElementById('assignReview').innerHTML = ''; }
+
+// ================== LOG ==================
+
+function renderLog(){
+  const dateVal = document.getElementById('dateFilter').value;
+  const empVal = document.getElementById('empFilter').value;
+  const locVal = document.getElementById('locFilter').value;
+
+  let rows = DATA.entries.slice();
+  if (dateVal) rows = rows.filter(r => r.segStart && String(r.segStart).slice(0,10) === dateVal);
+  if (empVal) rows = rows.filter(r => r.employee === empVal);
+  if (locVal) rows = rows.filter(r => r.locationId === locVal);
+  rows.sort((a,b)=> new Date(b.segStart) - new Date(a.segStart));
+
+  const wrap = document.getElementById('logTableWrap');
+  if (rows.length === 0){
+    wrap.innerHTML = '<div class="empty-note">No entries match these filters.</div>';
+    document.getElementById('summaryRow').innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = '<table><thead><tr>' +
+    '<th>Employee</th><th>Boat</th><th>Task</th><th>Start</th><th>End</th><th>Min</th><th></th>' +
+    '</tr></thead><tbody>' +
+    rows.map(r => '<tr>' +
+      '<td>'+r.employee+'</td><td>'+r.customer+' — '+r.boat+'</td><td>'+r.taskName+'</td>' +
+      '<td>'+fmtDT(r.segStart)+'</td><td>'+fmtDT(r.segEnd)+'</td><td>'+r.durationMin+'</td>' +
+      '<td><button class="btn small" onclick="editEntry(\''+r.id+'\')">Edit</button>' +
+      '<button class="btn small danger" onclick="deleteEntry(\''+r.id+'\')">Delete</button></td></tr>').join('') +
+    '</tbody></table>';
+
+  const totals = {};
+  rows.forEach(r => { totals[r.employee] = (totals[r.employee]||0) + Number(r.durationMin || 0); });
+  document.getElementById('summaryRow').innerHTML = 'Totals shown: ' +
+    Object.entries(totals).map(([n,m]) => '<b>'+n+'</b>: '+m+' min').join(' &nbsp;·&nbsp; ');
+}
+async function editEntry(id){
+  const entry = DATA.entries.find(e => e.id === id);
+  const newEmp = prompt('Employee:', entry.employee); if (newEmp === null) return;
+  const newStart = prompt('Start (YYYY-MM-DDTHH:MM):', entry.segStart ? entry.segStart.slice(0,16) : ''); if (newStart === null) return;
+  const newEnd = prompt('End (YYYY-MM-DDTHH:MM):', entry.segEnd ? entry.segEnd.slice(0,16) : ''); if (newEnd === null) return;
+  const mins = Math.round((new Date(newEnd) - new Date(newStart)) / 60000);
+  await run('adminEditEntry', { id, employee:newEmp, segStart:newStart, segEnd:newEnd, durationMin:mins });
+  await loadAll();
+}
+async function deleteEntry(id){
+  if (!confirm('Delete this time entry? This cannot be undone from here.')) return;
+  await run('adminDeleteEntry', id);
+  await loadAll();
+}
+
+// ================== BOATS & SLIPS ==================
+
+function renderBoats(){
+  const wrap = document.getElementById('boatsWrap');
+  wrap.innerHTML = DATA.locations.map(loc => {
+    const d = describeLocation(loc);
+    const tasks = DATA.tasks.filter(t => t.locationId === loc.id).sort((a,b)=> a.order - b.order);
+    return '<div class="loc-card">' +
+      '<div class="loc-head '+loc.type+'">' +
+        '<div><div class="loc-title">'+loc.label+'</div>' +
+        '<div class="loc-sub">'+d.customerName+(d.model?' — '+d.model:'')+(d.boatName?' "'+d.boatName+'"':'')+' · '+(loc.workOrder||'—')+'</div></div>' +
+        '<div><button class="btn small danger" onclick="deleteLocation(\''+loc.id+'\')">Remove Slip</button></div>' +
+      '</div>' +
+      '<div class="loc-body">' +
+        (tasks.length === 0 ? '<div class="empty-note">No tasks assigned yet.</div>' : '') +
+        tasks.map(t => '<div class="task-line">' +
+          '<span class="name">'+t.name+'<span class="status-tag '+t.status+'">'+t.status+'</span></span>' +
+          '<span>' +
+            '<button class="btn small" onclick="moveTask(\''+t.id+'\',\'up\')">↑</button>' +
+            '<button class="btn small" onclick="moveTask(\''+t.id+'\',\'down\')">↓</button>' +
+            '<button class="btn small" onclick="editTask(\''+t.id+'\')">Edit</button>' +
+            '<button class="btn small danger" onclick="deleteTask(\''+t.id+'\')">Delete</button>' +
+          '</span></div>').join('') +
+      '</div></div>';
+  }).join('');
+}
+async function addLocation(){
+  const id = document.getElementById('newLocId').value.trim();
+  const type = document.getElementById('newLocType').value;
+  const label = document.getElementById('newLocLabel').value.trim();
+  if (!id || !label){ alert('ID and Label are required.'); return; }
+  if (DATA.locations.some(l => l.id === id)){ alert('That ID is already in use — pick a different one.'); return; }
+  await run('adminAddLocation', { id, type, label });
+  ['newLocId','newLocLabel'].forEach(f => document.getElementById(f).value = '');
+  await loadAll();
+}
+async function deleteLocation(id){
+  if (!confirm('Remove this slip/stand entirely? This is for permanently removing a dock, not for clearing out a finished boat.')) return;
+  await run('adminDeleteLocation', id);
+  await loadAll();
+}
+async function editTask(id){
+  const task = DATA.tasks.find(t => t.id === id);
+  const name = prompt('Task name:', task.name); if (name === null) return;
+  await run('adminUpdateTask', { id, name });
+  await loadAll();
+}
+async function deleteTask(id){
+  if (!confirm('Delete this task?')) return;
+  await run('adminDeleteTask', id);
+  await loadAll();
+}
+async function moveTask(id, dir){
+  await run('adminMoveTask', id, dir);
+  await loadAll();
+}
+
+// ================== CUSTOMERS & BOATS ==================
+
+function renderCustomers(){
+  const wrap = document.getElementById('customersWrap');
+  if (DATA.customers.length === 0){ wrap.innerHTML = '<div class="empty-note">No customers yet.</div>'; return; }
+  wrap.innerHTML = DATA.customers.map(c=>{
+    const boats = DATA.boats.filter(b=>b.customerId===c.id);
+    return '<div class="loc-card">' +
+      '<div class="loc-head customer">' +
+        '<div><div class="loc-title">'+c.name+'</div>' +
+        '<div class="loc-sub">'+(c.phone||'—')+' · '+(c.email||'—')+'<br>'+(c.address||'—')+'</div></div>' +
+        '<div><button class="btn small" onclick="editCustomer(\''+c.id+'\')">Edit</button>' +
+        '<button class="btn small danger" onclick="deleteCustomer(\''+c.id+'\')">Delete</button></div>' +
+      '</div>' +
+      '<div class="loc-body">' +
+        (boats.length===0 ? '<div class="empty-note">No boats on file.</div>' : '') +
+        boats.map(b=>'<div class="task-line"><span class="name">'+b.model+(b.boatName?' — "'+b.boatName+'"':'')+'</span>' +
+          '<span><button class="btn small" onclick="editBoat(\''+b.id+'\')">Edit</button>' +
+          '<button class="btn small danger" onclick="deleteBoat(\''+b.id+'\')">Delete</button></span></div>').join('') +
+        '<div class="add-row">' +
+          '<input type="text" id="qNewBoatModel-'+c.id+'" placeholder="Boat model">' +
+          '<input type="text" id="qNewBoatName-'+c.id+'" placeholder="Boat name (optional)">' +
+          '<button class="btn primary" onclick="addBoatToCustomer(\''+c.id+'\')">+ Add Boat</button>' +
+        '</div>' +
+      '</div></div>';
+  }).join('');
+}
+async function addCustomerTab(){
+  const name = document.getElementById('custName').value.trim();
+  if (!name){ alert('Customer name is required.'); return; }
+  await run('adminAddCustomer', {
+    name,
+    phone: document.getElementById('custPhone').value.trim(),
+    email: document.getElementById('custEmail').value.trim(),
+    address: document.getElementById('custAddress').value.trim()
+  });
+  ['custName','custPhone','custEmail','custAddress'].forEach(f => document.getElementById(f).value = '');
+  await loadAll();
+}
+async function editCustomer(id){
+  const c = customerById(id);
+  const name = prompt('Customer name:', c.name); if (name===null) return;
+  const phone = prompt('Phone:', c.phone); if (phone===null) return;
+  const email = prompt('Email:', c.email); if (email===null) return;
+  const address = prompt('Address:', c.address); if (address===null) return;
+  await run('adminUpdateCustomer', { id, name, phone, email, address });
+  await loadAll();
+}
+async function deleteCustomer(id){
+  if (!confirm('Delete this customer? (Blocked if they still have boats on file.)')) return;
+  const res = await run('adminDeleteCustomer', id);
+  if (res && res.error){ alert(res.error); return; }
+  await loadAll();
+}
+async function addBoatToCustomer(customerId){
+  const model = document.getElementById('qNewBoatModel-'+customerId).value.trim();
+  const boatName = document.getElementById('qNewBoatName-'+customerId).value.trim();
+  if (!model){ alert('Boat model is required.'); return; }
+  await run('adminAddBoat', { customerId, model, boatName });
+  await loadAll();
+}
+async function editBoat(id){
+  const b = boatById(id);
+  const model = prompt('Boat model:', b.model); if (model===null) return;
+  const boatName = prompt('Boat name:', b.boatName); if (boatName===null) return;
+  await run('adminUpdateBoat', { id, model, boatName });
+  await loadAll();
+}
+async function deleteBoat(id){
+  if (!confirm('Delete this boat? (Blocked if it is currently assigned to a slip/stand.)')) return;
+  const res = await run('adminDeleteBoat', id);
+  if (res && res.error){ alert(res.error); return; }
+  await loadAll();
+}
+
+// ================== EMPLOYEES ==================
+
+function renderEmployees(){
+  const wrap = document.getElementById('empWrap');
+  wrap.innerHTML = '<table><tbody>' +
+    DATA.employees.map(n => '<tr><td>'+n+'</td><td style="text-align:right;">' +
+      '<button class="btn small danger" onclick="deleteEmployee(\''+n+'\')">Remove</button></td></tr>').join('') +
+    '</tbody></table>';
+}
+async function addEmployee(){
+  const input = document.getElementById('newEmpName');
+  const name = input.value.trim();
+  if (!name) return;
+  if (DATA.employees.includes(name)){ alert('That name is already on the list.'); return; }
+  await run('adminAddEmployee', name);
+  input.value = '';
+  await loadAll();
+}
+async function deleteEmployee(name){
+  if (!confirm('Remove ' + name + ' from the employee list?')) return;
+  await run('adminDeleteEmployee', name);
+  await loadAll();
+}
+
+loadAll();
+</script>
+</body>
+</html>
