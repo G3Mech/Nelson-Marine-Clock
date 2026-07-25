@@ -246,7 +246,7 @@
 // Paste the deployed Apps Script Web App URL here (Extensions > Apps Script
 // > Deploy > New deployment > Web app > Execute as: Me > Who has access:
 // Anyone > Deploy, then copy the URL ending in /exec).
-const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+const WEBAPP_URL = 'PASTE_YOUR_DEPLOYED_WEB_APP_URL_HERE';
 
 // An NFC tag at a physical slip links to this page with ?slip=slip14 (etc)
 // so tapping it jumps straight to that slip's boat. Yard boats have no
@@ -646,8 +646,20 @@ function renderChecklist(){
     const noteLabel = t.note ? '&#128221; Notes saved' : '+ Add notes';
     const noteCls = t.note ? 'has-note' : '';
     const dragHandle = '<span class="drag-handle" data-handle="'+t.taskId+'"><span></span><span></span><span></span></span>';
+    const isTimed = t.billMode !== 'complete'; // missing billMode (older tasks) defaults to timed, same as before this feature existed
 
     if (t.status === 'done'){
+      if (!isTimed){
+        return '<div class="task-row done" data-rowid="'+t.taskId+'">' +
+          '<div class="task-row-main">'+dragHandle+
+            '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
+            '<div class="task-sub">Completed</div></div>'+
+            '<span class="check-static">&#10003;</span></div>'+
+          '<div class="task-row-secondary">'+
+            '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+            '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
+          '</div></div>';
+      }
       const mins = Math.round(segMs(t)/60000);
       const sessionNote = (t._segments||[]).length>1 ? (' · '+t._segments.length+' sessions') : '';
       return '<div class="task-row done" data-rowid="'+t.taskId+'">' +
@@ -658,6 +670,17 @@ function renderChecklist(){
         '<div class="task-row-secondary">'+
           '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
           '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
+        '</div></div>';
+    }
+    if (!isTimed){
+      // Completion-billed task: a plain checkbox, no timer, no pause state at all
+      return '<div class="task-row pending" data-rowid="'+t.taskId+'">' +
+        '<div class="task-row-main">'+dragHandle+
+          '<div class="task-main-content"><div class="task-name">'+t.name+'</div></div>'+
+          '<button class="pill-btn start" data-act="check" data-task="'+t.taskId+'">Mark Done</button></div>'+
+        '<div class="task-row-secondary">'+
+          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+          '<span></span>'+
         '</div></div>';
     }
     if (t.status === 'paused'){
@@ -698,8 +721,20 @@ function handleAction(action, taskId){
   if (!currentUser){ overlay.style.display = 'flex'; return; }
 
   if (action === 'start' || action === 'resume'){ if (activeTaskId) return; beginSegment(task); }
+  else if (action === 'check'){ completeSimpleTask(taskId); }
   else if (action === 'ask'){ openConfirm(taskId, task.name); }
   else if (action === 'undo'){ undoComplete(taskId); }
+}
+// Completion-billed tasks skip the timer/confirm flow entirely -- tapping
+// "Mark Done" finishes it immediately, same as ticking a checkbox. There's
+// no time to log, so this doesn't create an Entries row the way finishing
+// a timed task does.
+function completeSimpleTask(taskId){
+  const task = findTask(taskId); if (!task) return;
+  task.status = 'done';
+  saveLocalState();
+  enqueue('updateTask', { taskId, status: 'done' });
+  playDoneSound(); renderView();
 }
 
 function beginSegment(task){
@@ -748,9 +783,10 @@ function completeTask(taskId){
 }
 function undoComplete(taskId){
   const task = findTask(taskId); if (!task) return;
-  task.status='paused';
+  const isTimed = task.billMode !== 'complete';
+  task.status = isTimed ? 'paused' : 'pending';
   saveLocalState();
-  enqueue('updateTask', { taskId, status: 'paused' });
+  enqueue('updateTask', { taskId, status: task.status });
   renderView();
 }
 
