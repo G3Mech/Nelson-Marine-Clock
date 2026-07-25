@@ -26,7 +26,7 @@
   .demo-strip{ background:var(--deep);color:#cfe0ea;font-size:12px;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:.02em; }
   .demo-strip button{ background:none;border:1px solid #385065;color:#cfe0ea;font-size:11px;padding:4px 9px;border-radius:20px;cursor:pointer; }
   .demo-strip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;position:relative;top:-1px;}
-  .dot.on{background:#4fd18b;} .dot.off{background:#e0705a;}
+  .dot.on{background:#4fd18b;} .dot.off{background:#e0705a;} .dot.connecting{background:#a9b7c0;}
 
   .whoami{ display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate);padding:12px 20px 0; }
   .whoami button{border:none;background:none;color:var(--slate);text-decoration:underline;font-size:12px;padding:0;cursor:pointer;}
@@ -150,8 +150,11 @@
 <div class="frame">
 
   <div class="demo-strip">
-    <span><span class="dot on" id="dot"></span><span id="netlabel">Online</span></span>
+    <span><span class="dot connecting" id="dot"></span><span id="netlabel">Connecting…</span></span>
     <button id="toggleNet">Force offline (testing)</button>
+  </div>
+  <div class="setup-warning" id="syncError">
+    <button onclick="clearPendingChanges()" style="float:right;background:none;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;">Clear stuck items</button>
   </div>
   <div class="setup-warning" id="setupWarning">
     This page isn't connected to the marina system yet — set WEBAPP_URL near the top of the code.
@@ -163,7 +166,10 @@
   </div>
 
   <header>
-    <div class="yard">Nelson Marine · Job Clock</div>
+    <div class="yard" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Nelson Marine · Job Clock</span>
+      <a href="tag-urls.html" style="color:var(--slate);text-transform:none;letter-spacing:normal;font-weight:600;font-size:12px;text-decoration:underline;">Tag URL Tool</a>
+    </div>
     <select id="locSelect">
       <option value="">Loading…</option>
     </select>
@@ -378,16 +384,37 @@ function enqueue(action, body){
 // before it ever reaches the script. Sending it as text/plain keeps the
 // request in the "simple request" category the browser doesn't preflight
 // -- doPost still gets the same JSON string in e.postData.contents either way.
+// Apps Script Web Apps don't handle a CORS preflight (OPTIONS) request, so
+// a POST with Content-Type: application/json gets blocked by the browser
+// before it ever reaches the script. Sending it as text/plain keeps the
+// request in the "simple request" category the browser doesn't preflight
+// -- doPost still gets the same JSON string in e.postData.contents either way.
 async function postToSheet(action, body){
-  const res = await fetch(WEBAPP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(Object.assign({ action }, body))
-  });
+  let res;
+  try{
+    res = await fetch(WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ action }, body))
+    });
+  } catch(networkErr){
+    // fetch itself never completed -- genuinely no connection right now
+    const e = new Error(networkErr.message || 'Network error');
+    e.isNetworkError = true;
+    throw e;
+  }
   const json = await res.json();
-  if (json && json.error) throw new Error(json.error);
+  if (json && json.error){
+    // the server was reached fine, but rejected this specific request
+    // (e.g. it references a task/boat that no longer exists) -- retrying
+    // this exact item will never succeed, so it's not a connectivity issue
+    const e = new Error(json.error);
+    e.isServerError = true;
+    throw e;
+  }
   return json;
 }
+let lastSyncError = null;
 let flushing = false;
 async function flushQueue(){
   if (flushing) return;
@@ -407,10 +434,23 @@ async function flushQueue(){
         }
         q.shift();
         saveQueue(q);
+        lastSyncError = null;
       } catch(err){
-        console.warn('Sync failed, will retry:', err);
-        markOffline();
-        break;
+        if (err.isNetworkError){
+          // can't reach the server at all right now -- stop here and
+          // leave this item queued to retry once we're back online
+          lastSyncError = null;
+          markOffline();
+          break;
+        }
+        // the server rejected this one specific item -- drop it and keep
+        // going, rather than letting a single bad item block every other
+        // queued change forever (this used to look identical to "offline"
+        // and never recover on its own)
+        console.warn('Dropping a queued action the server rejected:', item, err.message);
+        lastSyncError = item.action + ' failed permanently and was dropped: ' + err.message;
+        q.shift();
+        saveQueue(q);
       }
     }
   } finally {
@@ -442,6 +482,21 @@ function updateConnBadge(){
   netlabel.textContent = offline
     ? ('Offline' + (q.length ? ' — ' + q.length + ' change(s) waiting' : ''))
     : (q.length ? 'Syncing…' : 'Online');
+  const errEl = document.getElementById('syncError');
+  if (lastSyncError){
+    errEl.textContent = lastSyncError + ' ';
+    errEl.classList.add('show');
+  } else {
+    errEl.classList.remove('show');
+  }
+}
+async function clearPendingChanges(){
+  const q = loadQueue();
+  if (q.length === 0 && !lastSyncError){ alert('Nothing is stuck right now.'); return; }
+  if (!confirm('This will permanently discard ' + q.length + ' unsynced change(s) that haven\'t reached the office system. Only do this if syncing is stuck. Continue?')) return;
+  saveQueue([]);
+  lastSyncError = null;
+  updateConnBadge();
 }
 function markOffline(){ isOnline = false; updateConnBadge(); }
 window.addEventListener('online', ()=>{ isOnline = true; updateConnBadge(); flushQueue(); });
