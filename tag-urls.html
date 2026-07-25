@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nelson Marine — NFC Tag URLs</title>
+<style>
+  :root{
+    --ink:#0f2438; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
+    --go:#1c6e4a; --go-dark:#154f37; --slip-accent:#1c4f72; --slip-bg:#eaf2f7;
+    --yard-accent:#8a5a2b; --yard-bg:#f7f0e4; --danger:#a5342a; --danger-bg:#fbeceb;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    margin:0; background:var(--paper); color:var(--ink);
+  }
+  .wrap{ max-width:640px; margin:0 auto; padding:24px 20px 60px; }
+  h1{ font-size:19px; margin:0 0 6px; }
+  p.subtext{ color:var(--slate); font-size:13.5px; margin:0 0 16px; line-height:1.5; }
+  .note{ background:var(--slip-bg); border-radius:8px; padding:12px 14px; font-size:13px; color:var(--ink); margin-bottom:18px; line-height:1.5; }
+  #searchBox{
+    width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:9px;
+    font-size:15px; font-family:inherit; margin-bottom:16px;
+  }
+  #status{ color:var(--slate); font-size:13px; padding:20px 0; text-align:center; }
+  .tag-row{
+    display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; margin-bottom:7px; background:var(--white);
+  }
+  .tag-row.empty{ border-style:dashed; }
+  .tag-row.yard-noresult{ border-color:var(--yard-accent); background:var(--yard-bg); }
+  .tag-label{ font-weight:700; color:var(--slip-accent); min-width:64px; flex-shrink:0; font-size:13.5px; }
+  .tag-row.yard-noresult .tag-label{ color:var(--yard-accent); }
+  .tag-info{ flex:1; min-width:0; }
+  .tag-info .who{ font-size:13.5px; font-weight:600; }
+  .tag-info .url{ font-size:11.5px; color:var(--slate); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .no-tag-note{ font-size:12px; color:var(--yard-accent); font-weight:600; flex-shrink:0; }
+  .copy-btn{
+    flex-shrink:0; padding:7px 13px; border-radius:7px; font-size:12.5px; font-weight:700; cursor:pointer;
+    border:1px solid var(--go); background:var(--white); color:var(--go);
+  }
+  .copy-btn.copied{ background:var(--go); color:var(--white); }
+  .copy-btn:disabled{ opacity:.4; cursor:default; }
+  details.advanced{ margin-top:22px; border:1px solid var(--line); border-radius:10px; padding:2px 14px; }
+  details.advanced summary{ cursor:pointer; font-weight:700; font-size:12.5px; padding:9px 0; color:var(--slate); }
+  details.advanced label{ display:block; font-size:12px; font-weight:700; color:var(--slate); margin:10px 0 5px; }
+  details.advanced input[type="text"]{ width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:8px; font-size:13.5px; font-family:inherit; margin-bottom:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 style="display:flex;justify-content:space-between;align-items:center;">
+    <span>NFC Tag URLs</span>
+    <a href="clock-prototype.html" style="color:var(--slate);font-size:12px;font-weight:600;text-decoration:underline;">← Job Clock</a>
+  </h1>
+  <p class="subtext">Search by slip number, boat model, boat name, or customer name to find the exact URL for a tag. Copy it, then paste into a tag-writing app (e.g. "NFC Tools" on iPhone or Android) to program the tag — this page doesn't write tags itself, just gives you the exact text to write.</p>
+  <div class="note">Writing to tags directly from a web page only works on Android Chrome, not iPhone at all — that's why this is copy/paste into a separate app rather than built in here.</div>
+
+  <input type="text" id="searchBox" placeholder="Search: slip number, boat model, boat name, or customer…" oninput="renderList()">
+  <div id="status">Loading current slip &amp; boat data…</div>
+  <div id="list"></div>
+
+  <details class="advanced">
+    <summary>Advanced: site URL</summary>
+    <label>Site base URL (where clock-prototype.html lives)</label>
+    <input type="text" id="baseUrl" oninput="renderList()">
+  </details>
+</div>
+
+<script>
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+let DATA = null;
+
+document.getElementById('baseUrl').value =
+  window.location.href.replace(/tag-urls\.html.*$/, 'clock-prototype.html');
+
+function slipNumOf(l){ return parseInt((l.slipId.match(/\d+/)||['0'])[0], 10); }
+
+function describeBoat(boat){
+  if (!boat) return { customerName:'', model:'', boatName:'' };
+  const cust = DATA.customers.find(c => c.customerId === boat.customerId);
+  return { customerName: cust ? cust.name : '', model: boat.model || '', boatName: boat.boatName || '' };
+}
+
+function renderList(){
+  const status = document.getElementById('status');
+  const list = document.getElementById('list');
+  if (!DATA){ return; }
+  status.style.display = 'none';
+
+  const term = document.getElementById('searchBox').value.trim().toLowerCase();
+  const base = document.getElementById('baseUrl').value.trim().replace(/\?.*$/, '');
+
+  const slips = DATA.locations.slice().sort((a,b)=>slipNumOf(a)-slipNumOf(b));
+  const slipBoatIds = new Set(slips.filter(l=>l.boatId).map(l=>l.boatId));
+
+  const rows = [];
+
+  slips.forEach(l => {
+    const num = slipNumOf(l);
+    const boat = l.boatId ? DATA.boats.find(b => b.boatId === l.boatId) : null;
+    const d = describeBoat(boat);
+    const haystack = ('slip ' + num + ' ' + d.customerName + ' ' + d.model + ' ' + d.boatName).toLowerCase();
+    if (term && haystack.indexOf(term) === -1) return;
+
+    const url = base + '?slip=' + l.slipId;
+    const who = boat ? (d.customerName + ' — ' + d.model + (d.boatName ? ' "' + d.boatName + '"' : '')) : 'Empty';
+    rows.push({
+      html: '<div class="tag-row' + (boat ? '' : ' empty') + '">' +
+        '<span class="tag-label">Slip ' + num + '</span>' +
+        '<div class="tag-info"><div class="who">' + who + '</div><div class="url">' + url + '</div></div>' +
+        '<button class="copy-btn" data-url="' + url.replace(/"/g,'&quot;') + '">Copy</button>' +
+      '</div>'
+    });
+  });
+
+  // Boats that match the search but aren't in any slip right now -- yard
+  // stands aren't individually tagged, so there's no URL to give out, but
+  // showing them (rather than nothing) avoids "no results" confusion when
+  // someone searches a customer/boat that's just on land at the moment.
+  if (term){
+    DATA.boats.filter(b => !slipBoatIds.has(b.boatId)).forEach(b => {
+      const d = describeBoat(b);
+      const haystack = (d.customerName + ' ' + d.model + ' ' + d.boatName).toLowerCase();
+      if (haystack.indexOf(term) === -1) return;
+      const who = d.customerName + ' — ' + d.model + (d.boatName ? ' "' + d.boatName + '"' : '');
+      rows.push({
+        html: '<div class="tag-row yard-noresult">' +
+          '<span class="tag-label">Yard</span>' +
+          '<div class="tag-info"><div class="who">' + who + '</div><div class="url">Not in a slip right now</div></div>' +
+          '<span class="no-tag-note">No tag (yard)</span>' +
+        '</div>'
+      });
+    });
+  }
+
+  if (rows.length === 0){
+    list.innerHTML = '<div id="status">No matches.</div>';
+    return;
+  }
+  list.innerHTML = rows.map(r => r.html).join('');
+  list.querySelectorAll('.copy-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> copyUrl(btn));
+  });
+}
+
+async function copyUrl(btn){
+  const url = btn.dataset.url;
+  try{
+    await navigator.clipboard.writeText(url);
+  } catch(e){
+    window.prompt('Copy this URL:', url);
+    return;
+  }
+  const original = btn.textContent;
+  btn.textContent = 'Copied!';
+  btn.classList.add('copied');
+  setTimeout(()=>{ btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+}
+
+async function boot(){
+  try{
+    const res = await fetch(WEBAPP_URL + '?action=getAll');
+    DATA = await res.json();
+    if (DATA.error) throw new Error(DATA.error);
+    renderList();
+  } catch(e){
+    document.getElementById('status').textContent = 'Could not reach the marina system. Check your connection and reload.';
+  }
+}
+boot();
+</script>
+</body>
+</html>
