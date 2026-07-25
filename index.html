@@ -95,6 +95,7 @@
   .task-row.paused .task-sub{color:var(--amber);font-weight:600;font-size:12px;margin-top:2px;}
   .task-row.done .task-name{text-decoration:line-through;color:var(--slate);font-weight:500;}
   .task-sub{font-size:12px;color:var(--slate);margin-top:2px;}
+  .priority-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:middle; flex-shrink:0; }
 
   .pill-btn{
     font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:16px;white-space:nowrap;
@@ -635,11 +636,18 @@ function renderView(){
 function renderFocus(){
   const task = findTask(activeTaskId);
   if (!task) return;
-  focusTask.textContent = task.name;
+  focusTask.innerHTML = priorityDot(task) + task.name;
   focusContext.textContent = currentCtx.customerName + ' — ' + currentCtx.model;
   focusTimer.textContent = fmtDuration(liveMs(task));
 }
 
+// Small colored dot matching the same red/orange/grey priority scheme
+// used in the office dashboard: 1=High (red), 2=Normal (orange), 3=Low (grey)
+function priorityDot(t){
+  const p = t.priority || 2;
+  const color = p === 1 ? 'var(--stop)' : (p === 3 ? 'var(--slate)' : 'var(--amber)');
+  return '<span class="priority-dot" style="background:'+color+';" title="Priority '+p+'"></span>';
+}
 function renderChecklist(){
   const tasks = currentCtx.tasks || [];
   checklist.innerHTML = tasks.map(t=>{
@@ -652,7 +660,7 @@ function renderChecklist(){
       if (!isTimed){
         return '<div class="task-row done" data-rowid="'+t.taskId+'">' +
           '<div class="task-row-main">'+dragHandle+
-            '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
+            '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div>'+
             '<div class="task-sub">Completed</div></div>'+
             '<span class="check-static">&#10003;</span></div>'+
           '<div class="task-row-secondary">'+
@@ -664,7 +672,7 @@ function renderChecklist(){
       const sessionNote = (t._segments||[]).length>1 ? (' · '+t._segments.length+' sessions') : '';
       return '<div class="task-row done" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
-          '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
+          '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div>'+
           '<div class="task-sub">Total '+mins+' min'+sessionNote+'</div></div>'+
           '<span class="check-static">&#10003;</span></div>'+
         '<div class="task-row-secondary">'+
@@ -676,7 +684,7 @@ function renderChecklist(){
       // Completion-billed task: a plain checkbox, no timer, no pause state at all
       return '<div class="task-row pending" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
-          '<div class="task-main-content"><div class="task-name">'+t.name+'</div></div>'+
+          '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div></div>'+
           '<button class="pill-btn start" data-act="check" data-task="'+t.taskId+'">Mark Done</button></div>'+
         '<div class="task-row-secondary">'+
           '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
@@ -687,7 +695,7 @@ function renderChecklist(){
       const mins = Math.round(segMs(t)/60000);
       return '<div class="task-row paused" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
-          '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
+          '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div>'+
           '<div class="task-sub">'+mins+' min logged — paused</div></div>'+
           '<button class="pill-btn resume" data-act="resume" data-task="'+t.taskId+'">Resume</button></div>'+
         '<div class="task-row-secondary">'+
@@ -697,7 +705,7 @@ function renderChecklist(){
     }
     return '<div class="task-row pending" data-rowid="'+t.taskId+'">' +
       '<div class="task-row-main">'+dragHandle+
-        '<div class="task-main-content"><div class="task-name">'+t.name+'</div></div>'+
+        '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div></div>'+
         '<button class="pill-btn start" data-act="start" data-task="'+t.taskId+'">Start</button></div>'+
       '<div class="task-row-secondary">'+
         '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
