@@ -654,7 +654,7 @@ function renderChecklist(){
     const noteLabel = t.note ? '&#128221; Notes saved' : '+ Add notes';
     const noteCls = t.note ? 'has-note' : '';
     const dragHandle = '<span class="drag-handle" data-handle="'+t.taskId+'"><span></span><span></span><span></span></span>';
-    const isTimed = t.billMode !== 'complete'; // missing billMode (older tasks) defaults to timed, same as before this feature existed
+    const isTimed = String(t.billMode || '').trim().toLowerCase() !== 'complete'; // missing/oddly-cased billMode defaults to timed, same as before this feature existed
 
     if (t.status === 'done'){
       if (!isTimed){
@@ -783,15 +783,15 @@ function completeTask(taskId){
   const mins = Math.round(segMs(task)/60000);
   const last = (task._segments||[])[task._segments.length-1] || { start: Date.now(), end: Date.now() };
   enqueue('logEntry', {
-    taskId, locationId: currentCtx.mode==='slip' ? currentCtx.slipId : 'yard',
-    employee: currentUser, taskName: task.name, customer: currentCtx.customerName, boat: currentCtx.model,
+    taskId, boatId: currentCtx.boatId, workOrder: currentCtx.workOrder,
+    employee: currentUser, taskName: task.name,
     segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
   });
   playDoneSound(); renderView();
 }
 function undoComplete(taskId){
   const task = findTask(taskId); if (!task) return;
-  const isTimed = task.billMode !== 'complete';
+  const isTimed = String(task.billMode || '').trim().toLowerCase() !== 'complete';
   task.status = isTimed ? 'paused' : 'pending';
   saveLocalState();
   enqueue('updateTask', { taskId, status: task.status });
