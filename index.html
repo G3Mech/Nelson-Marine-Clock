@@ -36,6 +36,10 @@
   select#locSelect{ width:100%;font-size:16px;font-weight:600;padding:10px 12px;border-radius:9px;border:1px solid var(--line);background:var(--paper);color:var(--ink); }
   .lock-note{ font-size:12px;color:var(--stop);margin-top:8px;display:none; }
   .lock-note.show{display:block;}
+  .setup-warning{ font-size:12.5px;color:var(--white);background:var(--stop);padding:10px 20px;display:none;font-weight:600; }
+  .setup-warning.show{display:block;}
+  .empty-state{ margin:20px;padding:24px 20px;border:1.5px dashed var(--line);border-radius:12px;text-align:center;color:var(--slate);font-size:14px;display:none; }
+  .empty-state.show{display:block;}
 
   .boat-card{ margin:14px 20px 0;border:1px solid var(--line);border-left:4px solid var(--slate);border-radius:10px;padding:14px 16px; }
   .boat-card.slip{border-left-color:var(--slip-accent);}
@@ -145,8 +149,11 @@
 <div class="frame">
 
   <div class="demo-strip">
-    <span><span class="dot on" id="dot"></span><span id="netlabel">Online — testing mode</span></span>
-    <button id="toggleNet">Simulate signal drop</button>
+    <span><span class="dot on" id="dot"></span><span id="netlabel">Online</span></span>
+    <button id="toggleNet">Force offline (testing)</button>
+  </div>
+  <div class="setup-warning" id="setupWarning">
+    This page isn't connected to the marina system yet — set WEBAPP_URL near the top of the code.
   </div>
 
   <div class="whoami">
@@ -157,13 +164,7 @@
   <header>
     <div class="yard">Nelson Marine · Job Clock</div>
     <select id="locSelect">
-      <optgroup label="Slips — In Water">
-        <option value="slip14">Slip 14</option>
-        <option value="slip22">Slip 22</option>
-      </optgroup>
-      <optgroup label="Yard — On Stands">
-        <option value="yardC6">Yard Row C, Stand 6</option>
-      </optgroup>
+      <option value="">Loading…</option>
     </select>
     <div class="lock-note" id="lockNote">Pause your running task before switching jobs</div>
   </header>
@@ -178,6 +179,8 @@
     <div class="boat-model" id="boatModel"></div>
     <div class="boat-wo" id="boatWO"></div>
   </div>
+
+  <div class="empty-state" id="emptyState"></div>
 
   <div class="focus-panel" id="focusPanel">
     <div class="focus-label">Now timing</div>
@@ -201,10 +204,7 @@
   <div class="sheet">
     <h3>Who's clocking in?</h3>
     <p>One-time setup — this phone will remember you after this.</p>
-    <button class="name-btn" data-name="Gordon">Gordon</button>
-    <button class="name-btn" data-name="Nick">Nick</button>
-    <button class="name-btn" data-name="Cory">Cory</button>
-    <button class="name-btn" data-name="Doug">Doug</button>
+    <div id="nameButtons"></div>
   </div>
 </div>
 
@@ -242,47 +242,46 @@
 </div>
 
 <script>
-const locations = {
-  slip14: { type:'slip', label:'Slip 14 — In Water', customer:'R. Alvarez', boat:'Sea Ray 240 Sundancer', wo:'WO #4471',
-    tasks:[
-      {id:'t1', name:'Impeller replacement', status:'pending', segments:[], note:''},
-      {id:'t2', name:'Oil & filter change', status:'pending', segments:[], note:''},
-      {id:'t3', name:'Check shaft packing', status:'pending', segments:[], note:''}
-    ]
-  },
-  slip22: { type:'slip', label:'Slip 22 — In Water', customer:'T. Nguyen', boat:'Grady-White 236', wo:'WO #4483',
-    tasks:[
-      {id:'t1', name:'Hull cleaning', status:'pending', segments:[], note:''},
-      {id:'t2', name:'Zinc replacement', status:'pending', segments:[], note:''},
-      {id:'t3', name:'Prop inspection', status:'pending', segments:[], note:''}
-    ]
-  },
-  yardC6: { type:'yard', label:'Yard Row C, Stand 6', customer:'M. Castellano', boat:'Boston Whaler 22 Outrage', wo:'WO #4462',
-    tasks:[
-      {id:'t1', name:'Sand bottom', status:'pending', segments:[], note:''},
-      {id:'t2', name:'Apply barrier coat', status:'pending', segments:[], note:''},
-      {id:'t3', name:'Bottom paint — 2 coats', status:'pending', segments:[], note:''}
-    ]
-  }
-};
+// ======================= CONFIG =======================
+// Paste the deployed Apps Script Web App URL here (Extensions > Apps Script
+// > Deploy > New deployment > Web app > Execute as: Me > Who has access:
+// Anyone > Deploy, then copy the URL ending in /exec).
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
 
+// An NFC tag at a physical slip links to this page with ?slip=slip14 (etc)
+// so tapping it jumps straight to that slip's boat. Yard boats have no
+// physical tag (stands aren't numbered), so they're reached through the
+// picker below instead.
+const urlParams = new URLSearchParams(window.location.search);
+const tagSlipId = urlParams.get('slip') || null;
+
+// ======================= STATE =======================
+let DATA = null;                 // { locations, tasks, employees, entries, customers, boats } -- straight from the sheet
 let currentUser = null;
-let currentLoc = 'slip14';
-let activeTask = null;
-let pendingConfirm = null;
-let notesTaskRef = null;
-let isOnline = true;
+let currentCtx = null;           // { mode:'slip'|'yard', slipId, boatId }
+let activeTaskId = null;         // taskId of whichever task is currently timing
+let segStart = null;             // when the active task's current segment began
+let pendingConfirm = null;       // taskId awaiting the "mark complete?" confirmation
+let notesTaskRef = null;         // taskId whose notes sheet is open
+let isOnline = navigator.onLine;
+let forcedOffline = false;
 let ticker = null;
 let audioCtx = null;
-let taskCounter = 100;
-function newTaskId(){ return 't' + (taskCounter++); }
 
+const STORAGE_KEY = 'nelsonMarineClockState_v2';
+const QUEUE_KEY = 'nelsonMarineClockQueue_v1';
+const CACHE_KEY = 'nelsonMarineClockDataCache_v1';
+
+// ======================= DOM refs =======================
 const overlay = document.getElementById('setupOverlay');
+const nameButtons = document.getElementById('nameButtons');
 const confirmOverlay = document.getElementById('confirmOverlay');
 const confirmTaskName = document.getElementById('confirmTaskName');
 const whoName = document.getElementById('whoName');
 const locSelect = document.getElementById('locSelect');
 const lockNote = document.getElementById('lockNote');
+const setupWarning = document.getElementById('setupWarning');
+const emptyState = document.getElementById('emptyState');
 const typeBadge = document.getElementById('typeBadge');
 const boatCard = document.getElementById('boatCard');
 const boatCustomer = document.getElementById('boatCustomer');
@@ -296,7 +295,7 @@ const netlabel = document.getElementById('netlabel');
 
 const photoSlot = document.getElementById('photoSlot');
 const photoInput = document.getElementById('photoInput');
-const boatPhotos = {};
+const boatPhotos = {}; // stays local-only -- there's no photo storage in the sheet backend
 
 const focusPanel = document.getElementById('focusPanel');
 const focusTask = document.getElementById('focusTask');
@@ -311,6 +310,7 @@ const notesOverlay = document.getElementById('notesOverlay');
 const notesTaskTitle = document.getElementById('notesTaskTitle');
 const notesTextarea = document.getElementById('notesTextarea');
 
+// ======================= sounds =======================
 function getCtx(){ if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); } if(audioCtx.state==='suspended'){ audioCtx.resume(); } return audioCtx; }
 function tone(ctx, freq, startAt, dur){
   const o = ctx.createOscillator(); const g = ctx.createGain();
@@ -324,72 +324,276 @@ function playStartSound(){ tone(getCtx(), 880, getCtx().currentTime, 0.16); }
 function playPauseSound(){ tone(getCtx(), 550, getCtx().currentTime, 0.16); }
 function playDoneSound(){ const ctx=getCtx(); tone(ctx,660,ctx.currentTime,0.14); tone(ctx,440,ctx.currentTime+0.13,0.20); }
 
-// ---------- save to / load from this phone's local storage ----------
-// This is what makes progress survive closing the page, locking the
-// phone, or losing signal -- everything below writes here immediately
-// after any change, and it's read back in once, when the page opens.
-const STORAGE_KEY = 'nelsonMarineClockState_v1';
-
-function saveState(){
+// ======================= local persistence =======================
+// Local storage is still the safety net it always was: progress survives
+// closing the page, locking the phone, or losing signal. The difference
+// now is that it's a CACHE of the real sheet data plus a QUEUE of changes
+// still waiting to reach it, not the only copy of the truth.
+function saveLocalState(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      locations, currentUser, currentLoc, activeTask, boatPhotos
-    }));
-  } catch(e){
-    console.warn('Could not save locally (storage may be full or unavailable):', e);
-  }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentUser, currentCtx, activeTaskId, segStart, boatPhotos }));
+  } catch(e){ console.warn('Could not save locally:', e); }
 }
-
-function loadState(){
+function loadLocalState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
     const saved = JSON.parse(raw);
-    if (saved.locations) Object.assign(locations, saved.locations);
     if (saved.currentUser) currentUser = saved.currentUser;
-    if (saved.currentLoc) currentLoc = saved.currentLoc;
-    if (saved.activeTask) activeTask = saved.activeTask;
+    if (saved.currentCtx) currentCtx = saved.currentCtx;
+    if (saved.activeTaskId) activeTaskId = saved.activeTaskId;
+    if (saved.segStart) segStart = saved.segStart;
     if (saved.boatPhotos) Object.assign(boatPhotos, saved.boatPhotos);
     return true;
-  } catch(e){
-    console.warn('Could not load saved state:', e);
-    return false;
-  }
+  } catch(e){ console.warn('Could not load saved state:', e); return false; }
+}
+function cacheData(){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify(DATA)); } catch(e){ /* ignore -- cache is best-effort */ }
+}
+function loadCachedData(){
+  try{ const raw = localStorage.getItem(CACHE_KEY); return raw ? JSON.parse(raw) : null; } catch(e){ return null; }
 }
 
-document.querySelectorAll('.name-btn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{ currentUser = btn.dataset.name; whoName.textContent = currentUser; overlay.style.display='none'; saveState(); });
-});
-document.getElementById('switchUser').addEventListener('click', ()=> overlay.style.display='flex');
-
-document.getElementById('toggleNet').addEventListener('click', ()=>{
-  isOnline = !isOnline;
-  dot.className = 'dot ' + (isOnline ? 'on' : 'off');
-  netlabel.textContent = isOnline ? 'Online — testing mode' : 'No signal — testing mode';
-  if (isOnline) syncPending();
+// ======================= pending-action queue =======================
+// Every change (start/pause/complete a task, add one, reorder, save notes)
+// applies to the local view immediately, then gets queued here and sent
+// the moment we're online. If a send fails, everything behind it in the
+// queue waits too, so actions on the same task never arrive out of order.
+function loadQueue(){
+  try{ return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch(e){ return []; }
+}
+function saveQueue(q){
+  try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch(e){ console.warn('Could not save queue:', e); }
+}
+function enqueue(action, body){
+  const q = loadQueue();
+  q.push({ action, body });
+  saveQueue(q);
   renderLog();
+  flushQueue();
+}
+// Apps Script Web Apps don't handle a CORS preflight (OPTIONS) request, so
+// a POST with Content-Type: application/json gets blocked by the browser
+// before it ever reaches the script. Sending it as text/plain keeps the
+// request in the "simple request" category the browser doesn't preflight
+// -- doPost still gets the same JSON string in e.postData.contents either way.
+async function postToSheet(action, body){
+  const res = await fetch(WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(Object.assign({ action }, body))
+  });
+  const json = await res.json();
+  if (json && json.error) throw new Error(json.error);
+  return json;
+}
+let flushing = false;
+async function flushQueue(){
+  if (flushing) return;
+  if (isEffectivelyOffline()) return;
+  flushing = true;
+  try{
+    let q = loadQueue();
+    while (q.length > 0){
+      const item = q[0];
+      try{
+        const result = await postToSheet(item.action, item.body);
+        // a queued addTask carries a temporary local id -- once the real
+        // server id comes back, patch every reference to it so later
+        // queued actions (reorder, status updates) still hit the right row
+        if (item.action === 'addTask' && item.tempId && result && result.id){
+          reconcileTempTaskId(item.tempId, result.id);
+        }
+        q.shift();
+        saveQueue(q);
+      } catch(err){
+        console.warn('Sync failed, will retry:', err);
+        markOffline();
+        break;
+      }
+    }
+  } finally {
+    flushing = false;
+    renderLog();
+  }
+}
+function reconcileTempTaskId(tempId, realId){
+  if (currentCtx && currentCtx.tasks){
+    const t = currentCtx.tasks.find(t => t.taskId === tempId);
+    if (t) t.taskId = realId;
+  }
+  if (activeTaskId === tempId) activeTaskId = realId;
+  const q = loadQueue();
+  q.forEach(item => {
+    if (item.body && item.body.taskId === tempId) item.body.taskId = realId;
+    if (item.orderedIds) item.orderedIds = item.orderedIds.map(id => id === tempId ? realId : id);
+  });
+  saveQueue(q);
+  saveLocalState();
+}
+
+// ======================= connectivity =======================
+function isEffectivelyOffline(){ return forcedOffline || !isOnline; }
+function updateConnBadge(){
+  const offline = isEffectivelyOffline();
+  dot.className = 'dot ' + (offline ? 'off' : 'on');
+  const q = loadQueue();
+  netlabel.textContent = offline
+    ? ('Offline' + (q.length ? ' — ' + q.length + ' change(s) waiting' : ''))
+    : (q.length ? 'Syncing…' : 'Online');
+}
+function markOffline(){ isOnline = false; updateConnBadge(); }
+window.addEventListener('online', ()=>{ isOnline = true; updateConnBadge(); flushQueue(); });
+window.addEventListener('offline', ()=>{ isOnline = false; updateConnBadge(); });
+document.getElementById('toggleNet').addEventListener('click', ()=>{
+  forcedOffline = !forcedOffline;
+  document.getElementById('toggleNet').textContent = forcedOffline ? 'Back online (testing)' : 'Force offline (testing)';
+  updateConnBadge();
+  if (!forcedOffline) flushQueue();
 });
+
+// ======================= fetching real data =======================
+async function fetchAllData(){
+  const res = await fetch(WEBAPP_URL + '?action=getAll');
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json;
+}
+async function refreshData(){
+  try{
+    DATA = await fetchAllData();
+    cacheData();
+    isOnline = true;
+  } catch(e){
+    console.warn('Could not reach the marina system, using last cached data:', e);
+    const cached = loadCachedData();
+    if (cached){ DATA = cached; }
+    markOffline();
+  }
+  updateConnBadge();
+}
+
+// ======================= resolving "what boat is here" =======================
+function boatById(id){ return DATA.boats.find(b => b.boatId === id); }
+function customerById(id){ return DATA.customers.find(c => c.customerId === id); }
+function slipById(id){ return DATA.locations.find(l => l.slipId === id); }
+
+function buildContextForBoat(boatId, mode, slipId){
+  const boat = boatById(boatId);
+  const cust = boat ? customerById(boat.customerId) : null;
+  const tasks = DATA.tasks.filter(t => t.boatId === boatId).sort((a,b)=> (a.order||0) - (b.order||0));
+  return {
+    mode, slipId: slipId || null, boatId,
+    customerName: cust ? cust.name : '—',
+    model: boat ? boat.model : '', boatName: boat ? boat.boatName : '', loa: boat ? boat.loa : '',
+    workOrder: boat ? boat.currentWorkOrder : '',
+    tasks
+  };
+}
+// Boats not sitting in any slip are, by definition, in the yard -- but
+// only ones with an active job are worth offering in the picker, or every
+// customer's boat on file would show up in one long list.
+function yardBoatsWithActiveJob(){
+  const slipBoatIds = new Set(DATA.locations.filter(l => l.boatId).map(l => l.boatId));
+  return DATA.boats.filter(b => !slipBoatIds.has(b.boatId) && (b.currentWorkOrder || DATA.tasks.some(t => t.boatId === b.boatId)));
+}
+function occupiedSlipsSorted(){
+  const numOf = l => parseInt((l.slipId.match(/\d+/)||['0'])[0], 10);
+  return DATA.locations.filter(l => l.boatId).sort((a,b)=> numOf(a) - numOf(b));
+}
+function populateLocationPicker(){
+  const slips = occupiedSlipsSorted();
+  const yardBoats = yardBoatsWithActiveJob();
+  let html = '';
+  if (slips.length){
+    html += '<optgroup label="Slips — In Water">' + slips.map(l => {
+      const b = boatById(l.boatId); const c = b ? customerById(b.customerId) : null;
+      const n = (l.slipId.match(/\d+/)||['?'])[0];
+      return '<option value="slip:'+l.slipId+'">Slip '+n+' — '+(c?c.name:'—')+'</option>';
+    }).join('') + '</optgroup>';
+  }
+  if (yardBoats.length){
+    html += '<optgroup label="Yard — On Stands">' + yardBoats.map(b => {
+      const c = customerById(b.customerId);
+      return '<option value="boat:'+b.boatId+'">'+(c?c.name:'—')+' — '+(b.model||'boat')+'</option>';
+    }).join('') + '</optgroup>';
+  }
+  locSelect.innerHTML = html || '<option value="">Nothing currently assigned</option>';
+}
+
+// Figures out what to show on load: the tag's slip if the URL carries one
+// (an NFC tap), else whatever was last selected on this phone, else the
+// first thing in the picker.
+function resolveInitialContext(){
+  if (tagSlipId){
+    const slip = slipById(tagSlipId);
+    if (slip && slip.boatId) return buildContextForBoat(slip.boatId, 'slip', tagSlipId);
+    return { mode:'empty-slip', slipId: tagSlipId };
+  }
+  if (currentCtx){
+    if (currentCtx.mode === 'slip'){
+      const slip = slipById(currentCtx.slipId);
+      if (slip && slip.boatId) return buildContextForBoat(slip.boatId, 'slip', currentCtx.slipId);
+    } else if (currentCtx.mode === 'yard'){
+      const stillInYard = !DATA.locations.some(l => l.boatId === currentCtx.boatId);
+      if (stillInYard && boatById(currentCtx.boatId)) return buildContextForBoat(currentCtx.boatId, 'yard');
+    }
+  }
+  const slips = occupiedSlipsSorted();
+  if (slips.length) return buildContextForBoat(slips[0].boatId, 'slip', slips[0].slipId);
+  const yardBoats = yardBoatsWithActiveJob();
+  if (yardBoats.length) return buildContextForBoat(yardBoats[0].boatId, 'yard');
+  return { mode: 'none' };
+}
 
 locSelect.addEventListener('change', (e)=>{
-  if (activeTask){ e.target.value = currentLoc; lockNote.classList.add('show'); setTimeout(()=>lockNote.classList.remove('show'), 2200); return; }
-  currentLoc = e.target.value;
-  saveState();
+  if (activeTaskId){ populateLocationPicker(); setSelectValue(); lockNote.classList.add('show'); setTimeout(()=>lockNote.classList.remove('show'), 2200); return; }
+  const [kind, id] = e.target.value.split(':');
+  if (kind === 'slip'){ currentCtx = buildContextForBoat(slipById(id).boatId, 'slip', id); }
+  else if (kind === 'boat'){ currentCtx = buildContextForBoat(id, 'yard'); }
+  else { currentCtx = { mode: 'none' }; }
+  saveLocalState();
   renderBoatCard();
   renderView();
 });
+function setSelectValue(){
+  if (!currentCtx) return;
+  if (currentCtx.mode === 'slip') locSelect.value = 'slip:' + currentCtx.slipId;
+  else if (currentCtx.mode === 'yard') locSelect.value = 'boat:' + currentCtx.boatId;
+}
 
+// ======================= boat card =======================
 function renderBoatCard(){
-  const loc = locations[currentLoc];
-  boatCard.className = 'boat-card ' + loc.type;
-  typeBadge.className = 'type-badge ' + loc.type;
-  typeBadge.textContent = loc.type==='slip' ? 'SLIP · DOCKSIDE' : 'YARD · ON STANDS';
-  boatCustomer.textContent = loc.customer;
-  boatModel.textContent = loc.boat;
-  boatWO.textContent = loc.wo + ' — ' + loc.label;
+  if (!currentCtx || currentCtx.mode === 'none'){
+    boatCard.style.display = 'none'; focusPanel.classList.remove('show');
+    checklist.style.display = 'none'; addTaskBtn.style.display = 'none';
+    emptyState.classList.add('show');
+    emptyState.textContent = 'Nothing is currently assigned to a slip or yard spot. Ask the office to set up a work order first.';
+    return;
+  }
+  if (currentCtx.mode === 'empty-slip'){
+    boatCard.style.display = 'none'; focusPanel.classList.remove('show');
+    checklist.style.display = 'none'; addTaskBtn.style.display = 'none';
+    emptyState.classList.add('show');
+    const n = (currentCtx.slipId.match(/\d+/)||['?'])[0];
+    emptyState.textContent = 'Slip ' + n + ' is empty right now — nothing to clock in on.';
+    return;
+  }
+  emptyState.classList.remove('show');
+  boatCard.style.display = '';
+  const badgeType = currentCtx.mode === 'slip' ? 'slip' : 'yard';
+  boatCard.className = 'boat-card ' + badgeType;
+  typeBadge.className = 'type-badge ' + badgeType;
+  typeBadge.textContent = badgeType === 'slip' ? 'SLIP · DOCKSIDE' : 'YARD · ON STANDS';
+  boatCustomer.textContent = currentCtx.customerName;
+  boatModel.textContent = currentCtx.model + (currentCtx.boatName ? ' "'+currentCtx.boatName+'"' : '') + (currentCtx.loa ? ' ('+currentCtx.loa+')' : '');
+  const whereLabel = currentCtx.mode === 'slip' ? ('Slip ' + (currentCtx.slipId.match(/\d+/)||['?'])[0]) : 'Yard';
+  boatWO.textContent = (currentCtx.workOrder || 'No work order on file') + ' — ' + whereLabel;
   renderPhotoSlot();
 }
 function renderPhotoSlot(){
-  const photo = boatPhotos[currentLoc];
+  const key = currentCtx.mode === 'slip' ? currentCtx.slipId : currentCtx.boatId;
+  const photo = boatPhotos[key];
   if (photo){
     photoSlot.classList.add('has-photo');
     photoSlot.innerHTML = '<img src="'+photo+'" alt="Boat photo"><span class="photo-retake">Retake</span>';
@@ -402,17 +606,24 @@ photoSlot.addEventListener('click', ()=> photoInput.click());
 photoInput.addEventListener('change', (e)=>{
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = (ev)=>{ boatPhotos[currentLoc] = ev.target.result; renderPhotoSlot(); saveState(); };
+  reader.onload = (ev)=>{
+    const key = currentCtx.mode === 'slip' ? currentCtx.slipId : currentCtx.boatId;
+    boatPhotos[key] = ev.target.result; renderPhotoSlot(); saveLocalState();
+  };
   reader.readAsDataURL(file);
   photoInput.value = '';
 });
 
+// ======================= timer helpers =======================
 function fmtDuration(ms){ const s=Math.max(0,Math.floor(ms/1000)); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
-function segMs(task){ return task.segments.reduce((sum,s)=> sum+(s.end-s.start), 0); }
-function liveMs(task){ return segMs(task) + (task.status==='active' ? (Date.now()-task._segStart) : 0); }
+function findTask(taskId){ return currentCtx && currentCtx.tasks ? currentCtx.tasks.find(t=>t.taskId===taskId) : null; }
+function segMs(task){ return (task._segments||[]).reduce((sum,s)=> sum+(s.end-s.start), 0); }
+function liveMs(task){ return segMs(task) + (task.taskId===activeTaskId && segStart ? (Date.now()-segStart) : 0); }
 
+// ======================= view rendering =======================
 function renderView(){
-  if (activeTask){
+  if (!currentCtx || currentCtx.mode === 'none' || currentCtx.mode === 'empty-slip'){ renderLog(); return; }
+  if (activeTaskId && findTask(activeTaskId)){
     checklist.style.display='none'; addTaskBtn.style.display='none';
     focusPanel.classList.add('show'); renderFocus(); startTicker();
   } else {
@@ -422,53 +633,51 @@ function renderView(){
   renderLog();
 }
 function renderFocus(){
-  const loc = locations[activeTask.locId];
-  const task = loc.tasks.find(t=>t.id===activeTask.taskId);
+  const task = findTask(activeTaskId);
+  if (!task) return;
   focusTask.textContent = task.name;
-  focusContext.textContent = loc.customer + ' — ' + loc.boat;
+  focusContext.textContent = currentCtx.customerName + ' — ' + currentCtx.model;
   focusTimer.textContent = fmtDuration(liveMs(task));
 }
 
-// ---------- compact checklist ----------
 function renderChecklist(){
-  const loc = locations[currentLoc];
-  checklist.innerHTML = loc.tasks.map(t=>{
+  const tasks = currentCtx.tasks || [];
+  checklist.innerHTML = tasks.map(t=>{
     const noteLabel = t.note ? '&#128221; Notes saved' : '+ Add notes';
     const noteCls = t.note ? 'has-note' : '';
-    const dragHandle = '<span class="drag-handle" data-handle="'+t.id+'"><span></span><span></span><span></span></span>';
+    const dragHandle = '<span class="drag-handle" data-handle="'+t.taskId+'"><span></span><span></span><span></span></span>';
 
     if (t.status === 'done'){
       const mins = Math.round(segMs(t)/60000);
-      const sessionNote = t.segments.length > 1 ? (' · ' + t.segments.length + ' sessions') : '';
-      return '<div class="task-row done" data-rowid="'+t.id+'">' +
+      const sessionNote = (t._segments||[]).length>1 ? (' · '+t._segments.length+' sessions') : '';
+      return '<div class="task-row done" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
           '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
           '<div class="task-sub">Total '+mins+' min'+sessionNote+'</div></div>'+
           '<span class="check-static">&#10003;</span></div>'+
         '<div class="task-row-secondary">'+
-          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.id+'">'+noteLabel+'</button>'+
-          '<button class="undo-link" data-act="undo" data-task="'+t.id+'">Undo — reopen</button>'+
+          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+          '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
         '</div></div>';
     }
     if (t.status === 'paused'){
       const mins = Math.round(segMs(t)/60000);
-      return '<div class="task-row paused" data-rowid="'+t.id+'">' +
+      return '<div class="task-row paused" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
           '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
           '<div class="task-sub">'+mins+' min logged — paused</div></div>'+
-          '<button class="pill-btn resume" data-act="resume" data-task="'+t.id+'">Resume</button></div>'+
+          '<button class="pill-btn resume" data-act="resume" data-task="'+t.taskId+'">Resume</button></div>'+
         '<div class="task-row-secondary">'+
-          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.id+'">'+noteLabel+'</button>'+
-          '<button class="complete-link" data-act="ask" data-task="'+t.id+'">Job finished — mark complete</button>'+
+          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+          '<button class="complete-link" data-act="ask" data-task="'+t.taskId+'">Job finished — mark complete</button>'+
         '</div></div>';
     }
-    // pending
-    return '<div class="task-row pending" data-rowid="'+t.id+'">' +
+    return '<div class="task-row pending" data-rowid="'+t.taskId+'">' +
       '<div class="task-row-main">'+dragHandle+
         '<div class="task-main-content"><div class="task-name">'+t.name+'</div></div>'+
-        '<button class="pill-btn start" data-act="start" data-task="'+t.id+'">Start</button></div>'+
+        '<button class="pill-btn start" data-act="start" data-task="'+t.taskId+'">Start</button></div>'+
       '<div class="task-row-secondary">'+
-        '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.id+'">'+noteLabel+'</button>'+
+        '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
         '<span></span>'+
       '</div></div>';
   }).join('');
@@ -482,68 +691,82 @@ function renderChecklist(){
 }
 
 function handleAction(action, taskId){
-  const loc = locations[currentLoc];
-  const task = loc.tasks.find(t=>t.id===taskId);
+  const task = findTask(taskId);
   if (!task) return;
 
-  if (action === 'notes'){ openNotes(currentLoc, taskId, task.name, task.note); return; }
+  if (action === 'notes'){ openNotes(taskId, task.name, task.note); return; }
   if (!currentUser){ overlay.style.display = 'flex'; return; }
 
-  if (action === 'start' || action === 'resume'){ if (activeTask) return; beginSegment(task); }
-  else if (action === 'ask'){ openConfirm(currentLoc, taskId, task.name); }
-  else if (action === 'undo'){ undoComplete(currentLoc, taskId); }
+  if (action === 'start' || action === 'resume'){ if (activeTaskId) return; beginSegment(task); }
+  else if (action === 'ask'){ openConfirm(taskId, task.name); }
+  else if (action === 'undo'){ undoComplete(taskId); }
 }
 
 function beginSegment(task){
-  task.status='active'; task._segStart=Date.now();
-  activeTask = { locId: currentLoc, taskId: task.id };
-  saveState();
+  task.status='active'; segStart = Date.now(); activeTaskId = task.taskId;
+  saveLocalState();
+  enqueue('updateTask', { taskId: task.taskId, status: 'active' });
   playStartSound(); renderView();
 }
-function pauseTask(locId, taskId){
-  const task = locations[locId].tasks.find(t=>t.id===taskId);
-  task.segments.push({ start: task._segStart, end: Date.now() });
-  task._segStart=null; task.status='paused'; activeTask=null;
-  saveState();
+function pauseTask(taskId){
+  const task = findTask(taskId); if (!task) return;
+  task._segments = task._segments || [];
+  task._segments.push({ start: segStart, end: Date.now() });
+  segStart = null; task.status='paused'; activeTaskId=null;
+  saveLocalState();
+  enqueue('updateTask', { taskId, status: 'paused' });
   playPauseSound(); renderView();
 }
-function openConfirm(locId, taskId, name){
-  pendingConfirm = { locId, taskId };
+function openConfirm(taskId, name){
+  pendingConfirm = taskId;
   confirmTaskName.textContent = '"' + name + '"';
   confirmOverlay.style.display = 'flex';
 }
 document.getElementById('confirmCancelBtn').addEventListener('click', ()=>{ pendingConfirm=null; confirmOverlay.style.display='none'; });
 document.getElementById('confirmYesBtn').addEventListener('click', ()=>{
-  if (pendingConfirm) completeTask(pendingConfirm.locId, pendingConfirm.taskId);
+  if (pendingConfirm) completeTask(pendingConfirm);
   pendingConfirm = null; confirmOverlay.style.display='none';
 });
-function completeTask(locId, taskId){
-  const loc = locations[locId]; const task = loc.tasks.find(t=>t.id===taskId);
-  if (task.status === 'active'){ task.segments.push({start:task._segStart,end:Date.now()}); task._segStart=null; activeTask=null; }
-  task.status='done'; task.synced=isOnline; task.employee=currentUser; task.jobLabel = loc.customer+' — '+loc.boat;
-  saveState();
-  playDoneSound(); renderView(); if (isOnline) syncPending();
+function completeTask(taskId){
+  const task = findTask(taskId); if (!task) return;
+  if (task.taskId === activeTaskId && segStart){
+    task._segments = task._segments || [];
+    task._segments.push({ start: segStart, end: Date.now() });
+    segStart = null; activeTaskId = null;
+  }
+  task.status = 'done';
+  saveLocalState();
+  enqueue('updateTask', { taskId, status: 'done' });
+  const mins = Math.round(segMs(task)/60000);
+  const last = (task._segments||[])[task._segments.length-1] || { start: Date.now(), end: Date.now() };
+  enqueue('logEntry', {
+    taskId, locationId: currentCtx.mode==='slip' ? currentCtx.slipId : 'yard',
+    employee: currentUser, taskName: task.name, customer: currentCtx.customerName, boat: currentCtx.model,
+    segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
+  });
+  playDoneSound(); renderView();
 }
-function undoComplete(locId, taskId){
-  const task = locations[locId].tasks.find(t=>t.id===taskId);
-  task.status='paused'; delete task.synced; delete task.employee; delete task.jobLabel;
-  saveState();
+function undoComplete(taskId){
+  const task = findTask(taskId); if (!task) return;
+  task.status='paused';
+  saveLocalState();
+  enqueue('updateTask', { taskId, status: 'paused' });
   renderView();
 }
 
-bigPauseBtn.addEventListener('click', ()=>{ if (activeTask) pauseTask(activeTask.locId, activeTask.taskId); });
+bigPauseBtn.addEventListener('click', ()=>{ if (activeTaskId) pauseTask(activeTaskId); });
 bigCompleteBtn.addEventListener('click', ()=>{
-  if (!activeTask) return;
-  const loc = locations[activeTask.locId]; const task = loc.tasks.find(t=>t.id===activeTask.taskId);
-  openConfirm(activeTask.locId, activeTask.taskId, task.name);
+  if (!activeTaskId) return;
+  const task = findTask(activeTaskId);
+  if (task) openConfirm(activeTaskId, task.name);
 });
 
 function startTicker(){
   stopTicker();
   ticker = setInterval(()=>{
-    if (!activeTask) return;
-    const loc = locations[activeTask.locId]; const task = loc.tasks.find(t=>t.id===activeTask.taskId);
-    focusTimer.textContent = fmtDuration(liveMs(task));
+    if (!activeTaskId) return;
+    const task = findTask(activeTaskId);
+    if (task) focusTimer.textContent = fmtDuration(liveMs(task));
   }, 1000);
 }
 function stopTicker(){ clearInterval(ticker); }
@@ -554,15 +777,21 @@ document.getElementById('newTaskCancelBtn').addEventListener('click', ()=> newTa
 document.getElementById('newTaskAddBtn').addEventListener('click', ()=>{
   const name = newTaskInput.value.trim();
   if (!name) return;
-  locations[currentLoc].tasks.push({ id:newTaskId(), name, status:'pending', segments:[], note:'' });
-  saveState();
+  const tempId = 'temp_' + Date.now();
+  currentCtx.tasks = currentCtx.tasks || [];
+  currentCtx.tasks.push({ taskId: tempId, name, status:'pending', order: currentCtx.tasks.length+1, note:'', _segments:[] });
+  saveLocalState();
+  const q = loadQueue();
+  q.push({ action:'addTask', tempId, body: { boatId: currentCtx.boatId, name } });
+  saveQueue(q);
+  flushQueue();
   newTaskOverlay.style.display='none';
   renderChecklist();
 });
 
 // ---------- notes ----------
-function openNotes(locId, taskId, name, note){
-  notesTaskRef = { locId, taskId };
+function openNotes(taskId, name, note){
+  notesTaskRef = taskId;
   notesTaskTitle.textContent = 'Notes — ' + name;
   notesTextarea.value = note || '';
   notesOverlay.style.display = 'flex';
@@ -571,9 +800,12 @@ function openNotes(locId, taskId, name, note){
 document.getElementById('notesCancelBtn').addEventListener('click', ()=> notesOverlay.style.display='none');
 document.getElementById('notesSaveBtn').addEventListener('click', ()=>{
   if (!notesTaskRef) return;
-  const task = locations[notesTaskRef.locId].tasks.find(t=>t.id===notesTaskRef.taskId);
-  task.note = notesTextarea.value.trim();
-  saveState();
+  const task = findTask(notesTaskRef);
+  if (task){
+    task.note = notesTextarea.value.trim();
+    saveLocalState();
+    enqueue('updateTask', { taskId: notesTaskRef, note: task.note });
+  }
   notesOverlay.style.display='none';
   renderChecklist();
 });
@@ -581,13 +813,12 @@ document.getElementById('notesSaveBtn').addEventListener('click', ()=>{
 // ---------- drag to reorder (touch-friendly, no native HTML5 drag API) ----------
 let dragCtx = null;
 function startDrag(e, taskId){
-  const loc = locations[currentLoc];
   const rows = Array.from(checklist.querySelectorAll('.task-row'));
   const rowEl = rows.find(r=>r.dataset.rowid===taskId);
   if (!rowEl) return;
 
   const rects = rows.map(r=>({ id:r.dataset.rowid, el:r, top:r.getBoundingClientRect().top, height:r.offsetHeight }));
-  const startIndex = loc.tasks.findIndex(t=>t.id===taskId);
+  const startIndex = currentCtx.tasks.findIndex(t=>t.taskId===taskId);
 
   dragCtx = { taskId, rowEl, startY:e.clientY, startIndex, targetIndex:startIndex, rects, rowHeight:rowEl.offsetHeight };
   rowEl.style.transition='none'; rowEl.style.zIndex='50'; rowEl.style.position='relative';
@@ -621,45 +852,62 @@ function onDragEnd(){
   window.removeEventListener('pointermove', onDragMove);
   window.removeEventListener('pointerup', onDragEnd);
 
-  const loc = locations[currentLoc];
-  const task = loc.tasks.find(t=>t.id===dragCtx.taskId);
-  loc.tasks.splice(dragCtx.startIndex, 1);
-  loc.tasks.splice(dragCtx.targetIndex, 0, task);
+  const task = currentCtx.tasks.find(t=>t.taskId===dragCtx.taskId);
+  currentCtx.tasks.splice(dragCtx.startIndex, 1);
+  currentCtx.tasks.splice(dragCtx.targetIndex, 0, task);
+  saveLocalState();
+  enqueue('reorderTasks', { orderedIds: currentCtx.tasks.map(t=>t.taskId) });
 
   dragCtx = null;
   renderChecklist();
 }
 
-// ---------- global log ----------
+// ---------- today's log, across everything this phone has touched ----------
 function renderLog(){
-  const all = [];
-  Object.values(locations).forEach(loc=> loc.tasks.forEach(t=>{ if (t.status==='done') all.push(t); }));
-  all.sort((a,b)=> b.segments[b.segments.length-1].end - a.segments[a.segments.length-1].end);
-  if (all.length===0){ logList.innerHTML = '<div class="empty">No entries yet</div>'; return; }
-  logList.innerHTML = all.map(t=>{
+  const q = loadQueue();
+  updateConnBadge();
+  const doneHere = (currentCtx && currentCtx.tasks) ? currentCtx.tasks.filter(t=>t.status==='done') : [];
+  if (doneHere.length===0 && q.length===0){ logList.innerHTML = '<div class="empty">No entries yet</div>'; return; }
+  const pendingIds = new Set(q.filter(item=>item.action==='logEntry').map(item=>item.body.taskId));
+  logList.innerHTML = doneHere.map(t=>{
     const mins = Math.round(segMs(t)/60000);
-    const sessionNote = t.segments.length>1 ? (' · '+t.segments.length+' sessions') : '';
-    return '<div class="entry"><div><div>'+t.employee+' — '+t.name+'</div>'+
-      '<div class="meta">'+t.jobLabel+' · '+mins+' min'+sessionNote+'</div></div>'+
-      '<span class="pill '+(t.synced?'synced':'pending')+'">'+(t.synced?'Synced':'Pending')+'</span></div>';
+    const pending = pendingIds.has(t.taskId);
+    return '<div class="entry"><div><div>'+currentUser+' — '+t.name+'</div>'+
+      '<div class="meta">'+currentCtx.customerName+' — '+currentCtx.model+' · '+mins+' min</div></div>'+
+      '<span class="pill '+(pending?'pending':'synced')+'">'+(pending?'Pending':'Synced')+'</span></div>';
   }).join('');
 }
-function syncPending(){
-  let changed=false;
-  Object.values(locations).forEach(loc=> loc.tasks.forEach(t=>{ if (t.status==='done' && !t.synced){ t.synced=true; changed=true; } }));
-  if (changed) renderLog();
-}
 
-const hadSavedState = loadState();
-if (currentUser){
-  whoName.textContent = currentUser;
-  overlay.style.display = 'none';
-} else {
-  overlay.style.display = 'flex';
+// ======================= startup =======================
+async function boot(){
+  if (WEBAPP_URL.indexOf('PASTE_YOUR') === 0){
+    setupWarning.classList.add('show');
+  }
+  loadLocalState();
+  await refreshData();
+  populateLocationPicker();
+
+  currentCtx = resolveInitialContext();
+  setSelectValue();
+  saveLocalState();
+
+  if (currentUser){ whoName.textContent = currentUser; overlay.style.display = 'none'; }
+  else {
+    nameButtons.innerHTML = (DATA && DATA.employees ? DATA.employees : []).map(n =>
+      '<button class="name-btn" data-name="'+n+'">'+n+'</button>').join('');
+    nameButtons.querySelectorAll('.name-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ currentUser = btn.dataset.name; whoName.textContent = currentUser; overlay.style.display='none'; saveLocalState(); });
+    });
+    overlay.style.display = 'flex';
+  }
+  document.getElementById('switchUser').addEventListener('click', ()=> overlay.style.display='flex');
+
+  renderBoatCard();
+  renderView();
+  flushQueue();
 }
-locSelect.value = currentLoc;
-renderBoatCard();
-renderView();
+boot();
+
 </script>
 </body>
 </html>
