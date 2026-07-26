@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Nelson Marine — Work Board</title>
+<title>Nelson Marine — Shop Mode</title>
 <style>
   :root{
     --ink:#0f2438; --deep:#0a1a2b; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
-    --go:#1c6e4a; --go-bg:#e3f2ea; --stop:#8a2f1f; --amber:#a5690a; --amber-bg:#fbf1de;
-    --pause-blue:#1565a8; --slip-accent:#1c4f72; --slip-bg:#eaf2f7; --yard-accent:#8a5a2b; --yard-bg:#f7f0e4;
-    --caution-bg:#fff6cf; --caution-border:#e8cf5a; --caution-text:#7a5f0a;
+    --go:#1c6e4a; --go-dark:#154f37; --go-bg:#e3f2ea; --stop:#8a2f1f; --amber:#a5690a; --amber-bg:#fbf1de;
+    --pause-blue:#1565a8; --pause-blue-dark:#0f4c85; --slip-accent:#1c4f72; --slip-bg:#eaf2f7;
+    --yard-accent:#8a5a2b; --yard-bg:#f7f0e4; --caution-bg:#fff6cf; --caution-border:#e8cf5a; --caution-text:#7a5f0a;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;height:100%;overflow:hidden;}
@@ -19,76 +19,125 @@
     display:flex; flex-direction:column; height:100vh; width:100vw;
   }
 
-  /* ---- header bar ---- */
   header{
     flex-shrink:0; display:flex; align-items:center; justify-content:space-between;
-    padding:14px 26px; background:var(--deep); color:var(--white);
+    padding:12px 22px; background:var(--deep); color:var(--white); gap:16px;
   }
-  .brand{ font-size:20px; font-weight:800; letter-spacing:.01em; }
-  .brand .sub{ font-size:13px; font-weight:600; color:#9fb4c4; margin-left:12px; letter-spacing:.04em; }
-  .status{ display:flex; align-items:center; gap:10px; font-size:14px; color:#cfe0ea; font-weight:600; }
-  .dot{ width:11px;height:11px;border-radius:50%;background:#4fd18b;flex-shrink:0; }
+  .brand{ font-size:19px; font-weight:800; letter-spacing:.01em; white-space:nowrap; }
+  .brand .sub{ font-size:12.5px; font-weight:600; color:#9fb4c4; margin-left:10px; letter-spacing:.04em; }
+  .header-right{ display:flex; align-items:center; gap:14px; }
+  .status{ display:flex; align-items:center; gap:8px; font-size:13px; color:#cfe0ea; font-weight:600; white-space:nowrap; }
+  .dot{ width:10px;height:10px;border-radius:50%;background:#4fd18b;flex-shrink:0; }
   .dot.stale{ background:#e0705a; }
+  .whoami-btn{
+    background:#16324a; border:1px solid #2c4c68; color:var(--white); font-size:13.5px; font-weight:700;
+    padding:8px 14px; border-radius:20px; cursor:pointer; white-space:nowrap;
+  }
+  .whoami-btn .who-label{ color:#9fb4c4; font-weight:600; margin-right:6px; }
 
-  /* ---- body split ---- */
   .body{ flex:1; display:flex; min-height:0; }
-  .left{ flex:3 1 0; min-width:0; padding:20px 22px; overflow-y:auto; }
-  .right{ flex:1 1 0; min-width:300px; max-width:420px; border-left:2px solid var(--line); background:var(--white); padding:20px 18px; overflow-y:auto; }
+  .left{ flex:3 1 0; min-width:0; padding:18px 20px; overflow-y:auto; }
+  .right{ flex:1 1 0; min-width:290px; max-width:400px; border-left:2px solid var(--line); background:var(--white); padding:18px 16px; overflow-y:auto; }
 
   .panel-title{
-    font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--slate);
-    margin:0 0 14px; display:flex; align-items:center; gap:8px;
+    font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--slate);
+    margin:0 0 12px; display:flex; align-items:center; gap:8px;
   }
-  .panel-title .count{
-    background:var(--line); color:var(--ink); font-size:12px; font-weight:800; padding:2px 9px; border-radius:20px;
-  }
+  .panel-title .count{ background:var(--line); color:var(--ink); font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; }
 
-  /* ---- work order cards (left) ---- */
-  .wo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(380px, 1fr)); gap:16px; align-content:start; }
-  .wo-card{ background:var(--white); border:1px solid var(--line); border-left:6px solid var(--slate); border-radius:12px; padding:16px 18px; }
+  .wo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(400px, 1fr)); gap:14px; align-content:start; }
+  .wo-card{ background:var(--white); border:1px solid var(--line); border-left:6px solid var(--slate); border-radius:12px; padding:14px 16px; }
   .wo-card.slip{ border-left-color:var(--slip-accent); }
   .wo-card.yard{ border-left-color:var(--yard-accent); }
-  .wo-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px; }
-  .wo-cust{ font-size:19px; font-weight:800; line-height:1.25; }
-  .wo-boat{ font-size:13.5px; color:var(--slate); margin-top:2px; }
+  .wo-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px; }
+  .wo-cust{ font-size:17px; font-weight:800; line-height:1.25; }
+  .wo-boat{ font-size:13px; color:var(--slate); margin-top:2px; }
   .wo-badges{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
-  .wo-num{ font-size:13px; font-weight:800; color:var(--white); background:var(--ink); padding:4px 11px; border-radius:20px; white-space:nowrap; }
-  .wo-loc{ font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .wo-num{ font-size:12.5px; font-weight:800; color:var(--white); background:var(--ink); padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .wo-loc{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
   .wo-loc.slip{ background:var(--slip-bg); color:var(--slip-accent); }
   .wo-loc.yard{ background:var(--yard-bg); color:var(--yard-accent); }
+  .wo-addtask{ background:none;border:1.5px dashed var(--line);border-radius:8px;color:var(--slate);font-weight:700;font-size:12.5px;padding:7px 10px;margin-top:8px;cursor:pointer;width:100%; }
 
-  .wo-tasks{ margin-top:8px; border-top:1px solid var(--line); padding-top:8px; }
-  .wo-task{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; font-size:15px; }
-  .wo-task .t-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .status-pill{ font-size:11px; font-weight:800; padding:3px 10px; border-radius:20px; white-space:nowrap; flex-shrink:0; text-transform:uppercase; letter-spacing:.03em; }
+  .wo-tasks{ margin-top:8px; border-top:1px solid var(--line); padding-top:6px; }
+  .task-row{ padding:9px 0; border-bottom:1px solid var(--line); }
+  .task-row:last-child{ border-bottom:none; }
+  .task-row-main{ display:flex; align-items:center; gap:10px; }
+  .task-main-content{ flex:1; min-width:0; }
+  .task-name{ font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .task-sub{ font-size:12px; color:var(--slate); margin-top:2px; }
+  .priority-1{ border-left:8px solid var(--stop); padding-left:8px; margin-left:-16px; }
+  .priority-2{ border-left:8px solid var(--amber); padding-left:8px; margin-left:-16px; }
+  .priority-3{ border-left:8px solid var(--slate); padding-left:8px; margin-left:-16px; }
+
+  .pill-btn{ font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:16px;white-space:nowrap;flex-shrink:0;cursor:pointer;border:1px solid transparent; }
+  .pill-btn.start,.pill-btn.resume{ background:var(--white);color:var(--go);border:1px solid var(--go); }
+  .pill-btn.pause{ background:var(--white);color:var(--pause-blue);border:1px solid var(--pause-blue); }
+  .pill-btn.complete{ background:var(--go);color:var(--white); }
+  .pill-btn.unflag{ background:var(--white);color:var(--caution-text);border:1px solid var(--caution-border); }
+  .row-timer{ font-size:16px;font-weight:800;color:var(--go);font-variant-numeric:tabular-nums;flex-shrink:0;min-width:52px;text-align:right; }
+  .status-pill{ font-size:10px; font-weight:800; padding:2px 8px; border-radius:20px; white-space:nowrap; text-transform:uppercase; letter-spacing:.03em; }
   .status-pill.pending{ background:var(--paper); color:var(--slate); border:1px solid var(--line); }
-  .status-pill.active{ background:var(--go-bg); color:var(--go); }
   .status-pill.paused{ background:var(--amber-bg); color:var(--amber); }
   .status-pill.flagged{ background:var(--caution-bg); color:var(--caution-text); border:1px solid var(--caution-border); }
 
-  .empty-note{ color:var(--slate); font-size:15px; padding:30px 4px; }
+  .task-row-secondary{ margin-top:6px; padding-left:0; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .notes-photo-group{ display:flex; align-items:center; gap:12px; }
+  .icon-btn{ background:none;border:none;font-size:17px;padding:2px;cursor:pointer;line-height:1;opacity:.6; }
+  .icon-btn.has-note{ opacity:1; color:var(--pause-blue); }
+  .icon-btn.flag-icon{ opacity:.55; }
 
-  /* ---- now running (right) ---- */
-  .run-card{
-    border:1.5px solid var(--go); border-radius:12px; padding:14px 16px; margin-bottom:14px; background:var(--go-bg);
-  }
-  .run-timer{ font-size:34px; font-weight:800; color:var(--go); font-variant-numeric:tabular-nums; line-height:1; }
-  .run-name{ font-size:16px; font-weight:700; margin-top:8px; }
-  .run-meta{ font-size:12.5px; color:var(--slate); margin-top:3px; }
-  .run-empty{ color:var(--slate); font-size:14px; padding:20px 4px; }
+  .empty-note{ color:var(--slate); font-size:14px; padding:26px 4px; }
 
-  /* smaller screens: stack instead of side-by-side */
+  .run-card{ border:1.5px solid var(--go); border-radius:12px; padding:12px 14px; margin-bottom:12px; background:var(--go-bg); }
+  .run-timer{ font-size:28px; font-weight:800; color:var(--go); font-variant-numeric:tabular-nums; line-height:1; }
+  .run-name{ font-size:14.5px; font-weight:700; margin-top:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .run-meta{ font-size:11.5px; color:var(--slate); margin-top:2px; }
+  .run-actions{ display:flex; gap:8px; margin-top:8px; }
+  .run-empty{ color:var(--slate); font-size:13.5px; padding:16px 4px; }
+
   @media (max-width:900px){
     .body{ flex-direction:column; }
     .right{ max-width:none; border-left:none; border-top:2px solid var(--line); }
   }
+
+  .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:center;justify-content:center;z-index:40; }
+  .sheet{ background:var(--white);width:100%;max-width:440px;border-radius:16px;padding:26px 24px 30px;max-height:82vh;overflow-y:auto; }
+  .sheet h3{margin:0 0 4px;font-size:19px;}
+  .sheet p{margin:0 0 18px;font-size:13px;color:var(--slate);}
+  .name-btn{ width:100%;text-align:left;padding:15px 16px;border:1px solid var(--line);border-radius:10px;background:var(--white);font-size:15px;font-weight:600;margin-bottom:9px;cursor:pointer;color:var(--ink); }
+  .name-btn:active{background:var(--paper);}
+  .sheet input[type="text"], .sheet textarea, .sheet select{
+    width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:9px;font-size:15px;font-family:inherit;margin-bottom:14px;
+  }
+  .btn-row{display:flex;gap:10px;}
+  .btn-secondary{flex:1;padding:12px 0;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--paper);color:var(--ink);}
+  .btn-primary{flex:1;padding:12px 0;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:none;background:var(--go);color:var(--white);}
+  .confirm-label{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate);font-weight:700;text-align:center;}
+  .confirm-title{font-size:21px;font-weight:800;text-align:center;margin-top:8px;}
+  .confirm-detail{font-size:13px;color:var(--slate);text-align:center;margin-top:8px;line-height:1.4;margin-bottom:20px;}
+  .big-btn{ width:100%;padding:15px 0;font-size:15px;font-weight:800;border:none;border-radius:12px;color:var(--white);cursor:pointer;margin-bottom:10px; }
+  .big-btn.big-pause{background:var(--pause-blue);}
+  .big-btn.big-complete{background:var(--go);}
+  .notes-photo-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+  .notes-photo-thumb{position:relative;width:66px;height:66px;border-radius:9px;overflow:hidden;border:1px solid var(--line);}
+  .notes-photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;}
+  .notes-photo-thumb .thumb-del{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(10,26,43,.75);color:var(--white);border:none;font-size:12px;font-weight:800;line-height:1;cursor:pointer;}
+  .parts-list-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;}
+  .parts-list-item:last-child{border-bottom:none;}
+  .parts-list-item .part-info b{display:block;font-size:14px;}
+  .parts-list-item .part-info span{color:var(--slate);font-size:12px;}
+  .parts-list-item .part-del{background:none;border:none;color:var(--stop);font-size:18px;font-weight:800;cursor:pointer;flex-shrink:0;}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="brand">Nelson Marine <span class="sub">WORK BOARD</span></div>
-  <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
+  <div class="brand">Nelson Marine <span class="sub">SHOP MODE</span></div>
+  <div class="header-right">
+    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
+    <button class="whoami-btn" id="whoamiBtn"><span class="who-label">Working as</span><span id="whoamiName">— tap to set —</span></button>
+  </div>
 </header>
 
 <div class="body">
@@ -102,17 +151,115 @@
   </div>
 </div>
 
-<script>
-// ======================= CONFIG =======================
-// Same deployed Apps Script Web App URL as the phone page -- this board
-// is read-only, so it only ever calls ?action=getAll, never POSTs.
-const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+<div class="overlay" id="whoamiOverlay" style="display:none;">
+  <div class="sheet">
+    <h3>Who's working?</h3>
+    <p>Whoever starts or resumes a job gets credited for the time logged on it.</p>
+    <div id="whoamiButtons"></div>
+  </div>
+</div>
 
-const REFRESH_MS = 15000; // how often to re-fetch from the sheet
+<div class="overlay" id="newTaskOverlay" style="display:none;">
+  <div class="sheet">
+    <h3>Add a task</h3>
+    <p id="newTaskBoatLabel">What needs doing?</p>
+    <input type="text" id="newTaskInput" placeholder="e.g. Replace bilge pump">
+    <select id="newTaskBillMode">
+      <option value="timed">⏱ Timed</option>
+      <option value="complete">✅ Completion</option>
+    </select>
+    <div class="btn-row">
+      <button class="btn-secondary" id="newTaskCancelBtn">Cancel</button>
+      <button class="btn-primary" id="newTaskAddBtn">Add Task</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="confirmOverlay" style="display:none;">
+  <div class="sheet">
+    <div class="confirm-label">Mark complete?</div>
+    <div class="confirm-title" id="confirmTaskName">—</div>
+    <div class="confirm-detail">This stops timing and checks it off. You can undo it from the Sheet if you tap the wrong one.</div>
+    <button class="big-btn big-pause" id="confirmCancelBtn">Not Yet — Keep Going</button>
+    <button class="big-btn big-complete" id="confirmYesBtn">Yes, Job Complete</button>
+  </div>
+</div>
+
+<div class="overlay" id="flagConfirmOverlay" style="display:none;">
+  <div class="sheet">
+    <div class="confirm-label">Flag job as Incompletable</div>
+    <div class="confirm-title" id="flagConfirmTaskName">—</div>
+    <div class="confirm-detail">This marks the task as blocked so the office can see it, without deleting it. Unflag it later if it turns out to be doable.</div>
+    <button class="big-btn big-pause" id="flagConfirmCancelBtn">Cancel</button>
+    <button class="big-btn big-complete" id="flagConfirmYesBtn">Yes, Flag It</button>
+  </div>
+</div>
+
+<div class="overlay" id="notesOverlay" style="display:none;">
+  <div class="sheet">
+    <h3 id="notesTaskTitle">Notes</h3>
+    <textarea id="notesTextarea" rows="5" placeholder="Anything worth flagging about this task..."></textarea>
+    <div id="notesPhotoList"></div>
+    <button class="btn-secondary" id="notesAddPhotoBtn" style="width:100%;margin-bottom:14px;">+ Add Photo</button>
+    <div class="btn-row">
+      <button class="btn-secondary" id="notesCancelBtn">Cancel</button>
+      <button class="btn-primary" id="notesSaveBtn">Save Notes</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="photoChoiceOverlay" style="display:none;">
+  <div class="sheet">
+    <h3>Add Photo</h3>
+    <div class="btn-row" style="flex-direction:column;gap:10px;">
+      <button class="btn-primary" id="photoChoiceCameraBtn" style="width:100%;">📷 Take Photo</button>
+      <button class="btn-secondary" id="photoChoiceLibraryBtn" style="width:100%;">🖼️ Choose from Library</button>
+      <button class="btn-secondary" id="photoChoiceCancelBtn" style="width:100%;">Cancel</button>
+    </div>
+  </div>
+</div>
+<input type="file" accept="image/*" capture="environment" id="sharedPhotoCameraInput" style="display:none;">
+<input type="file" accept="image/*" multiple id="sharedPhotoLibraryInput" style="display:none;">
+
+<div class="overlay" id="photoViewOverlay" style="display:none;">
+  <div style="position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;">
+    <button style="position:absolute;top:20px;right:16px;width:42px;height:42px;border-radius:50%;border:none;background:var(--white);color:var(--ink);font-size:22px;font-weight:800;cursor:pointer;" id="photoViewCloseBtn">&times;</button>
+    <img id="photoViewImg" src="" alt="Photo" style="max-width:92vw;max-height:80vh;border-radius:10px;">
+  </div>
+</div>
+
+<div class="overlay" id="partsOverlay" style="display:none;">
+  <div class="sheet">
+    <h3 id="partsTaskTitle">⚙️ Parts List</h3>
+    <div id="partsList"></div>
+    <input type="text" id="partNameInput" placeholder="Part name" list="partNameSuggestions">
+    <input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">
+    <input type="text" id="partSupplierInput" placeholder="Supplier" list="partSupplierSuggestions">
+    <input type="text" id="partQtyInput" placeholder="Quantity" inputmode="numeric">
+    <datalist id="partNameSuggestions"></datalist>
+    <datalist id="partNumberSuggestions"></datalist>
+    <datalist id="partSupplierSuggestions"></datalist>
+    <button class="btn-secondary" id="partAddBtn" style="width:100%;margin-bottom:14px;">+ Add Part</button>
+    <div class="btn-row">
+      <button class="btn-secondary" id="partsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+const REFRESH_MS = 15000;
 
 let DATA = null;
 let lastFetchOk = null;
 let lastFetchAt = null;
+let currentEmployee = null;
+let taskRuntime = {};
+let pendingStatusOverride = {};
+
+const STORAGE_KEY = 'nelsonMarineBoardState_v1';
+const QUEUE_KEY = 'nelsonMarineBoardQueue_v1';
+const CACHE_KEY = 'nelsonMarineBoardCache_v1';
 
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
@@ -120,35 +267,456 @@ const woGrid = document.getElementById('woGrid');
 const woCount = document.getElementById('woCount');
 const runList = document.getElementById('runList');
 const runCount = document.getElementById('runCount');
+const whoamiBtn = document.getElementById('whoamiBtn');
+const whoamiName = document.getElementById('whoamiName');
+const whoamiOverlay = document.getElementById('whoamiOverlay');
+const whoamiButtons = document.getElementById('whoamiButtons');
 
-// ======================= lookups (same pattern as the phone page) =======================
+function saveLocalState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentEmployee, taskRuntime })); } catch(e){}
+}
+function loadLocalState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (saved.currentEmployee) currentEmployee = saved.currentEmployee;
+    if (saved.taskRuntime) taskRuntime = saved.taskRuntime;
+  } catch(e){}
+}
+function cacheData(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(DATA)); } catch(e){} }
+function loadCachedData(){ try{ const raw = localStorage.getItem(CACHE_KEY); return raw ? JSON.parse(raw) : null; } catch(e){ return null; } }
+
+function loadQueue(){ try{ return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch(e){ return []; } }
+function saveQueue(q){ try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch(e){} }
+function enqueue(action, body){
+  const q = loadQueue();
+  q.push({ action, body });
+  saveQueue(q);
+  flushQueue();
+}
+async function postToSheet(action, body){
+  let res;
+  try{
+    res = await fetch(WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ action }, body))
+    });
+  } catch(networkErr){
+    const e = new Error(networkErr.message || 'Network error'); e.isNetworkError = true; throw e;
+  }
+  const json = await res.json();
+  if (json && json.error){ const e = new Error(json.error); e.isServerError = true; throw e; }
+  return json;
+}
+let flushing = false;
+async function flushQueue(){
+  if (flushing) return;
+  flushing = true;
+  try{
+    while (true){
+      const q = loadQueue();
+      if (q.length === 0) break;
+      const item = q[0];
+      try{
+        const result = await postToSheet(item.action, item.body);
+        if (item.action === 'addTask' && item.tempId && result && result.id){
+          reconcileTempTaskId(item.tempId, result.id);
+        }
+        if (item.action === 'updateTask' && item.body && item.body.taskId){
+          delete pendingStatusOverride[item.body.taskId];
+        }
+        const remaining = loadQueue(); remaining.shift(); saveQueue(remaining);
+      } catch(err){
+        if (err.isNetworkError){ break; }
+        console.warn('Dropping a queued action the server rejected:', item, err.message);
+        const remaining2 = loadQueue(); remaining2.shift(); saveQueue(remaining2);
+      }
+    }
+  } finally { flushing = false; }
+}
+function reconcileTempTaskId(tempId, realId){
+  const t = DATA.tasks.find(t => t.taskId === tempId);
+  if (t) t.taskId = realId;
+  if (taskRuntime[tempId]){ taskRuntime[realId] = taskRuntime[tempId]; delete taskRuntime[tempId]; }
+  if (pendingStatusOverride[tempId] !== undefined){ pendingStatusOverride[realId] = pendingStatusOverride[tempId]; delete pendingStatusOverride[tempId]; }
+  const q = loadQueue();
+  q.forEach(item => { if (item.body && item.body.taskId === tempId) item.body.taskId = realId; });
+  saveQueue(q);
+  saveLocalState();
+  render();
+}
+
 function boatById(id){ return DATA.boats.find(b => b.boatId === id); }
 function customerById(id){ return DATA.customers.find(c => c.customerId === id); }
 function slipForBoat(boatId){ return DATA.locations.find(l => l.boatId === boatId); }
+function findTaskById(taskId){ return DATA.tasks.find(t => t.taskId === taskId); }
+function workOrderSortKey(wo){ const n = parseFloat(String(wo).replace(/[^0-9.]/g, '')); return isNaN(n) ? Infinity : n; }
 
-// A work order number can be a plain integer, something like "WO #4471",
-// or occasionally left blank -- sort numerically on whatever digits are
-// in it, with anything unparsable (or blank) pushed to the end rather
-// than sorting alphabetically ahead of real numbers.
-function workOrderSortKey(wo){
-  const n = parseFloat(String(wo).replace(/[^0-9.]/g, ''));
-  return isNaN(n) ? Infinity : n;
+function ensureRuntime(task){
+  if (taskRuntime[task.taskId]) return taskRuntime[task.taskId];
+  const rt = { segStart: null, segments: [], employee: null };
+  if (task.status === 'active'){
+    rt.segStart = task.activeSince ? new Date(task.activeSince).getTime() : Date.now();
+  }
+  taskRuntime[task.taskId] = rt;
+  return rt;
 }
-
+function segMs(taskId){ return (taskRuntime[taskId] ? taskRuntime[taskId].segments : []).reduce((s, seg) => s + (seg.end - seg.start), 0); }
+function liveMs(task){
+  const rt = taskRuntime[task.taskId];
+  return segMs(task.taskId) + (rt && rt.segStart ? (Date.now() - rt.segStart) : 0);
+}
 function fmtElapsed(ms){
   const total = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = total % 60;
+  const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
   const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0');
   return h > 0 ? (h + ':' + mm + ':' + ss) : (mm + ':' + ss);
 }
 
-// ======================= rendering =======================
+let pendingWhoamiAction = null;
+function openWhoami(){
+  whoamiButtons.innerHTML = (DATA && DATA.employees ? DATA.employees : []).map(n =>
+    '<button class="name-btn" data-name="' + n + '">' + n + '</button>').join('');
+  whoamiButtons.querySelectorAll('.name-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentEmployee = btn.dataset.name;
+      whoamiName.textContent = currentEmployee;
+      saveLocalState();
+      whoamiOverlay.style.display = 'none';
+      if (pendingWhoamiAction){ const fn = pendingWhoamiAction; pendingWhoamiAction = null; fn(); }
+    });
+  });
+  whoamiOverlay.style.display = 'flex';
+}
+whoamiBtn.addEventListener('click', () => { pendingWhoamiAction = null; openWhoami(); });
+function requireEmployee(action){
+  if (currentEmployee){ action(); return; }
+  pendingWhoamiAction = action;
+  openWhoami();
+}
+
+function startTask(task){
+  requireEmployee(() => {
+    const rt = ensureRuntime(task);
+    rt.segStart = Date.now();
+    rt.employee = currentEmployee;
+    task.status = 'active';
+    pendingStatusOverride[task.taskId] = 'active';
+    saveLocalState();
+    enqueue('updateTask', { taskId: task.taskId, status: 'active' });
+    render();
+  });
+}
+function pauseTask(task){
+  const rt = taskRuntime[task.taskId];
+  if (rt && rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
+  task.status = 'paused';
+  pendingStatusOverride[task.taskId] = 'paused';
+  saveLocalState();
+  enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
+  render();
+}
+function completeSimpleTask(task){
+  task.status = 'done';
+  pendingStatusOverride[task.taskId] = 'done';
+  saveLocalState();
+  enqueue('updateTask', { taskId: task.taskId, status: 'done' });
+  render();
+}
+let pendingCompleteTaskId = null;
+function openCompleteConfirm(task){
+  pendingCompleteTaskId = task.taskId;
+  document.getElementById('confirmTaskName').textContent = '"' + task.name + '"';
+  document.getElementById('confirmOverlay').style.display = 'flex';
+}
+function completeTimedTask(task){
+  const rt = ensureRuntime(task);
+  if (rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
+  const mins = Math.round(segMs(task.taskId) / 60000);
+  const last = rt.segments[rt.segments.length - 1] || { start: Date.now(), end: Date.now() };
+  const employee = rt.employee || currentEmployee || 'Unknown';
+  task.status = 'done';
+  pendingStatusOverride[task.taskId] = 'done';
+  saveLocalState();
+  enqueue('updateTask', { taskId: task.taskId, status: 'done' });
+  enqueue('logEntry', {
+    taskId: task.taskId, boatId: task.boatId, workOrder: task.workOrder || '',
+    employee, taskName: task.name,
+    segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
+  });
+  delete taskRuntime[task.taskId];
+  render();
+}
+
+let pendingFlagTaskId = null;
+function openFlagConfirm(task){
+  pendingFlagTaskId = task.taskId;
+  document.getElementById('flagConfirmTaskName').textContent = '"' + task.name + '"';
+  document.getElementById('flagConfirmOverlay').style.display = 'flex';
+}
+function setFlag(task, flagged){
+  if (flagged){
+    task._preFlagStatus = task.status;
+    task.status = 'flagged';
+  } else {
+    task.status = task._preFlagStatus || 'pending';
+    delete task._preFlagStatus;
+  }
+  pendingStatusOverride[task.taskId] = task.status;
+  saveLocalState();
+  enqueue('updateTask', { taskId: task.taskId, status: task.status });
+  render();
+}
+
+let addTaskBoatId = null;
+function openAddTask(boatId, custBoatLabel){
+  addTaskBoatId = boatId;
+  document.getElementById('newTaskBoatLabel').textContent = custBoatLabel;
+  document.getElementById('newTaskInput').value = '';
+  document.getElementById('newTaskBillMode').value = 'timed';
+  document.getElementById('newTaskOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('newTaskInput').focus(), 50);
+}
+document.getElementById('newTaskCancelBtn').addEventListener('click', () => document.getElementById('newTaskOverlay').style.display = 'none');
+document.getElementById('newTaskAddBtn').addEventListener('click', () => {
+  const name = document.getElementById('newTaskInput').value.trim();
+  if (!name) return;
+  const billMode = document.getElementById('newTaskBillMode').value;
+  const tempId = 'temp_' + Date.now();
+  const boat = boatById(addTaskBoatId);
+  const existing = DATA.tasks.filter(t => t.boatId === addTaskBoatId);
+  DATA.tasks.push({ taskId: tempId, boatId: addTaskBoatId, name, status: 'pending', note: '', order: existing.length + 1, billMode, priority: 2, workOrder: boat ? boat.currentWorkOrder : '' });
+  enqueue('addTask', { boatId: addTaskBoatId, name, billMode });
+  const q = loadQueue(); q[q.length - 1].tempId = tempId; saveQueue(q);
+  document.getElementById('newTaskOverlay').style.display = 'none';
+  render();
+});
+
+let notesTaskRef = null;
+function openNotes(task){
+  notesTaskRef = task.taskId;
+  document.getElementById('notesTaskTitle').textContent = 'Notes — ' + task.name;
+  document.getElementById('notesTextarea').value = task.note || '';
+  renderNotesPhotoList();
+  document.getElementById('notesOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('notesTextarea').focus(), 50);
+}
+function renderNotesPhotoList(){
+  const wrap = document.getElementById('notesPhotoList');
+  const photos = (DATA.photos || []).filter(p => p.taskId === notesTaskRef);
+  wrap.innerHTML = photos.length === 0 ? '' :
+    '<div class="notes-photo-grid">' + photos.map(p =>
+      '<div class="notes-photo-thumb"><img src="' + p.url + '" alt="Task photo" onclick="openPhotoView(\'' + p.photoId + '\')">' +
+        '<button class="thumb-del" onclick="deleteNotePhoto(\'' + p.photoId + '\')" title="Delete">&times;</button></div>'
+    ).join('') + '</div>';
+}
+function openPhotoView(photoId){
+  const photo = (DATA.photos || []).find(p => p.photoId === photoId);
+  document.getElementById('photoViewImg').src = photo ? photo.url : '';
+  document.getElementById('photoViewOverlay').style.display = 'flex';
+}
+document.getElementById('photoViewCloseBtn').addEventListener('click', () => document.getElementById('photoViewOverlay').style.display = 'none');
+async function deleteNotePhoto(photoId){
+  if (!confirm('Delete this photo?')) return;
+  await postToSheet('deletePhoto', { photoId });
+  DATA.photos = (DATA.photos || []).filter(p => p.photoId !== photoId);
+  renderNotesPhotoList();
+}
+document.getElementById('notesAddPhotoBtn').addEventListener('click', () => {
+  const task = findTaskById(notesTaskRef);
+  const btn = document.getElementById('notesAddPhotoBtn');
+  const originalText = btn.textContent;
+  openPhotoChoice({
+    boatId: task ? task.boatId : null, taskId: notesTaskRef,
+    onProgress: (n, total) => { btn.textContent = total > 1 ? ('Uploading ' + n + ' of ' + total + '…') : 'Uploading…'; btn.disabled = true; },
+    onEach: () => renderNotesPhotoList(),
+    onDone: () => { btn.textContent = originalText; btn.disabled = false; }
+  });
+});
+document.getElementById('notesCancelBtn').addEventListener('click', () => document.getElementById('notesOverlay').style.display = 'none');
+document.getElementById('notesSaveBtn').addEventListener('click', () => {
+  if (!notesTaskRef) return;
+  const task = findTaskById(notesTaskRef);
+  if (task){
+    task.note = document.getElementById('notesTextarea').value.trim();
+    enqueue('updateTask', { taskId: notesTaskRef, note: task.note });
+  }
+  document.getElementById('notesOverlay').style.display = 'none';
+  render();
+});
+
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxDim){ height = Math.round(height * maxDim / width); width = maxDim; }
+        else if (height > maxDim){ width = Math.round(width * maxDim / height); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Could not read that image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadPhoto(file, boatId, taskId){
+  try{
+    const dataUrl = await compressImage(file, 1600, 0.72);
+    const base64 = dataUrl.split(',')[1];
+    return await postToSheet('uploadPhoto', { boatId, taskId: taskId || '', imageData: base64, mimeType: 'image/jpeg', employee: currentEmployee || '' });
+  } catch(err){
+    alert('Photo upload failed: ' + err.message);
+    return null;
+  }
+}
+async function uploadPhotoBatch(files, boatId, taskId, progressCb, onSuccessCb){
+  for (let i = 0; i < files.length; i++){
+    if (progressCb) progressCb(i + 1, files.length);
+    const result = await uploadPhoto(files[i], boatId, taskId);
+    if (result && result.ok && onSuccessCb) onSuccessCb(result);
+  }
+}
+let photoUploadContext = null;
+function openPhotoChoice(ctx){ photoUploadContext = ctx; document.getElementById('photoChoiceOverlay').style.display = 'flex'; }
+document.getElementById('photoChoiceCameraBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; document.getElementById('sharedPhotoCameraInput').click(); });
+document.getElementById('photoChoiceLibraryBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; document.getElementById('sharedPhotoLibraryInput').click(); });
+document.getElementById('photoChoiceCancelBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; photoUploadContext = null; });
+function handleChosenFiles(fileList){
+  const files = Array.from(fileList);
+  const ctx = photoUploadContext; photoUploadContext = null;
+  if (!ctx || files.length === 0) return;
+  uploadPhotoBatch(files, ctx.boatId, ctx.taskId, ctx.onProgress, (result) => {
+    DATA.photos = DATA.photos || [];
+    DATA.photos.push({ boatId: ctx.boatId, taskId: ctx.taskId || '', url: result.url, photoId: result.photoId });
+    if (ctx.onEach) ctx.onEach(result);
+  }).then(() => { if (ctx.onDone) ctx.onDone(); });
+}
+document.getElementById('sharedPhotoCameraInput').addEventListener('change', (e) => { handleChosenFiles(e.target.files); e.target.value = ''; });
+document.getElementById('sharedPhotoLibraryInput').addEventListener('change', (e) => { handleChosenFiles(e.target.files); e.target.value = ''; });
+
+let partsTaskRef = null;
+function openParts(task){
+  partsTaskRef = task.taskId;
+  document.getElementById('partsTaskTitle').textContent = '⚙️ Parts List — ' + task.name;
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
+  renderPartsList();
+  populatePartSuggestions();
+  document.getElementById('partsOverlay').style.display = 'flex';
+}
+function renderPartsList(){
+  const wrap = document.getElementById('partsList');
+  const parts = (DATA.parts || []).filter(p => p.taskId === partsTaskRef);
+  wrap.innerHTML = parts.length === 0 ? '' : parts.map(p =>
+    '<div class="parts-list-item"><div class="part-info"><b>' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</b>' +
+      '<span>' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + '</span></div>' +
+      '<button class="part-del" onclick="deletePart(\'' + p.partId + '\')" title="Delete">&times;</button></div>'
+  ).join('');
+}
+function populatePartSuggestions(){
+  const names = [...new Set((DATA.parts||[]).map(p=>p.partName).filter(Boolean))].sort();
+  const numbers = [...new Set((DATA.parts||[]).map(p=>p.partNumber).filter(Boolean))].sort();
+  const suppliers = [...new Set((DATA.parts||[]).map(p=>p.supplier).filter(Boolean))].sort();
+  document.getElementById('partNameSuggestions').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('partNumberSuggestions').innerHTML = numbers.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('partSupplierSuggestions').innerHTML = suppliers.map(n=>'<option value="'+n+'">').join('');
+}
+document.getElementById('partAddBtn').addEventListener('click', () => {
+  const partName = document.getElementById('partNameInput').value.trim();
+  if (!partName) return;
+  const partNumber = document.getElementById('partNumberInput').value.trim();
+  const supplier = document.getElementById('partSupplierInput').value.trim();
+  const quantity = document.getElementById('partQtyInput').value.trim();
+  const task = findTaskById(partsTaskRef);
+  const boatId = task ? task.boatId : null;
+  const tempId = 'temp_' + Date.now();
+  DATA.parts = DATA.parts || [];
+  DATA.parts.push({ partId: tempId, taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
+  enqueue('addPart', { taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
+  renderPartsList(); populatePartSuggestions();
+});
+async function deletePart(partId){
+  if (!confirm('Delete this part entry?')) return;
+  DATA.parts = (DATA.parts || []).filter(p => p.partId !== partId);
+  renderPartsList();
+  if (String(partId).indexOf('temp_') === 0) return;
+  await postToSheet('deletePart', { partId });
+}
+document.getElementById('partsCloseBtn').addEventListener('click', () => document.getElementById('partsOverlay').style.display = 'none');
+
+document.getElementById('confirmCancelBtn').addEventListener('click', () => { pendingCompleteTaskId = null; document.getElementById('confirmOverlay').style.display = 'none'; });
+document.getElementById('confirmYesBtn').addEventListener('click', () => {
+  if (pendingCompleteTaskId){
+    const task = findTaskById(pendingCompleteTaskId);
+    if (task) completeTimedTask(task);
+  }
+  pendingCompleteTaskId = null;
+  document.getElementById('confirmOverlay').style.display = 'none';
+});
+document.getElementById('flagConfirmCancelBtn').addEventListener('click', () => { pendingFlagTaskId = null; document.getElementById('flagConfirmOverlay').style.display = 'none'; });
+document.getElementById('flagConfirmYesBtn').addEventListener('click', () => {
+  if (pendingFlagTaskId){
+    const task = findTaskById(pendingFlagTaskId);
+    if (task) setFlag(task, true);
+  }
+  pendingFlagTaskId = null;
+  document.getElementById('flagConfirmOverlay').style.display = 'none';
+});
+
+function priorityClass(t){ return 'priority-' + (t.priority || 2); }
+
+function taskRowHtml(t){
+  const hasNotePhoto = (DATA.photos || []).some(p => p.taskId === t.taskId);
+  const noteLabel = '&#128221;' + (hasNotePhoto ? ' &#128247;' : '');
+  const noteCls = (t.note || hasNotePhoto) ? 'has-note' : '';
+  const isTimed = String(t.billMode || '').trim().toLowerCase() !== 'complete';
+  const notesBtn = '<button class="icon-btn ' + noteCls + '" onclick="openNotes(findTaskById(\'' + t.taskId + '\'))" title="Notes">' + noteLabel + '</button>';
+  const partsBtn = '<button class="icon-btn" onclick="openParts(findTaskById(\'' + t.taskId + '\'))" title="Parts">&#9881;&#65039;</button>';
+  const flagBtn = '<button class="icon-btn flag-icon" onclick="openFlagConfirm(findTaskById(\'' + t.taskId + '\'))" title="Flag as incompletable">&#9888;&#65039;</button>';
+
+  let mainRight;
+  if (t.status === 'flagged'){
+    mainRight = '<span class="status-pill flagged">Flagged</span>' +
+      '<button class="pill-btn unflag" onclick="setFlag(findTaskById(\'' + t.taskId + '\'), false)">Unflag</button>';
+  } else if (!isTimed){
+    mainRight = '<button class="pill-btn start" onclick="completeSimpleTask(findTaskById(\'' + t.taskId + '\'))">Mark Done</button>';
+  } else if (t.status === 'active'){
+    mainRight = '<span class="row-timer" data-task="' + t.taskId + '">' + fmtElapsed(liveMs(t)) + '</span>' +
+      '<button class="pill-btn pause" onclick="pauseTask(findTaskById(\'' + t.taskId + '\'))">Pause</button>' +
+      '<button class="pill-btn complete" onclick="openCompleteConfirm(findTaskById(\'' + t.taskId + '\'))">Complete</button>';
+  } else if (t.status === 'paused'){
+    const mins = Math.round(segMs(t.taskId) / 60000);
+    mainRight = '<span class="status-pill paused">' + mins + ' min</span>' +
+      '<button class="pill-btn resume" onclick="startTask(findTaskById(\'' + t.taskId + '\'))">Resume</button>';
+  } else {
+    mainRight = '<button class="pill-btn start" onclick="startTask(findTaskById(\'' + t.taskId + '\'))">Start</button>';
+  }
+
+  const showFlagIcon = t.status !== 'flagged' && t.status !== 'active';
+
+  return '<div class="task-row ' + priorityClass(t) + '" data-rowid="' + t.taskId + '">' +
+    '<div class="task-row-main">' +
+      '<div class="task-main-content"><div class="task-name">' + t.name + '</div></div>' +
+      mainRight +
+    '</div>' +
+    '<div class="task-row-secondary">' +
+      '<span class="notes-photo-group">' + notesBtn + partsBtn + (showFlagIcon ? flagBtn : '') + '</span>' +
+      '<span></span>' +
+    '</div>' +
+  '</div>';
+}
+
 function renderWorkOrders(){
-  // Only boats with an actual work order number, and at least one task
-  // that isn't done yet -- a boat whose work order is fully wrapped up
-  // belongs in Billing, not on a board of what's still to do.
   const cards = DATA.boats
     .filter(b => b.currentWorkOrder)
     .map(b => ({ boat: b, tasks: DATA.tasks.filter(t => t.boatId === b.boatId && t.status !== 'done') }))
@@ -168,6 +736,7 @@ function renderWorkOrders(){
     const locType = slip ? 'slip' : 'yard';
     const locLabel = slip ? ('Slip ' + (slip.slipId.match(/\d+/) || ['?'])[0]) : 'Yard';
     const sortedTasks = tasks.slice().sort((a, b) => (a.priority || 2) - (b.priority || 2) || (a.order || 0) - (b.order || 0));
+    const custLabel = (cust ? cust.name : '—') + ' — ' + (boat.model || '');
 
     return '<div class="wo-card ' + locType + '">' +
       '<div class="wo-head">' +
@@ -176,20 +745,20 @@ function renderWorkOrders(){
         '<div class="wo-badges"><div class="wo-num">WO ' + boat.currentWorkOrder + '</div>' +
         '<div class="wo-loc ' + locType + '">' + locLabel + '</div></div>' +
       '</div>' +
-      '<div class="wo-tasks">' +
-        sortedTasks.map(t =>
-          '<div class="wo-task"><span class="t-name">' + t.name + '</span>' +
-            '<span class="status-pill ' + t.status + '">' + t.status + '</span></div>'
-        ).join('') +
-      '</div>' +
+      '<div class="wo-tasks">' + sortedTasks.map(taskRowHtml).join('') + '</div>' +
+      '<button class="wo-addtask" onclick="openAddTask(\'' + boat.boatId + '\', \'' + custLabel.replace(/'/g,"\\'") + '\')">+ Add Task</button>' +
     '</div>';
   }).join('');
 }
 
 function renderRunning(){
-  const running = DATA.tasks
-    .filter(t => t.status === 'active')
-    .sort((a, b) => new Date(a.activeSince || 0) - new Date(b.activeSince || 0)); // longest-running first
+  const running = DATA.tasks.filter(t => t.status === 'active');
+  running.forEach(ensureRuntime);
+  running.sort((a, b) => {
+    const aStart = taskRuntime[a.taskId] && taskRuntime[a.taskId].segStart ? taskRuntime[a.taskId].segStart : Infinity;
+    const bStart = taskRuntime[b.taskId] && taskRuntime[b.taskId].segStart ? taskRuntime[b.taskId].segStart : Infinity;
+    return aStart - bStart;
+  });
 
   runCount.textContent = running.length;
 
@@ -202,38 +771,38 @@ function renderRunning(){
     const boat = boatById(t.boatId);
     const cust = boat ? customerById(boat.customerId) : null;
     const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
-    return '<div class="run-card" data-since="' + (t.activeSince || '') + '">' +
-      '<div class="run-timer">' + (t.activeSince ? fmtElapsed(Date.now() - new Date(t.activeSince).getTime()) : '—:—') + '</div>' +
+    const rt = taskRuntime[t.taskId];
+    return '<div class="run-card" data-task="' + t.taskId + '">' +
+      '<div class="run-timer">' + fmtElapsed(liveMs(t)) + '</div>' +
       '<div class="run-name">' + t.name + '</div>' +
-      '<div class="run-meta">' + who + '</div>' +
+      '<div class="run-meta">' + who + (rt && rt.employee ? ' · ' + rt.employee : '') + '</div>' +
+      '<div class="run-actions">' +
+        '<button class="pill-btn pause" onclick="pauseTask(findTaskById(\'' + t.taskId + '\'))">Pause</button>' +
+        '<button class="pill-btn complete" onclick="openCompleteConfirm(findTaskById(\'' + t.taskId + '\'))">Complete</button>' +
+      '</div>' +
     '</div>';
   }).join('');
 }
 
 function render(){
   if (!DATA) return;
+  saveLocalState();
   renderWorkOrders();
   renderRunning();
 }
 
-// Re-stamps just the timer text every second without touching the rest
-// of the DOM -- a full render() every second would be wasteful and would
-// interrupt anyone reading the work-order list.
 function tickTimers(){
-  document.querySelectorAll('.run-card').forEach(el => {
-    const since = el.dataset.since;
-    if (!since) return;
-    const timerEl = el.querySelector('.run-timer');
-    if (timerEl) timerEl.textContent = fmtElapsed(Date.now() - new Date(since).getTime());
+  if (!DATA) return;
+  document.querySelectorAll('.row-timer, .run-timer').forEach(el => {
+    const rowEl = el.closest('[data-task],[data-rowid]');
+    const taskId = rowEl ? (rowEl.dataset.task || rowEl.dataset.rowid) : null;
+    const task = taskId ? findTaskById(taskId) : null;
+    if (task) el.textContent = fmtElapsed(liveMs(task));
   });
 }
 
 function updateStatusBar(){
-  if (lastFetchOk === null){
-    statusDot.className = 'dot';
-    statusText.textContent = 'Loading…';
-    return;
-  }
+  if (lastFetchOk === null){ statusDot.className = 'dot'; statusText.textContent = 'Loading…'; return; }
   const secsAgo = lastFetchAt ? Math.round((Date.now() - lastFetchAt) / 1000) : null;
   if (lastFetchOk){
     statusDot.className = 'dot';
@@ -244,28 +813,47 @@ function updateStatusBar(){
   }
 }
 
-// ======================= fetching =======================
+function mergeFetchedTasks(freshTasks){
+  return freshTasks.map(t => {
+    if (pendingStatusOverride[t.taskId] !== undefined){
+      return Object.assign({}, t, { status: pendingStatusOverride[t.taskId] });
+    }
+    return t;
+  });
+}
 async function refreshData(){
   try{
     const res = await fetch(WEBAPP_URL + '?action=getAll');
     const json = await res.json();
     if (json.error) throw new Error(json.error);
+    json.tasks = mergeFetchedTasks(json.tasks);
     DATA = json;
+    cacheData();
     lastFetchOk = true;
     lastFetchAt = Date.now();
   } catch (e){
-    console.warn('Work board: could not refresh from the sheet:', e);
+    console.warn('Shop Mode: could not refresh from the sheet:', e);
     lastFetchOk = false;
-    // keep showing whatever DATA already holds -- a stale board is far
-    // more useful on a wall-mounted tablet than a blank one
   }
   render();
   updateStatusBar();
 }
 
-refreshData();
-setInterval(refreshData, REFRESH_MS);
-setInterval(() => { tickTimers(); updateStatusBar(); }, 1000);
+function mergeCachedWithOverrides(cached){
+  cached.tasks = mergeFetchedTasks(cached.tasks || []);
+  return cached;
+}
+function boot(){
+  loadLocalState();
+  if (currentEmployee) whoamiName.textContent = currentEmployee;
+  const cached = loadCachedData();
+  if (cached){ DATA = mergeCachedWithOverrides(cached); render(); }
+  refreshData();
+  setInterval(refreshData, REFRESH_MS);
+  setInterval(() => { tickTimers(); updateStatusBar(); }, 1000);
+  flushQueue();
+}
+boot();
 </script>
 </body>
 </html>
