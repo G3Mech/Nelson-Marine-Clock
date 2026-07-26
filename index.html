@@ -255,11 +255,14 @@
 // Anyone > Deploy, then copy the URL ending in /exec).
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
 
-// An NFC tag at a physical slip links to this page with ?slip=slip14 (etc)
-// so tapping it jumps straight to that slip's boat. Yard boats have no
-// physical tag (stands aren't numbered), so they're reached through the
-// picker below instead.
+// NFC tags are attached to the boats themselves (not the slips), so the
+// same tag stays correct no matter which slip -- or the yard -- a boat
+// ends up in. Tapping a boat's tag links here with ?boat=b47 (etc).
 const urlParams = new URLSearchParams(window.location.search);
+const tagBoatId = urlParams.get('boat') || null;
+// ?slip=slip14 is kept as a secondary option -- e.g. for looking up
+// "whoever is in slip 14 right now" -- but it's not what gets written
+// onto a physical tag; boats carry their own tag now, not slips.
 const tagSlipId = urlParams.get('slip') || null;
 
 // ======================= STATE =======================
@@ -581,6 +584,10 @@ function populateLocationPicker(){
 // (an NFC tap), else whatever was last selected on this phone, else the
 // first thing in the picker.
 function resolveInitialContext(){
+  if (tagBoatId && boatById(tagBoatId)){
+    const slip = DATA.locations.find(l => l.boatId === tagBoatId);
+    return slip ? buildContextForBoat(tagBoatId, 'slip', slip.slipId) : buildContextForBoat(tagBoatId, 'yard');
+  }
   if (tagSlipId){
     const slip = slipById(tagSlipId);
     if (slip && slip.boatId) return buildContextForBoat(slip.boatId, 'slip', tagSlipId);
