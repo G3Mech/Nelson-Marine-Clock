@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Nelson Marine — Shop Mode</title>
+<title>Nelson Marine Databasin — Shop Mode</title>
 <style>
   :root{
     --ink:#0f2438; --deep:#0a1a2b; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
@@ -134,7 +134,7 @@
 <body>
 
 <header>
-  <div class="brand">Nelson Marine <span class="sub">SHOP MODE</span></div>
+  <div class="brand">Nelson Marine Databasin <span class="sub">SHOP MODE</span></div>
   <div class="header-right">
     <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
     <button class="whoami-btn" id="whoamiBtn"><span class="who-label">Working as</span><span id="whoamiName">— tap to set —</span></button>
@@ -268,6 +268,21 @@ const SAME_USER_WINDOW_MS = 10000;
 const STORAGE_KEY = 'nelsonMarineBoardState_v1';
 const QUEUE_KEY = 'nelsonMarineBoardQueue_v1';
 const CACHE_KEY = 'nelsonMarineBoardCache_v1';
+
+// ======================= sounds (same tones as the phone page) =======================
+let audioCtx = null;
+function getCtx(){ if(!audioCtx){ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); } if(audioCtx.state==='suspended'){ audioCtx.resume(); } return audioCtx; }
+function tone(ctx, freq, startAt, dur){
+  const o = ctx.createOscillator(); const g = ctx.createGain();
+  o.type='sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001, startAt);
+  g.gain.exponentialRampToValueAtTime(0.32, startAt+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, startAt+dur);
+  o.connect(g); g.connect(ctx.destination); o.start(startAt); o.stop(startAt+dur+0.02);
+}
+function playStartSound(){ tone(getCtx(), 880, getCtx().currentTime, 0.16); }
+function playPauseSound(){ tone(getCtx(), 550, getCtx().currentTime, 0.16); }
+function playDoneSound(){ const ctx=getCtx(); tone(ctx,660,ctx.currentTime,0.14); tone(ctx,440,ctx.currentTime+0.13,0.20); }
 
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
@@ -423,6 +438,7 @@ function startTask(task){
     pendingStatusOverride[task.taskId] = 'active';
     touchActivity();
     enqueue('updateTask', { taskId: task.taskId, status: 'active' });
+    playStartSound();
     render();
   });
 }
@@ -433,6 +449,7 @@ function pauseTask(task){
   pendingStatusOverride[task.taskId] = 'paused';
   touchActivity();
   enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
+  playPauseSound();
   render();
 }
 function completeSimpleTask(task){
@@ -441,6 +458,7 @@ function completeSimpleTask(task){
     pendingStatusOverride[task.taskId] = 'done';
     touchActivity();
     enqueue('updateTask', { taskId: task.taskId, status: 'done' });
+    playDoneSound();
     render();
   });
 }
@@ -470,6 +488,7 @@ function completeTimedTask(task){
     segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
   });
   delete taskRuntime[task.taskId];
+  playDoneSound();
   render();
 }
 
@@ -762,8 +781,8 @@ function renderWorkOrders(){
 
     return '<div class="wo-card ' + locType + '">' +
       '<div class="wo-head">' +
-        '<div><div class="wo-cust">' + (cust ? cust.name : '—') + '</div>' +
-        '<div class="wo-boat">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div></div>' +
+        '<div><div class="wo-cust">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div>' +
+        '<div class="wo-boat">' + (cust ? cust.name : '—') + '</div></div>' +
         '<div class="wo-badges"><div class="wo-num">WO ' + boat.currentWorkOrder + '</div>' +
         '<div class="wo-loc ' + locType + '">' + locLabel + '</div></div>' +
       '</div>' +
