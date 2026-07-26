@@ -28,8 +28,37 @@
   .demo-strip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;position:relative;top:-1px;}
   .dot.on{background:#4fd18b;} .dot.off{background:#e0705a;} .dot.connecting{background:#a9b7c0;}
 
-  .whoami{ display:flex;align-items:center;gap:8px;font-size:12px;color:var(--slate);padding:12px 20px 0; }
-  .whoami button{border:none;background:none;color:var(--slate);text-decoration:underline;font-size:12px;padding:0;cursor:pointer;}
+  /* ---- hamburger trigger -- big enough to hit reliably with a glove on ---- */
+  .hamburger-btn{
+    width:48px;height:48px;flex-shrink:0;border:none;background:none;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+  }
+  .hamburger-btn span{ display:block;width:26px;height:3px;border-radius:2px;background:var(--ink); }
+
+  /* ---- full-screen nav menu -- large tap targets throughout for gloved use ---- */
+  .menu-overlay{
+    position:fixed;inset:0;background:var(--white);z-index:60;display:none;flex-direction:column;
+    overflow-y:auto;
+  }
+  .menu-overlay.show{ display:flex; }
+  .menu-close{
+    align-self:flex-end;margin:14px 14px 0 0;width:56px;height:56px;border-radius:50%;
+    border:none;background:var(--paper);color:var(--ink);font-size:32px;font-weight:700;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;line-height:1;flex-shrink:0;
+  }
+  .menu-whoami{ padding:6px 26px 26px;border-bottom:1px solid var(--line); }
+  .menu-whoami-label{ font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate);font-weight:700; }
+  .menu-whoami-name{ font-size:25px;font-weight:800;margin-top:4px; }
+  .menu-switch-btn{
+    margin-top:16px;padding:16px 18px;border-radius:11px;border:1px solid var(--line);background:var(--paper);
+    color:var(--ink);font-size:16px;font-weight:700;cursor:pointer;width:100%;
+  }
+  .menu-nav{ display:flex;flex-direction:column;padding:6px 0; }
+  .menu-item{
+    display:block;padding:24px 26px;font-size:20px;font-weight:700;color:var(--ink);
+    text-decoration:none;border-bottom:1px solid var(--line);
+  }
+  .menu-item:active{ background:var(--paper); }
 
   header{ padding:16px 20px 14px; border-bottom:1px solid var(--line); }
   .yard{ font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate);font-weight:600;margin-bottom:8px; }
@@ -160,15 +189,10 @@
     This page isn't connected to the marina system yet — set WEBAPP_URL near the top of the code.
   </div>
 
-  <div class="whoami">
-    Logged in as <strong id="whoName">—</strong>
-    <button id="switchUser">not you?</button>
-  </div>
-
   <header>
     <div class="yard" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Nelson Marine · Job Clock</span>
-      <a href="tag-urls.html" style="color:var(--slate);text-transform:none;letter-spacing:normal;font-weight:600;font-size:12px;text-decoration:underline;">Tag URL Tool</a>
+      <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu"><span></span><span></span><span></span></button>
     </div>
     <select id="locSelect">
       <option value="">Loading…</option>
@@ -205,6 +229,20 @@
     <h2>Today, all jobs</h2>
     <div id="logList"><div class="empty">No entries yet</div></div>
   </section>
+</div>
+
+<div class="menu-overlay" id="menuOverlay">
+  <button class="menu-close" id="menuCloseBtn" aria-label="Close menu">&times;</button>
+  <div class="menu-whoami">
+    <div class="menu-whoami-label">Logged in as</div>
+    <div class="menu-whoami-name" id="menuWhoName">—</div>
+    <button class="menu-switch-btn" id="menuSwitchUser">Not you? Switch user</button>
+  </div>
+  <nav class="menu-nav">
+    <a class="menu-item" href="search.html">Search</a>
+    <a class="menu-item" href="find-work.html">Find Work</a>
+    <a class="menu-item" href="tag-urls.html">Tag URL Tool</a>
+  </nav>
 </div>
 
 <div class="overlay" id="setupOverlay">
@@ -287,7 +325,11 @@ const overlay = document.getElementById('setupOverlay');
 const nameButtons = document.getElementById('nameButtons');
 const confirmOverlay = document.getElementById('confirmOverlay');
 const confirmTaskName = document.getElementById('confirmTaskName');
-const whoName = document.getElementById('whoName');
+const whoName = document.getElementById('menuWhoName');
+const hamburgerBtn = document.getElementById('hamburgerBtn');
+const menuOverlay = document.getElementById('menuOverlay');
+const menuCloseBtn = document.getElementById('menuCloseBtn');
+const menuSwitchUser = document.getElementById('menuSwitchUser');
 const locSelect = document.getElementById('locSelect');
 const lockNote = document.getElementById('lockNote');
 const setupWarning = document.getElementById('setupWarning');
@@ -1006,7 +1048,10 @@ async function boot(){
     });
     overlay.style.display = 'flex';
   }
-  document.getElementById('switchUser').addEventListener('click', ()=> overlay.style.display='flex');
+  hamburgerBtn.addEventListener('click', ()=>{ menuWhoName_sync(); menuOverlay.classList.add('show'); });
+  menuCloseBtn.addEventListener('click', ()=> menuOverlay.classList.remove('show'));
+  menuSwitchUser.addEventListener('click', ()=>{ menuOverlay.classList.remove('show'); overlay.style.display='flex'; });
+  function menuWhoName_sync(){ whoName.textContent = currentUser || '—'; }
 
   renderBoatCard();
   renderView();
