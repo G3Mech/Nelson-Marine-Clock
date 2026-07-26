@@ -153,7 +153,7 @@
   .boat-parts-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);margin-bottom:8px;}
   .boat-parts-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px;}
   .boat-parts-item:last-child{border-bottom:none;}
-  .boat-parts-item b{display:block;}
+  .boat-parts-item .part-name-line{display:block;}
   .part-task-name{color:#9aa8b2;font-weight:400;font-size:12.5px;}
   .boat-parts-item span{color:var(--slate);font-size:12px;}
   .parts-list-item:last-child{border-bottom:none;}
@@ -956,7 +956,8 @@ function renderBoatPartsBox(){
       const task = findTask(p.taskId);
       const qtyLabel = p.quantity ? (', x'+p.quantity) : '';
       const taskLabel = task ? (' <span class="part-task-name">- '+task.name+'</span>') : '';
-      return '<div class="boat-parts-item"><div><b>'+p.partName+qtyLabel+'</b>'+taskLabel+
+      return '<div class="boat-parts-item"><div>' +
+        '<div class="part-name-line"><b>'+p.partName+qtyLabel+'</b>'+taskLabel+'</div>' +
         '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div></div>';
     }).join('') + '</div>';
 }
