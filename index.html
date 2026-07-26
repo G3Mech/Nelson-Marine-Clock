@@ -466,8 +466,16 @@ async function flushQueue(){
   if (isEffectivelyOffline()) return;
   flushing = true;
   try{
-    let q = loadQueue();
-    while (q.length > 0){
+    while (true){
+      // Re-read fresh on every pass, rather than looping over a snapshot
+      // taken once at the start. completeTask() enqueues updateTask and
+      // logEntry back-to-back -- the second one gets added to storage
+      // while the first is still mid-flight (awaiting its network call).
+      // A stale in-memory copy wouldn't know about that second item, and
+      // would silently erase it the moment it saved the queue back after
+      // finishing the first one. Reading fresh each time avoids that.
+      const q = loadQueue();
+      if (q.length === 0) break;
       const item = q[0];
       try{
         const result = await postToSheet(item.action, item.body);
@@ -477,8 +485,9 @@ async function flushQueue(){
         if (item.action === 'addTask' && item.tempId && result && result.id){
           reconcileTempTaskId(item.tempId, result.id);
         }
-        q.shift();
-        saveQueue(q);
+        const remaining = loadQueue();
+        remaining.shift();
+        saveQueue(remaining);
         lastSyncError = null;
       } catch(err){
         if (err.isNetworkError){
@@ -494,8 +503,9 @@ async function flushQueue(){
         // and never recover on its own)
         console.warn('Dropping a queued action the server rejected:', item, err.message);
         lastSyncError = item.action + ' failed permanently and was dropped: ' + err.message;
-        q.shift();
-        saveQueue(q);
+        const remaining2 = loadQueue();
+        remaining2.shift();
+        saveQueue(remaining2);
       }
     }
   } finally {
