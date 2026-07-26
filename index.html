@@ -147,6 +147,12 @@
   .notes-link.has-note{color:var(--pause-blue);font-weight:600;}
   .notes-photo-group{display:flex;align-items:center;gap:10px;}
   .quick-photo-btn{background:none;border:none;font-size:15px;padding:2px 0;cursor:pointer;line-height:1;}
+  .quick-parts-btn{background:none;border:none;font-size:15px;padding:2px 0;cursor:pointer;line-height:1;}
+  .parts-list-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+  .parts-list-item:last-child{border-bottom:none;}
+  .parts-list-item .part-info b{display:block;font-size:14px;}
+  .parts-list-item .part-info span{color:var(--slate);font-size:12px;}
+  .parts-list-item .part-del{background:none;border:none;color:var(--danger,#a5342a);font-size:18px;font-weight:800;cursor:pointer;flex-shrink:0;}
   .complete-link{ background:none;border:none;font-size:12px;color:var(--slate);text-decoration:underline;padding:2px 0;cursor:pointer;text-align:right; }
   .undo-link{ background:none;border:none;font-size:12px;color:var(--amber);text-decoration:underline;padding:2px 0;cursor:pointer;font-weight:600;text-align:right; }
 
@@ -328,6 +334,24 @@
   <div class="photo-view-content">
     <button class="lightbox-close-mobile" id="photoViewCloseBtn" title="Close">&times;</button>
     <img id="photoViewImg" src="" alt="Photo">
+  </div>
+</div>
+
+<div class="overlay" id="partsOverlay" style="display:none;">
+  <div class="sheet">
+    <h3 id="partsTaskTitle">Parts Used</h3>
+    <div id="partsList"></div>
+    <input type="text" id="partNameInput" placeholder="Part name" list="partNameSuggestions">
+    <input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">
+    <input type="text" id="partSupplierInput" placeholder="Supplier" list="partSupplierSuggestions">
+    <input type="text" id="partQtyInput" placeholder="Quantity" inputmode="numeric">
+    <datalist id="partNameSuggestions"></datalist>
+    <datalist id="partNumberSuggestions"></datalist>
+    <datalist id="partSupplierSuggestions"></datalist>
+    <button class="btn-secondary" id="partAddBtn" style="width:100%;margin-bottom:14px;">+ Add Part</button>
+    <div class="btn-row">
+      <button class="btn-secondary" id="partsCloseBtn">Close</button>
+    </div>
   </div>
 </div>
 
@@ -942,6 +966,7 @@ function renderChecklist(){
             '<span class="notes-photo-group">'+
                 '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
                 '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+                '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
               '</span>'+
             '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
           '</div></div>';
@@ -957,6 +982,7 @@ function renderChecklist(){
           '<span class="notes-photo-group">'+
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
             '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+            '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
           '</span>'+
           '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
         '</div></div>';
@@ -971,6 +997,7 @@ function renderChecklist(){
           '<span class="notes-photo-group">'+
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
             '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+            '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
           '</span>'+
           '<span></span>'+
         '</div></div>';
@@ -986,6 +1013,7 @@ function renderChecklist(){
           '<span class="notes-photo-group">'+
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
             '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+            '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
           '</span>'+
           '<button class="complete-link" data-act="ask" data-task="'+t.taskId+'">Job finished — mark complete</button>'+
         '</div></div>';
@@ -998,6 +1026,7 @@ function renderChecklist(){
         '<span class="notes-photo-group">'+
           '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
           '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+          '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
         '</span>'+
         '<span></span>'+
       '</div></div>';
@@ -1022,6 +1051,7 @@ function handleAction(action, taskId){
     openPhotoChoice({ boatId: t ? t.boatId : currentCtx.boatId, taskId, onDone: () => renderChecklist() });
     return;
   }
+  if (action === 'parts'){ openPartsOverlay(taskId, task.name); return; }
 
   if (action === 'start' || action === 'resume'){ if (activeTaskId) return; beginSegment(task); }
   else if (action === 'check'){ completeSimpleTask(taskId); }
@@ -1168,6 +1198,69 @@ document.getElementById('newTaskAddBtn').addEventListener('click', ()=>{
 });
 
 // ---------- notes ----------
+let partsTaskRef = null; // taskId whose parts list is currently open
+function openPartsOverlay(taskId, name){
+  partsTaskRef = taskId;
+  document.getElementById('partsTaskTitle').textContent = 'Parts Used — ' + name;
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
+  renderPartsList();
+  populatePartSuggestions();
+  document.getElementById('partsOverlay').style.display = 'flex';
+}
+function renderPartsList(){
+  const wrap = document.getElementById('partsList');
+  const parts = (DATA.parts || []).filter(p => p.taskId === partsTaskRef);
+  wrap.innerHTML = parts.length === 0 ? '' : parts.map(p =>
+    '<div class="parts-list-item"><div class="part-info"><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
+      '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div>' +
+      '<button class="part-del" onclick="deletePart(\''+p.partId+'\')" title="Delete">&times;</button></div>'
+  ).join('');
+}
+// Every part name/number/supplier ever logged becomes a suggestion --
+// this is what turns the sheet into a genuinely reusable database
+// instead of everyone retyping the same part info from scratch each time.
+function populatePartSuggestions(){
+  const names = [...new Set((DATA.parts||[]).map(p=>p.partName).filter(Boolean))].sort();
+  const numbers = [...new Set((DATA.parts||[]).map(p=>p.partNumber).filter(Boolean))].sort();
+  const suppliers = [...new Set((DATA.parts||[]).map(p=>p.supplier).filter(Boolean))].sort();
+  document.getElementById('partNameSuggestions').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('partNumberSuggestions').innerHTML = numbers.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('partSupplierSuggestions').innerHTML = suppliers.map(n=>'<option value="'+n+'">').join('');
+}
+document.getElementById('partAddBtn').addEventListener('click', ()=>{
+  const partName = document.getElementById('partNameInput').value.trim();
+  if (!partName) return;
+  const partNumber = document.getElementById('partNumberInput').value.trim();
+  const supplier = document.getElementById('partSupplierInput').value.trim();
+  const quantity = document.getElementById('partQtyInput').value.trim();
+  const task = findTask(partsTaskRef);
+  const boatId = task ? task.boatId : currentCtx.boatId;
+  const tempId = 'temp_' + Date.now();
+  DATA.parts = DATA.parts || [];
+  DATA.parts.push({ partId: tempId, taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentUser });
+  const q = loadQueue();
+  q.push({ action: 'addPart', tempPartId: tempId, body: { taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentUser } });
+  saveQueue(q);
+  flushQueue();
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
+  renderPartsList();
+  populatePartSuggestions();
+});
+async function deletePart(partId){
+  if (!confirm('Delete this part entry?')) return;
+  DATA.parts = (DATA.parts || []).filter(p => p.partId !== partId);
+  renderPartsList();
+  if (String(partId).indexOf('temp_') === 0){
+    // Hasn't reached the server yet -- cancel the pending add instead of
+    // sending a delete for an ID the server has never actually seen.
+    const q = loadQueue();
+    saveQueue(q.filter(item => item.tempPartId !== partId));
+    return;
+  }
+  enqueue('deletePart', { partId });
+}
+document.getElementById('partsCloseBtn').addEventListener('click', ()=> document.getElementById('partsOverlay').style.display = 'none');
+
 function openNotes(taskId, name, note){
   notesTaskRef = taskId;
   notesTaskTitle.textContent = 'Notes — ' + name;
@@ -1191,7 +1284,9 @@ function openPhotoView(photoId){
   // through Google's own thumbnail-generation pipeline, which can
   // mishandle color profiles -- the full-size view uses a direct file
   // URL instead, bypassing that re-processing step.
-  const viewUrl = photo && photo.driveFileId ? ('https://drive.google.com/uc?export=view&id=' + photo.driveFileId) : (photo ? photo.url : '');
+  // Reverted: export=view doesn't reliably load as an embedded image at
+  // all -- back to the thumbnail endpoint, which loads reliably.
+  const viewUrl = photo ? photo.url : '';
   document.getElementById('photoViewImg').src = viewUrl;
   document.getElementById('photoViewOverlay').style.display = 'flex';
 }
