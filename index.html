@@ -153,6 +153,11 @@
   .pill.synced{background:#e3f2ea;color:var(--go);}
   .pill.pending{background:var(--amber-bg);color:var(--amber);}
   .empty{color:var(--slate);font-size:13px;padding:6px 0 2px;}
+  .entry-actions{ display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .reopen-link{ background:none;border:none;font-size:12px;color:var(--amber);text-decoration:underline;font-weight:600;padding:0;cursor:pointer;white-space:nowrap; }
+  .past-jobs{ margin-top:16px;border-top:1px solid var(--line);padding-top:10px; }
+  .past-jobs summary{ cursor:pointer;font-size:12px;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.1em; }
+  .past-jobs .entry{ font-size:13px; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px; }
@@ -166,7 +171,7 @@
   .confirm-title{font-size:23px;font-weight:800;text-align:center;margin-top:8px;}
   .confirm-detail{font-size:13.5px;color:var(--slate);text-align:center;margin-top:8px;line-height:1.4;margin-bottom:22px;}
 
-  .sheet input[type="text"], .sheet textarea{
+  .sheet input[type="text"], .sheet textarea, .sheet select{
     width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:9px;
     font-size:15px;font-family:inherit;margin-bottom:14px;
   }
@@ -226,8 +231,12 @@
   <button class="add-task-btn" id="addTaskBtn">+ New Task</button>
 
   <section class="log">
-    <h2>Today, all jobs</h2>
+    <h2>Today, Done Jobs</h2>
     <div id="logList"><div class="empty">No entries yet</div></div>
+    <details class="past-jobs">
+      <summary>Past completed work</summary>
+      <div id="pastLogList" class="loading">Loading…</div>
+    </details>
   </section>
 </div>
 
@@ -268,6 +277,10 @@
     <h3>Add a task</h3>
     <p>What needs doing on this boat?</p>
     <input type="text" id="newTaskInput" placeholder="e.g. Replace bilge pump">
+    <select id="newTaskBillMode">
+      <option value="timed">⏱ Timed</option>
+      <option value="complete">✅ Completion</option>
+    </select>
     <div class="btn-row">
       <button class="btn-secondary" id="newTaskCancelBtn">Cancel</button>
       <button class="btn-primary" id="newTaskAddBtn">Add Task</button>
@@ -309,6 +322,11 @@ let currentUser = null;
 let currentCtx = null;           // { mode:'slip'|'yard', slipId, boatId }
 let activeTaskId = null;         // taskId of whichever task is currently timing
 let segStart = null;             // when the active task's current segment began
+// Every task completed this session, regardless of which boat it belongs
+// to -- gives instant "Today, Done Jobs" feedback without waiting on the
+// next server fetch to catch up. Merged with DATA.completedTasks (which
+// covers everything from before this session) when rendering.
+let sessionCompletions = [];     // { taskId, boatId, name, billMode, completedAt }
 let pendingConfirm = null;       // taskId awaiting the "mark complete?" confirmation
 let notesTaskRef = null;         // taskId whose notes sheet is open
 let isOnline = navigator.onLine;
@@ -342,6 +360,7 @@ const boatWO = document.getElementById('boatWO');
 const checklist = document.getElementById('checklist');
 const addTaskBtn = document.getElementById('addTaskBtn');
 const logList = document.getElementById('logList');
+const pastLogList = document.getElementById('pastLogList');
 const dot = document.getElementById('dot');
 const netlabel = document.getElementById('netlabel');
 
@@ -383,7 +402,7 @@ function playDoneSound(){ const ctx=getCtx(); tone(ctx,660,ctx.currentTime,0.14)
 // still waiting to reach it, not the only copy of the truth.
 function saveLocalState(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentUser, currentCtx, activeTaskId, segStart, boatPhotos }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentUser, currentCtx, activeTaskId, segStart, boatPhotos, sessionCompletions }));
   } catch(e){ console.warn('Could not save locally:', e); }
 }
 function loadLocalState(){
@@ -395,6 +414,10 @@ function loadLocalState(){
     if (saved.currentCtx) currentCtx = saved.currentCtx;
     if (saved.activeTaskId) activeTaskId = saved.activeTaskId;
     if (saved.segStart) segStart = saved.segStart;
+    if (saved.sessionCompletions) {
+      const today = new Date().toISOString().slice(0,10);
+      sessionCompletions = saved.sessionCompletions.filter(c => c.completedAt.slice(0,10) === today);
+    }
     if (saved.boatPhotos) Object.assign(boatPhotos, saved.boatPhotos);
     return true;
   } catch(e){ console.warn('Could not load saved state:', e); return false; }
@@ -851,9 +874,18 @@ function handleAction(action, taskId){
 // "Mark Done" finishes it immediately, same as ticking a checkbox. There's
 // no time to log, so this doesn't create an Entries row the way finishing
 // a timed task does.
+function recordSessionCompletion(taskId, boatId, name, billMode){
+  sessionCompletions = sessionCompletions.filter(c => c.taskId !== taskId); // replace if it was already there
+  sessionCompletions.push({ taskId, boatId, name, billMode: billMode || 'timed', completedAt: new Date().toISOString() });
+}
+function removeSessionCompletion(taskId){
+  sessionCompletions = sessionCompletions.filter(c => c.taskId !== taskId);
+}
+
 function completeSimpleTask(taskId){
   const task = findTask(taskId); if (!task) return;
   task.status = 'done';
+  recordSessionCompletion(taskId, currentCtx.boatId, task.name, task.billMode);
   saveLocalState();
   enqueue('updateTask', { taskId, status: 'done' });
   playDoneSound(); renderView();
@@ -892,6 +924,7 @@ function completeTask(taskId){
     segStart = null; activeTaskId = null;
   }
   task.status = 'done';
+  recordSessionCompletion(taskId, currentCtx.boatId, task.name, task.billMode);
   saveLocalState();
   enqueue('updateTask', { taskId, status: 'done' });
   const mins = Math.round(segMs(task)/60000);
@@ -907,9 +940,30 @@ function undoComplete(taskId){
   const task = findTask(taskId); if (!task) return;
   const isTimed = String(task.billMode || '').trim().toLowerCase() !== 'complete';
   task.status = isTimed ? 'paused' : 'pending';
+  removeSessionCompletion(taskId);
   saveLocalState();
   enqueue('updateTask', { taskId, status: task.status });
   renderView();
+}
+// Reopens a task from the Done Jobs list, which might belong to a
+// different boat than the one currently on screen -- so this can't just
+// mutate currentCtx.tasks the way undoComplete() does. If it happens to
+// be the same boat, restore it into the visible checklist too; either
+// way, the actual reopen is sent the same way (enqueue handles offline
+// queuing/retry regardless of which boat it's for).
+async function reopenFromLog(taskId, boatId, billMode){
+  const isTimed = String(billMode || '').trim().toLowerCase() !== 'complete';
+  const newStatus = isTimed ? 'paused' : 'pending';
+  removeSessionCompletion(taskId);
+  saveLocalState();
+  enqueue('updateTask', { taskId, status: newStatus });
+  renderLog();
+  if (currentCtx && currentCtx.boatId === boatId){
+    await refreshData();
+    populateLocationPicker();
+    renderBoatCard();
+    renderView();
+  }
 }
 
 bigPauseBtn.addEventListener('click', ()=>{ if (activeTaskId) pauseTask(activeTaskId); });
@@ -930,17 +984,25 @@ function startTicker(){
 function stopTicker(){ clearInterval(ticker); }
 
 // ---------- add task ----------
-addTaskBtn.addEventListener('click', ()=>{ newTaskInput.value=''; newTaskOverlay.style.display='flex'; setTimeout(()=>newTaskInput.focus(),50); });
+let lastNewTaskBillMode = 'timed'; // the Add Task overlay defaults to whichever mode was picked last
+addTaskBtn.addEventListener('click', ()=>{
+  newTaskInput.value='';
+  document.getElementById('newTaskBillMode').value = lastNewTaskBillMode;
+  newTaskOverlay.style.display='flex';
+  setTimeout(()=>newTaskInput.focus(),50);
+});
 document.getElementById('newTaskCancelBtn').addEventListener('click', ()=> newTaskOverlay.style.display='none');
 document.getElementById('newTaskAddBtn').addEventListener('click', ()=>{
   const name = newTaskInput.value.trim();
   if (!name) return;
+  const billMode = document.getElementById('newTaskBillMode').value;
+  lastNewTaskBillMode = billMode;
   const tempId = 'temp_' + Date.now();
   currentCtx.tasks = currentCtx.tasks || [];
-  currentCtx.tasks.push({ taskId: tempId, name, status:'pending', order: currentCtx.tasks.length+1, note:'', _segments:[] });
+  currentCtx.tasks.push({ taskId: tempId, name, status:'pending', order: currentCtx.tasks.length+1, note:'', billMode, _segments:[] });
   saveLocalState();
   const q = loadQueue();
-  q.push({ action:'addTask', tempId, body: { boatId: currentCtx.boatId, name } });
+  q.push({ action:'addTask', tempId, body: { boatId: currentCtx.boatId, name, billMode } });
   saveQueue(q);
   flushQueue();
   newTaskOverlay.style.display='none';
@@ -1022,18 +1084,43 @@ function onDragEnd(){
 
 // ---------- today's log, across everything this phone has touched ----------
 function renderLog(){
+  if (!DATA) return;
   const q = loadQueue();
   updateConnBadge();
-  const doneHere = (currentCtx && currentCtx.tasks) ? currentCtx.tasks.filter(t=>t.status==='done') : [];
-  if (doneHere.length===0 && q.length===0){ logList.innerHTML = '<div class="empty">No entries yet</div>'; return; }
-  const pendingIds = new Set(q.filter(item=>item.action==='logEntry').map(item=>item.body.taskId));
-  logList.innerHTML = doneHere.map(t=>{
-    const mins = Math.round(segMs(t)/60000);
-    const pending = pendingIds.has(t.taskId);
-    return '<div class="entry"><div><div>'+currentUser+' — '+t.name+'</div>'+
-      '<div class="meta">'+currentCtx.customerName+' — '+currentCtx.model+' · '+mins+' min</div></div>'+
-      '<span class="pill '+(pending?'pending':'synced')+'">'+(pending?'Pending':'Synced')+'</span></div>';
-  }).join('');
+
+  const today = new Date().toISOString().slice(0,10);
+  const serverCompleted = DATA.completedTasks || [];
+
+  // Merge session-local completions (instant feedback, before the next
+  // fetch catches up) with whatever the server already has -- session
+  // entries win on overlap since they're guaranteed fresher.
+  const byTaskId = {};
+  serverCompleted.forEach(t => { byTaskId[t.taskId] = { taskId: t.taskId, boatId: t.boatId, name: t.name, billMode: t.billMode, completedAt: t.completedAt }; });
+  sessionCompletions.forEach(c => { byTaskId[c.taskId] = c; });
+  const all = Object.values(byTaskId).filter(t => t.completedAt);
+
+  const todays = all.filter(t => t.completedAt.slice(0,10) === today).sort((a,b)=> new Date(b.completedAt) - new Date(a.completedAt));
+  const past = all.filter(t => t.completedAt.slice(0,10) !== today).sort((a,b)=> new Date(b.completedAt) - new Date(a.completedAt)).slice(0, 50);
+
+  const pendingTaskIds = new Set(q.filter(item => item.action==='updateTask' && item.body.status==='done').map(item=>item.body.taskId));
+
+  function renderEntry(t, showDate){
+    const boat = boatById(t.boatId);
+    const cust = boat ? customerById(boat.customerId) : null;
+    const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
+    const dt = new Date(t.completedAt);
+    const whenLabel = (showDate ? dt.toLocaleDateString() + ' ' : '') + dt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    const pending = pendingTaskIds.has(t.taskId);
+    return '<div class="entry"><div><div>'+t.name+'</div>'+
+      '<div class="meta">'+who+' · '+whenLabel+'</div></div>'+
+      '<div class="entry-actions">'+
+        '<span class="pill '+(pending?'pending':'synced')+'">'+(pending?'Pending':'Synced')+'</span>'+
+        '<button class="reopen-link" onclick="reopenFromLog(\''+t.taskId+'\',\''+t.boatId+'\',\''+(t.billMode||'timed')+'\')">Reopen</button>'+
+      '</div></div>';
+  }
+
+  logList.innerHTML = todays.length === 0 ? '<div class="empty">No jobs finished yet today</div>' : todays.map(t => renderEntry(t, false)).join('');
+  pastLogList.innerHTML = past.length === 0 ? '<div class="empty">Nothing here yet</div>' : past.map(t => renderEntry(t, true)).join('');
 }
 
 // ======================= startup =======================
