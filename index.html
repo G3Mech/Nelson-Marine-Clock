@@ -941,13 +941,13 @@ function renderView(){
 }
 // A quick-glance, read-only summary of everything logged for this boat
 // across all its tasks -- actually adding/deleting still happens through
-// the gear-icon Parts Used popup on each task, this is just visibility.
+// the gear-icon Parts popup on each task, this is just visibility.
 function renderBoatPartsBox(){
   const box = document.getElementById('boatPartsBox');
   if (!currentCtx || !currentCtx.boatId){ box.innerHTML = ''; return; }
   const parts = (DATA.parts || []).filter(p => p.boatId === currentCtx.boatId);
   if (parts.length === 0){ box.innerHTML = ''; return; }
-  box.innerHTML = '<div class="boat-parts-box"><div class="boat-parts-title">Parts Used</div>' +
+  box.innerHTML = '<div class="boat-parts-box"><div class="boat-parts-title">Parts</div>' +
     parts.map(p =>
       '<div class="boat-parts-item"><div><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
         '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div></div>'
