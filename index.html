@@ -788,7 +788,13 @@ function compressImage(file, maxDim, quality){
         else if (height > maxDim){ width = Math.round(width * maxDim / height); height = maxDim; }
         const canvas = document.createElement('canvas');
         canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        // Explicitly requesting sRGB matters here -- iPhone photos are
+        // often shot in the wider Display P3 color space, and without
+        // this, some browsers draw those pixel values onto the canvas
+        // without properly remapping them, which shows up as colors
+        // looking oversaturated or shifted in the compressed result.
+        const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+        ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = () => reject(new Error('Could not read that image'));
@@ -1175,12 +1181,18 @@ function renderNotesPhotoList(){
   const photos = (DATA.photos || []).filter(p => p.taskId === notesTaskRef);
   wrap.innerHTML = photos.length === 0 ? '' :
     '<div class="notes-photo-grid">' + photos.map(p =>
-      '<div class="notes-photo-thumb"><img src="'+p.url+'" alt="Task photo" onclick="openPhotoView(\''+(p.url||'').replace(/'/g,"\\'")+'\')">' +
+      '<div class="notes-photo-thumb"><img src="'+p.url+'" alt="Task photo" onclick="openPhotoView(\''+p.photoId+'\')">' +
         '<button class="thumb-del" onclick="deleteNotePhoto(\''+p.photoId+'\')" title="Delete">&times;</button></div>'
     ).join('') + '</div>';
 }
-function openPhotoView(url){
-  document.getElementById('photoViewImg').src = url;
+function openPhotoView(photoId){
+  const photo = (DATA.photos || []).find(p => p.photoId === photoId);
+  // The thumbnail endpoint (used for the small grid previews) goes
+  // through Google's own thumbnail-generation pipeline, which can
+  // mishandle color profiles -- the full-size view uses a direct file
+  // URL instead, bypassing that re-processing step.
+  const viewUrl = photo && photo.driveFileId ? ('https://drive.google.com/uc?export=view&id=' + photo.driveFileId) : (photo ? photo.url : '');
+  document.getElementById('photoViewImg').src = viewUrl;
   document.getElementById('photoViewOverlay').style.display = 'flex';
 }
 document.getElementById('photoViewCloseBtn').addEventListener('click', ()=> document.getElementById('photoViewOverlay').style.display = 'none');
