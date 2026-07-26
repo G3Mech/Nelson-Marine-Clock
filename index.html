@@ -88,7 +88,10 @@
   .photo-slot .photo-status{position:absolute;bottom:8px;left:8px;right:8px;background:rgba(10,26,43,.72);color:var(--white);font-size:11.5px;font-weight:700;padding:6px 11px;border-radius:20px;text-align:center;}
   .notes-photo-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
   .notes-photo-thumb{position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid var(--line);}
-  .notes-photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .notes-photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;}
+  .photo-view-content{position:relative;display:flex;align-items:center;justify-content:center;width:100%;height:100%;}
+  .photo-view-content img{max-width:92vw;max-height:80vh;border-radius:10px;}
+  .lightbox-close-mobile{position:absolute;top:20px;right:16px;width:42px;height:42px;border-radius:50%;border:none;background:var(--white);color:var(--ink);font-size:22px;font-weight:800;cursor:pointer;}
   .notes-photo-thumb .thumb-del{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(10,26,43,.75);color:var(--white);border:none;font-size:12px;font-weight:800;line-height:1;cursor:pointer;}
 
   .type-badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:5px;margin-bottom:8px;}
@@ -217,8 +220,8 @@
     <div class="photo-slot" id="photoSlot">
       <div class="photo-placeholder"><span class="plus">+</span><span>Add photo of boat</span></div>
     </div>
-    <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none;">
-    <input type="file" accept="image/*" capture="environment" id="quickPhotoInput" style="display:none;">
+    <input type="file" accept="image/*" capture="environment" id="sharedPhotoCameraInput" style="display:none;">
+    <input type="file" accept="image/*" multiple id="sharedPhotoLibraryInput" style="display:none;">
     <span class="type-badge" id="typeBadge"></span>
     <div class="boat-customer" id="boatCustomer"></div>
     <div class="boat-model" id="boatModel"></div>
@@ -303,13 +306,31 @@
     <textarea id="notesTextarea" rows="5" placeholder="Anything worth flagging about this task..."></textarea>
     <div id="notesPhotoList"></div>
     <button class="btn-secondary" id="notesAddPhotoBtn" style="width:100%;margin-bottom:14px;">+ Add Photo</button>
-    <input type="file" accept="image/*" capture="environment" id="notesPhotoInput" style="display:none;">
     <div class="btn-row">
       <button class="btn-secondary" id="notesCancelBtn">Cancel</button>
       <button class="btn-primary" id="notesSaveBtn">Save Notes</button>
     </div>
   </div>
 </div>
+
+<div class="overlay" id="photoChoiceOverlay" style="display:none;">
+  <div class="sheet">
+    <h3>Add Photo</h3>
+    <div class="btn-row" style="flex-direction:column;gap:10px;">
+      <button class="btn-primary" id="photoChoiceCameraBtn" style="width:100%;">📷 Take Photo</button>
+      <button class="btn-secondary" id="photoChoiceLibraryBtn" style="width:100%;">🖼️ Choose from Library</button>
+      <button class="btn-secondary" id="photoChoiceCancelBtn" style="width:100%;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="photoViewOverlay" style="display:none;">
+  <div class="photo-view-content">
+    <button class="lightbox-close-mobile" id="photoViewCloseBtn" title="Close">&times;</button>
+    <img id="photoViewImg" src="" alt="Photo">
+  </div>
+</div>
+
 
 <script>
 // ======================= CONFIG =======================
@@ -341,7 +362,6 @@ let segStart = null;             // when the active task's current segment began
 let sessionCompletions = [];     // { taskId, boatId, name, billMode, completedAt }
 let pendingConfirm = null;       // taskId awaiting the "mark complete?" confirmation
 let notesTaskRef = null;         // taskId whose notes sheet is open
-let quickPhotoTaskId = null;     // taskId the camera-icon shortcut is currently targeting
 let isOnline = navigator.onLine;
 let forcedOffline = false;
 let ticker = null;
@@ -378,7 +398,6 @@ const dot = document.getElementById('dot');
 const netlabel = document.getElementById('netlabel');
 
 const photoSlot = document.getElementById('photoSlot');
-const photoInput = document.getElementById('photoInput');
 // Photos are now stored server-side (in Google Drive, linked from DATA.photos) --
 
 const focusPanel = document.getElementById('focusPanel');
@@ -798,37 +817,69 @@ async function uploadPhoto(file, boatId, taskId, statusEl){
     if (statusEl) statusEl.textContent = '';
   }
 }
-photoSlot.addEventListener('click', ()=> photoInput.click());
-photoInput.addEventListener('change', (e)=>{
-  const file = e.target.files[0]; if (!file) return;
-  photoInput.value = '';
-  photoSlot.classList.add('uploading');
-  const statusSpan = document.createElement('span');
-  statusSpan.className = 'photo-status';
-  photoSlot.appendChild(statusSpan);
-  uploadPhoto(file, currentCtx.boatId, null, statusSpan).then(result => {
-    photoSlot.classList.remove('uploading');
-    if (result && result.ok){
-      DATA.photos = DATA.photos || [];
-      DATA.photos.push({ boatId: currentCtx.boatId, taskId: '', url: result.url, photoId: result.photoId });
-    }
-    renderPhotoSlot();
-  });
+// Uploads a batch of files one at a time (not in parallel -- keeps
+// things predictable and avoids opening a pile of simultaneous
+// connections over what might be a weak marina wifi signal). progressCb
+// runs before each upload, onSuccessCb after each one that succeeds.
+async function uploadPhotoBatch(files, boatId, taskId, progressCb, onSuccessCb){
+  for (let i = 0; i < files.length; i++){
+    if (progressCb) progressCb(i + 1, files.length);
+    const result = await uploadPhoto(files[i], boatId, taskId, null);
+    if (result && result.ok && onSuccessCb) onSuccessCb(result);
+  }
+}
+// Shared "Take Photo or choose from Library" flow, used by the boat
+// photo slot, the per-task camera-icon shortcut, and the Notes popup's
+// Add Photo button alike -- one prompt, one pair of hidden inputs,
+// rather than three separate copies of the same picker wiring.
+let photoUploadContext = null; // { boatId, taskId, onProgress(n,total), onEach(result), onDone() }
+function openPhotoChoice(ctx){
+  photoUploadContext = ctx;
+  document.getElementById('photoChoiceOverlay').style.display = 'flex';
+}
+function closePhotoChoice(){
+  document.getElementById('photoChoiceOverlay').style.display = 'none';
+}
+document.getElementById('photoChoiceCameraBtn').addEventListener('click', ()=>{
+  closePhotoChoice();
+  document.getElementById('sharedPhotoCameraInput').click();
 });
-// The camera-icon shortcut next to each task -- attaches straight to
-// that task, same as a photo added through the full Notes popup, just
-// without needing to open it first.
-document.getElementById('quickPhotoInput').addEventListener('change', (e)=>{
-  const file = e.target.files[0]; if (!file) return;
-  e.target.value = '';
-  const taskId = quickPhotoTaskId; if (!taskId) return;
-  const task = findTask(taskId);
-  uploadPhoto(file, task ? task.boatId : currentCtx.boatId, taskId, null).then(result => {
-    if (result && result.ok){
-      DATA.photos = DATA.photos || [];
-      DATA.photos.push({ boatId: task ? task.boatId : currentCtx.boatId, taskId, url: result.url, photoId: result.photoId });
-      renderChecklist();
-    }
+document.getElementById('photoChoiceLibraryBtn').addEventListener('click', ()=>{
+  closePhotoChoice();
+  document.getElementById('sharedPhotoLibraryInput').click();
+});
+document.getElementById('photoChoiceCancelBtn').addEventListener('click', ()=>{
+  closePhotoChoice();
+  photoUploadContext = null;
+});
+function handleChosenFiles(fileList){
+  const files = Array.from(fileList);
+  const ctx = photoUploadContext;
+  photoUploadContext = null;
+  if (!ctx || files.length === 0) return;
+  uploadPhotoBatch(files, ctx.boatId, ctx.taskId, ctx.onProgress, (result) => {
+    DATA.photos = DATA.photos || [];
+    DATA.photos.push({ boatId: ctx.boatId, taskId: ctx.taskId || '', url: result.url, photoId: result.photoId });
+    if (ctx.onEach) ctx.onEach(result);
+  }).then(() => { if (ctx.onDone) ctx.onDone(); });
+}
+document.getElementById('sharedPhotoCameraInput').addEventListener('change', (e)=>{
+  handleChosenFiles(e.target.files); e.target.value = '';
+});
+document.getElementById('sharedPhotoLibraryInput').addEventListener('change', (e)=>{
+  handleChosenFiles(e.target.files); e.target.value = '';
+});
+
+photoSlot.addEventListener('click', ()=>{
+  openPhotoChoice({
+    boatId: currentCtx.boatId, taskId: null,
+    onProgress: (n, total) => {
+      photoSlot.classList.add('uploading');
+      let statusSpan = photoSlot.querySelector('.photo-status');
+      if (!statusSpan){ statusSpan = document.createElement('span'); statusSpan.className = 'photo-status'; photoSlot.appendChild(statusSpan); }
+      statusSpan.textContent = total > 1 ? ('Uploading ' + n + ' of ' + total + '…') : 'Uploading…';
+    },
+    onDone: () => { photoSlot.classList.remove('uploading'); renderPhotoSlot(); }
   });
 });
 
@@ -960,7 +1011,11 @@ function handleAction(action, taskId){
 
   if (action === 'notes'){ openNotes(taskId, task.name, task.note); return; }
   if (!currentUser){ overlay.style.display = 'flex'; return; }
-  if (action === 'photo'){ quickPhotoTaskId = taskId; document.getElementById('quickPhotoInput').click(); return; }
+  if (action === 'photo'){
+    const t = findTask(taskId);
+    openPhotoChoice({ boatId: t ? t.boatId : currentCtx.boatId, taskId, onDone: () => renderChecklist() });
+    return;
+  }
 
   if (action === 'start' || action === 'resume'){ if (activeTaskId) return; beginSegment(task); }
   else if (action === 'check'){ completeSimpleTask(taskId); }
@@ -1120,31 +1175,30 @@ function renderNotesPhotoList(){
   const photos = (DATA.photos || []).filter(p => p.taskId === notesTaskRef);
   wrap.innerHTML = photos.length === 0 ? '' :
     '<div class="notes-photo-grid">' + photos.map(p =>
-      '<div class="notes-photo-thumb"><img src="'+p.url+'" alt="Task photo">' +
+      '<div class="notes-photo-thumb"><img src="'+p.url+'" alt="Task photo" onclick="openPhotoView(\''+(p.url||'').replace(/'/g,"\\'")+'\')">' +
         '<button class="thumb-del" onclick="deleteNotePhoto(\''+p.photoId+'\')" title="Delete">&times;</button></div>'
     ).join('') + '</div>';
 }
+function openPhotoView(url){
+  document.getElementById('photoViewImg').src = url;
+  document.getElementById('photoViewOverlay').style.display = 'flex';
+}
+document.getElementById('photoViewCloseBtn').addEventListener('click', ()=> document.getElementById('photoViewOverlay').style.display = 'none');
 async function deleteNotePhoto(photoId){
   if (!confirm('Delete this photo?')) return;
   await postToSheet('deletePhoto', { photoId });
   DATA.photos = (DATA.photos || []).filter(p => p.photoId !== photoId);
   renderNotesPhotoList();
 }
-document.getElementById('notesAddPhotoBtn').addEventListener('click', ()=> document.getElementById('notesPhotoInput').click());
-document.getElementById('notesPhotoInput').addEventListener('change', (e)=>{
-  const file = e.target.files[0]; if (!file) return;
-  e.target.value = '';
+document.getElementById('notesAddPhotoBtn').addEventListener('click', ()=>{
+  const task = findTask(notesTaskRef);
   const btn = document.getElementById('notesAddPhotoBtn');
   const originalText = btn.textContent;
-  btn.textContent = 'Uploading…'; btn.disabled = true;
-  const task = findTask(notesTaskRef);
-  uploadPhoto(file, task ? task.boatId : currentCtx.boatId, notesTaskRef, null).then(result => {
-    btn.textContent = originalText; btn.disabled = false;
-    if (result && result.ok){
-      DATA.photos = DATA.photos || [];
-      DATA.photos.push({ boatId: task ? task.boatId : currentCtx.boatId, taskId: notesTaskRef, url: result.url, photoId: result.photoId });
-      renderNotesPhotoList();
-    }
+  openPhotoChoice({
+    boatId: task ? task.boatId : currentCtx.boatId, taskId: notesTaskRef,
+    onProgress: (n, total) => { btn.textContent = total > 1 ? ('Uploading ' + n + ' of ' + total + '…') : 'Uploading…'; btn.disabled = true; },
+    onEach: () => renderNotesPhotoList(),
+    onDone: () => { btn.textContent = originalText; btn.disabled = false; }
   });
 });
 document.getElementById('notesCancelBtn').addEventListener('click', ()=> notesOverlay.style.display='none');
