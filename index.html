@@ -1027,23 +1027,36 @@ function renderLog(){
 }
 
 // ======================= startup =======================
+function menuWhoName_sync(){ whoName.textContent = currentUser || '—'; }
+function populateNameButtons(){
+  nameButtons.innerHTML = (DATA && DATA.employees ? DATA.employees : []).map(n =>
+    '<button class="name-btn" data-name="'+n+'">'+n+'</button>').join('');
+  nameButtons.querySelectorAll('.name-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ currentUser = btn.dataset.name; whoName.textContent = currentUser; overlay.style.display='none'; saveLocalState(); });
+  });
+}
+// Everything that depends on DATA being populated -- safe to call more
+// than once (e.g. once instantly from cache, then again once the fresh
+// fetch resolves), since it just re-renders current state rather than
+// binding anything new.
+function applyData(){
+  if (!DATA) return;
+  populateLocationPicker();
+  currentCtx = resolveInitialContext();
+  setSelectValue();
+  if (currentUser){ whoName.textContent = currentUser; overlay.style.display = 'none'; }
+  else { populateNameButtons(); overlay.style.display = 'flex'; }
+  renderBoatCard();
+  renderView();
+}
+
 async function boot(){
   if (WEBAPP_URL.indexOf('PASTE_YOUR') === 0){
     setupWarning.classList.add('show');
   }
   loadLocalState();
-  await refreshData();
-  populateLocationPicker();
 
-  currentCtx = resolveInitialContext();
-  setSelectValue();
-  saveLocalState();
-
-  if (currentUser){ whoName.textContent = currentUser; overlay.style.display = 'none'; }
-  else {
-    populateNameButtons();
-    overlay.style.display = 'flex';
-  }
+  // Bind the static UI once, regardless of how data loading goes below.
   hamburgerBtn.addEventListener('click', ()=>{ menuWhoName_sync(); menuOverlay.classList.add('show'); });
   menuCloseBtn.addEventListener('click', ()=> menuOverlay.classList.remove('show'));
   menuSwitchUser.addEventListener('click', ()=>{
@@ -1051,17 +1064,18 @@ async function boot(){
     populateNameButtons();
     overlay.style.display='flex';
   });
-  function menuWhoName_sync(){ whoName.textContent = currentUser || '—'; }
-  function populateNameButtons(){
-    nameButtons.innerHTML = (DATA && DATA.employees ? DATA.employees : []).map(n =>
-      '<button class="name-btn" data-name="'+n+'">'+n+'</button>').join('');
-    nameButtons.querySelectorAll('.name-btn').forEach(btn=>{
-      btn.addEventListener('click', ()=>{ currentUser = btn.dataset.name; whoName.textContent = currentUser; overlay.style.display='none'; saveLocalState(); });
-    });
-  }
 
-  renderBoatCard();
-  renderView();
+  // Render instantly from yesterday's cached data if we have any, rather
+  // than making everyone -- including the "who's clocking in" screen --
+  // wait on a network round trip every single time. The real fetch below
+  // still runs right after and re-renders with whatever's actually
+  // current, so this is just about not staring at a blank screen for it.
+  const cached = loadCachedData();
+  if (cached){ DATA = cached; applyData(); }
+
+  await refreshData();
+  applyData();
+  saveLocalState();
   flushQueue();
 }
 boot();
