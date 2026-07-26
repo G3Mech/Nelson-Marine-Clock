@@ -149,6 +149,12 @@
   .quick-photo-btn{background:none;border:none;font-size:15px;padding:2px 0;cursor:pointer;line-height:1;}
   .quick-parts-btn{background:none;border:none;font-size:15px;padding:2px 0;cursor:pointer;line-height:1;}
   .parts-list-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+  .boat-parts-box{margin:0 20px 16px;border:1px solid var(--line);border-radius:10px;padding:12px 16px;background:var(--paper);}
+  .boat-parts-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);margin-bottom:8px;}
+  .boat-parts-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px;}
+  .boat-parts-item:last-child{border-bottom:none;}
+  .boat-parts-item b{display:block;}
+  .boat-parts-item span{color:var(--slate);font-size:12px;}
   .parts-list-item:last-child{border-bottom:none;}
   .parts-list-item .part-info b{display:block;font-size:14px;}
   .parts-list-item .part-info span{color:var(--slate);font-size:12px;}
@@ -245,6 +251,7 @@
     <button class="big-btn big-complete" id="bigCompleteBtn">Job Finished</button>
   </div>
 
+  <div id="boatPartsBox"></div>
   <div class="checklist" id="checklist"></div>
   <button class="add-task-btn" id="addTaskBtn">+ New Task</button>
 
@@ -921,6 +928,7 @@ function liveMs(task){ return segMs(task) + (task.taskId===activeTaskId && segSt
 
 // ======================= view rendering =======================
 function renderView(){
+  renderBoatPartsBox();
   if (!currentCtx || currentCtx.mode === 'none' || currentCtx.mode === 'empty-slip'){ renderLog(); return; }
   if (activeTaskId && findTask(activeTaskId)){
     checklist.style.display='none'; addTaskBtn.style.display='none';
@@ -930,6 +938,20 @@ function renderView(){
     stopTicker(); renderChecklist();
   }
   renderLog();
+}
+// A quick-glance, read-only summary of everything logged for this boat
+// across all its tasks -- actually adding/deleting still happens through
+// the gear-icon Parts Used popup on each task, this is just visibility.
+function renderBoatPartsBox(){
+  const box = document.getElementById('boatPartsBox');
+  if (!currentCtx || !currentCtx.boatId){ box.innerHTML = ''; return; }
+  const parts = (DATA.parts || []).filter(p => p.boatId === currentCtx.boatId);
+  if (parts.length === 0){ box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="boat-parts-box"><div class="boat-parts-title">Parts Used</div>' +
+    parts.map(p =>
+      '<div class="boat-parts-item"><div><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
+        '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div></div>'
+    ).join('') + '</div>';
 }
 function renderFocus(){
   const task = findTask(activeTaskId);
@@ -1245,11 +1267,13 @@ document.getElementById('partAddBtn').addEventListener('click', ()=>{
   ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
   renderPartsList();
   populatePartSuggestions();
+  renderBoatPartsBox();
 });
 async function deletePart(partId){
   if (!confirm('Delete this part entry?')) return;
   DATA.parts = (DATA.parts || []).filter(p => p.partId !== partId);
   renderPartsList();
+  renderBoatPartsBox();
   if (String(partId).indexOf('temp_') === 0){
     // Hasn't reached the server yet -- cancel the pending add instead of
     // sending a delete for an ID the server has never actually seen.
