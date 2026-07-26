@@ -383,6 +383,18 @@ const tagBoatId = urlParams.get('boat') || null;
 // onto a physical tag; boats carry their own tag now, not slips.
 const tagSlipId = urlParams.get('slip') || null;
 
+// The tag URL should only steer the page on the actual NFC tap that
+// opened it. Once read, strip it from the address bar -- otherwise it
+// wins every reload of this same tab forever (e.g. iOS discarding a
+// backgrounded tab and reloading it later), snapping back to the
+// tapped boat even after the mechanic deliberately switched to a
+// different one via the dropdown. A fresh tap still works fine, since
+// the physical tag always delivers the full ?boat= URL again regardless
+// of what any open tab's address bar currently shows.
+if (tagBoatId || tagSlipId){
+  window.history.replaceState(null, '', window.location.pathname);
+}
+
 // ======================= STATE =======================
 let DATA = null;                 // { locations, tasks, employees, entries, customers, boats } -- straight from the sheet
 let currentUser = null;
@@ -512,11 +524,6 @@ function enqueue(action, body){
   renderLog();
   flushQueue();
 }
-// Apps Script Web Apps don't handle a CORS preflight (OPTIONS) request, so
-// a POST with Content-Type: application/json gets blocked by the browser
-// before it ever reaches the script. Sending it as text/plain keeps the
-// request in the "simple request" category the browser doesn't preflight
-// -- doPost still gets the same JSON string in e.postData.contents either way.
 // Apps Script Web Apps don't handle a CORS preflight (OPTIONS) request, so
 // a POST with Content-Type: application/json gets blocked by the browser
 // before it ever reaches the script. Sending it as text/plain keeps the
