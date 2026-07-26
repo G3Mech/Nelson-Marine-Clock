@@ -116,7 +116,7 @@
 
   /* ---- compact checklist ---- */
   .checklist{ margin:16px 20px 0;border:1px solid var(--line);border-radius:10px;overflow:hidden; }
-  .task-row{ border-bottom:1px solid var(--line);padding:12px 14px;background:var(--white); }
+  .task-row{ border-bottom:1px solid var(--line);padding:16px 18px;background:var(--white); }
   .task-row:last-child{border-bottom:none;}
   .task-row.paused{background:var(--amber-bg);}
   .task-row.done{background:var(--paper);}
@@ -124,30 +124,32 @@
 
   .task-row-main{ display:flex;align-items:center; }
   .drag-handle{
-    width:26px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:3px;padding:10px 4px;cursor:grab;touch-action:none;
+    width:32px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:4px;padding:14px 6px;cursor:grab;touch-action:none;
   }
-  .drag-handle span{width:4px;height:4px;border-radius:50%;background:var(--slate);opacity:.55;}
+  .drag-handle span{width:5px;height:5px;border-radius:50%;background:var(--slate);opacity:.55;}
   .task-main-content{flex:1;min-width:0;}
-  .task-name{font-size:14.5px;font-weight:600;}
-  .task-row.paused .task-sub{color:var(--amber);font-weight:600;font-size:12px;margin-top:2px;}
+  .task-name{font-size:17px;font-weight:600;}
+  .task-row.paused .task-sub{color:var(--amber);font-weight:600;font-size:13.5px;margin-top:3px;}
   .task-row.done .task-name{text-decoration:line-through;color:var(--slate);font-weight:500;}
-  .task-sub{font-size:12px;color:var(--slate);margin-top:2px;}
-  .priority-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:7px; vertical-align:middle; flex-shrink:0; }
+  .task-sub{font-size:13.5px;color:var(--slate);margin-top:3px;}
+  .priority-1{ border-left:5px solid var(--stop); }
+  .priority-2{ border-left:5px solid var(--amber); }
+  .priority-3{ border-left:5px solid var(--slate); }
 
   .pill-btn{
-    font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:16px;white-space:nowrap;
-    flex-shrink:0;margin-left:10px;cursor:pointer;border:1px solid transparent;
+    font-size:14.5px;font-weight:700;padding:10px 18px;border-radius:18px;white-space:nowrap;
+    flex-shrink:0;margin-left:12px;cursor:pointer;border:1px solid transparent;
   }
   .pill-btn.start, .pill-btn.resume{background:var(--white);color:var(--go);border:1px solid var(--go);}
-  .check-static{color:var(--go);font-size:16px;margin-left:10px;flex-shrink:0;}
+  .check-static{color:var(--go);font-size:20px;margin-left:12px;flex-shrink:0;}
 
-  .task-row-secondary{ margin-top:9px;padding-top:9px;padding-left:26px;border-top:1px dashed rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:center;gap:10px; }
-  .notes-link{ background:none;border:none;font-size:12px;color:var(--slate);text-decoration:underline;padding:2px 0;cursor:pointer;text-align:left; }
+  .task-row-secondary{ margin-top:12px;padding-top:12px;padding-left:32px;border-top:1px dashed rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:center;gap:12px; }
+  .notes-link{ background:none;border:none;font-size:14px;color:var(--slate);text-decoration:underline;padding:6px 0;cursor:pointer;text-align:left; }
   .notes-link.has-note{color:var(--pause-blue);font-weight:600;}
-  .notes-photo-group{display:flex;align-items:center;gap:10px;}
-  .quick-photo-btn{background:none;border:none;font-size:15px;padding:2px 0;cursor:pointer;line-height:1;}
-  .quick-parts-btn{background:none;border:none;font-size:15px;padding:2px 0;cursor:pointer;line-height:1;}
+  .notes-photo-group{display:flex;align-items:center;gap:16px;}
+  .quick-photo-btn{background:none;border:none;font-size:21px;padding:4px 2px;cursor:pointer;line-height:1;}
+  .quick-parts-btn{background:none;border:none;font-size:21px;padding:4px 2px;cursor:pointer;line-height:1;}
   .parts-list-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
   .boat-parts-box{margin:0 20px 16px;border:1px solid var(--line);border-radius:10px;padding:12px 16px;background:var(--paper);}
   .boat-parts-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);margin-bottom:8px;}
@@ -160,8 +162,8 @@
   .parts-list-item .part-info b{display:block;font-size:14px;}
   .parts-list-item .part-info span{color:var(--slate);font-size:12px;}
   .parts-list-item .part-del{background:none;border:none;color:var(--danger,#a5342a);font-size:18px;font-weight:800;cursor:pointer;flex-shrink:0;}
-  .complete-link{ background:none;border:none;font-size:12px;color:var(--slate);text-decoration:underline;padding:2px 0;cursor:pointer;text-align:right; }
-  .undo-link{ background:none;border:none;font-size:12px;color:var(--amber);text-decoration:underline;padding:2px 0;cursor:pointer;font-weight:600;text-align:right; }
+  .complete-link{ background:none;border:none;font-size:14px;color:var(--slate);text-decoration:underline;padding:6px 0;cursor:pointer;text-align:right; }
+  .undo-link{ background:none;border:none;font-size:14px;color:var(--amber);text-decoration:underline;padding:6px 0;cursor:pointer;font-weight:600;text-align:right; }
 
   .add-task-btn{
     width:calc(100% - 40px);margin:10px 20px 0;padding:13px 0;border-radius:10px;
@@ -679,7 +681,7 @@ function slipById(id){ return DATA.locations.find(l => l.slipId === id); }
 function buildContextForBoat(boatId, mode, slipId){
   const boat = boatById(boatId);
   const cust = boat ? customerById(boat.customerId) : null;
-  const tasks = DATA.tasks.filter(t => t.boatId === boatId).sort((a,b)=> (a.order||0) - (b.order||0));
+  const tasks = DATA.tasks.filter(t => t.boatId === boatId).sort((a,b)=> (a.priority||2) - (b.priority||2) || (a.order||0) - (b.order||0));
   return {
     mode, slipId: slipId || null, boatId,
     customerName: cust ? cust.name : '—',
@@ -964,17 +966,19 @@ function renderBoatPartsBox(){
 function renderFocus(){
   const task = findTask(activeTaskId);
   if (!task) return;
-  focusTask.innerHTML = priorityDot(task) + task.name;
+  focusTask.textContent = task.name;
+  focusPanel.className = focusPanel.className.replace(/\bpriority-\d\b/g, '').trim();
+  focusPanel.classList.add(priorityClass(task));
   focusContext.textContent = currentCtx.customerName + ' — ' + currentCtx.model;
   focusTimer.textContent = fmtDuration(liveMs(task));
 }
 
-// Small colored dot matching the same red/orange/grey priority scheme
-// used in the office dashboard: 1=High (red), 2=Normal (orange), 3=Low (grey)
-function priorityDot(t){
+// Priority is shown as a colored stripe on the task box's left border
+// now, rather than a small dot next to the name -- matching the same
+// red/orange/grey scheme used everywhere else in this build.
+function priorityClass(t){
   const p = t.priority || 2;
-  const color = p === 1 ? 'var(--stop)' : (p === 3 ? 'var(--slate)' : 'var(--amber)');
-  return '<span class="priority-dot" style="background:'+color+';" title="Priority '+p+'"></span>';
+  return 'priority-' + p;
 }
 function renderChecklist(){
   const tasks = currentCtx.tasks || [];
@@ -987,9 +991,9 @@ function renderChecklist(){
 
     if (t.status === 'done'){
       if (!isTimed){
-        return '<div class="task-row done" data-rowid="'+t.taskId+'">' +
+        return '<div class="task-row done '+priorityClass(t)+'" data-rowid="'+t.taskId+'">' +
           '<div class="task-row-main">'+dragHandle+
-            '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div>'+
+            '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
             '<div class="task-sub">Completed</div></div>'+
             '<span class="check-static">&#10003;</span></div>'+
           '<div class="task-row-secondary">'+
@@ -1003,9 +1007,9 @@ function renderChecklist(){
       }
       const mins = Math.round(segMs(t)/60000);
       const sessionNote = (t._segments||[]).length>1 ? (' · '+t._segments.length+' sessions') : '';
-      return '<div class="task-row done" data-rowid="'+t.taskId+'">' +
+      return '<div class="task-row done '+priorityClass(t)+'" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
-          '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div>'+
+          '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
           '<div class="task-sub">Total '+mins+' min'+sessionNote+'</div></div>'+
           '<span class="check-static">&#10003;</span></div>'+
         '<div class="task-row-secondary">'+
@@ -1019,9 +1023,9 @@ function renderChecklist(){
     }
     if (!isTimed){
       // Completion-billed task: a plain checkbox, no timer, no pause state at all
-      return '<div class="task-row pending" data-rowid="'+t.taskId+'">' +
+      return '<div class="task-row pending '+priorityClass(t)+'" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
-          '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div></div>'+
+          '<div class="task-main-content"><div class="task-name">'+t.name+'</div></div>'+
           '<button class="pill-btn start" data-act="check" data-task="'+t.taskId+'">Mark Done</button></div>'+
         '<div class="task-row-secondary">'+
           '<span class="notes-photo-group">'+
@@ -1034,9 +1038,9 @@ function renderChecklist(){
     }
     if (t.status === 'paused'){
       const mins = Math.round(segMs(t)/60000);
-      return '<div class="task-row paused" data-rowid="'+t.taskId+'">' +
+      return '<div class="task-row paused '+priorityClass(t)+'" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
-          '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div>'+
+          '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
           '<div class="task-sub">'+mins+' min logged — paused</div></div>'+
           '<button class="pill-btn resume" data-act="resume" data-task="'+t.taskId+'">Resume</button></div>'+
         '<div class="task-row-secondary">'+
@@ -1048,9 +1052,9 @@ function renderChecklist(){
           '<button class="complete-link" data-act="ask" data-task="'+t.taskId+'">Job finished — mark complete</button>'+
         '</div></div>';
     }
-    return '<div class="task-row pending" data-rowid="'+t.taskId+'">' +
+    return '<div class="task-row pending '+priorityClass(t)+'" data-rowid="'+t.taskId+'">' +
       '<div class="task-row-main">'+dragHandle+
-        '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div></div>'+
+        '<div class="task-main-content"><div class="task-name">'+t.name+'</div></div>'+
         '<button class="pill-btn start" data-act="start" data-task="'+t.taskId+'">Start</button></div>'+
       '<div class="task-row-secondary">'+
         '<span class="notes-photo-group">'+
