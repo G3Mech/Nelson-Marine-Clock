@@ -84,6 +84,12 @@
   .photo-placeholder{display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--slate);font-size:13px;font-weight:600;}
   .photo-placeholder .plus{font-size:26px;line-height:1;color:var(--slate);}
   .photo-retake{position:absolute;bottom:8px;right:8px;background:rgba(10,26,43,.72);color:var(--white);font-size:11.5px;font-weight:700;padding:6px 11px;border-radius:20px;pointer-events:none;}
+  .photo-slot.uploading{opacity:.55;pointer-events:none;}
+  .photo-slot .photo-status{position:absolute;bottom:8px;left:8px;right:8px;background:rgba(10,26,43,.72);color:var(--white);font-size:11.5px;font-weight:700;padding:6px 11px;border-radius:20px;text-align:center;}
+  .notes-photo-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+  .notes-photo-thumb{position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid var(--line);}
+  .notes-photo-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .notes-photo-thumb .thumb-del{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(10,26,43,.75);color:var(--white);border:none;font-size:12px;font-weight:800;line-height:1;cursor:pointer;}
 
   .type-badge{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:5px;margin-bottom:8px;}
   .type-badge.slip{background:var(--slip-bg);color:var(--slip-accent);}
@@ -292,6 +298,9 @@
   <div class="sheet">
     <h3 id="notesTaskTitle">Notes</h3>
     <textarea id="notesTextarea" rows="5" placeholder="Anything worth flagging about this task..."></textarea>
+    <div id="notesPhotoList"></div>
+    <button class="btn-secondary" id="notesAddPhotoBtn" style="width:100%;margin-bottom:14px;">+ Add Photo</button>
+    <input type="file" accept="image/*" capture="environment" id="notesPhotoInput" style="display:none;">
     <div class="btn-row">
       <button class="btn-secondary" id="notesCancelBtn">Cancel</button>
       <button class="btn-primary" id="notesSaveBtn">Save Notes</button>
@@ -366,7 +375,7 @@ const netlabel = document.getElementById('netlabel');
 
 const photoSlot = document.getElementById('photoSlot');
 const photoInput = document.getElementById('photoInput');
-const boatPhotos = {}; // stays local-only -- there's no photo storage in the sheet backend
+// Photos are now stored server-side (in Google Drive, linked from DATA.photos) --
 
 const focusPanel = document.getElementById('focusPanel');
 const focusTask = document.getElementById('focusTask');
@@ -402,7 +411,7 @@ function playDoneSound(){ const ctx=getCtx(); tone(ctx,660,ctx.currentTime,0.14)
 // still waiting to reach it, not the only copy of the truth.
 function saveLocalState(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentUser, currentCtx, activeTaskId, segStart, boatPhotos, sessionCompletions }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentUser, currentCtx, activeTaskId, segStart, sessionCompletions }));
   } catch(e){ console.warn('Could not save locally:', e); }
 }
 function loadLocalState(){
@@ -418,7 +427,6 @@ function loadLocalState(){
       const today = new Date().toISOString().slice(0,10);
       sessionCompletions = saved.sessionCompletions.filter(c => c.completedAt.slice(0,10) === today);
     }
-    if (saved.boatPhotos) Object.assign(boatPhotos, saved.boatPhotos);
     return true;
   } catch(e){ console.warn('Could not load saved state:', e); return false; }
 }
@@ -731,26 +739,77 @@ function renderBoatCard(){
   renderPhotoSlot();
 }
 function renderPhotoSlot(){
-  const key = currentCtx.mode === 'slip' ? currentCtx.slipId : currentCtx.boatId;
-  const photo = boatPhotos[key];
+  const photos = (DATA.photos || []).filter(p => p.boatId === currentCtx.boatId && !p.taskId);
+  const photo = photos.length ? photos[photos.length - 1] : null; // most recently uploaded
   if (photo){
     photoSlot.classList.add('has-photo');
-    photoSlot.innerHTML = '<img src="'+photo+'" alt="Boat photo"><span class="photo-retake">Retake</span>';
+    photoSlot.innerHTML = '<img src="'+photo.url+'" alt="Boat photo"><span class="photo-retake">Retake</span>';
   } else {
     photoSlot.classList.remove('has-photo');
     photoSlot.innerHTML = '<div class="photo-placeholder"><span class="plus">+</span><span>Add photo of boat</span></div>';
   }
 }
+// Shared by both the boat photo slot and the notes-photo attachment --
+// resizes and compresses before upload, since a raw phone camera photo
+// can be several MB and there's no reason to send that much data (or
+// spend that much of a marina wifi connection) for what's really just a
+// reference snapshot.
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxDim){ height = Math.round(height * maxDim / width); width = maxDim; }
+        else if (height > maxDim){ width = Math.round(width * maxDim / height); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Could not read that image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.readAsDataURL(file);
+  });
+}
+// Photo uploads go straight to the server rather than through the
+// offline queue -- even compressed, an image is much bigger than a
+// typical queued action, and localStorage has a hard size limit shared
+// by everything else the app queues. If this fails, it fails visibly
+// right away instead of silently bloating that shared storage.
+async function uploadPhoto(file, boatId, taskId, statusEl){
+  if (statusEl) statusEl.textContent = 'Uploading…';
+  try{
+    const dataUrl = await compressImage(file, 1600, 0.72);
+    const base64 = dataUrl.split(',')[1];
+    const result = await postToSheet('uploadPhoto', { boatId, taskId: taskId || '', imageData: base64, mimeType: 'image/jpeg', employee: currentUser });
+    return result;
+  } catch(err){
+    alert('Photo upload failed: ' + err.message + (err.isNetworkError ? ' (check your connection and try again)' : ''));
+    return null;
+  } finally {
+    if (statusEl) statusEl.textContent = '';
+  }
+}
 photoSlot.addEventListener('click', ()=> photoInput.click());
 photoInput.addEventListener('change', (e)=>{
   const file = e.target.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev)=>{
-    const key = currentCtx.mode === 'slip' ? currentCtx.slipId : currentCtx.boatId;
-    boatPhotos[key] = ev.target.result; renderPhotoSlot(); saveLocalState();
-  };
-  reader.readAsDataURL(file);
   photoInput.value = '';
+  photoSlot.classList.add('uploading');
+  const statusSpan = document.createElement('span');
+  statusSpan.className = 'photo-status';
+  photoSlot.appendChild(statusSpan);
+  uploadPhoto(file, currentCtx.boatId, null, statusSpan).then(result => {
+    photoSlot.classList.remove('uploading');
+    if (result && result.ok){
+      DATA.photos = DATA.photos || [];
+      DATA.photos.push({ boatId: currentCtx.boatId, taskId: '', url: result.url, photoId: result.photoId });
+    }
+    renderPhotoSlot();
+  });
 });
 
 // ======================= timer helpers =======================
@@ -789,8 +848,9 @@ function priorityDot(t){
 function renderChecklist(){
   const tasks = currentCtx.tasks || [];
   checklist.innerHTML = tasks.map(t=>{
-    const noteLabel = t.note ? '&#128221; Notes saved' : '+ Add notes';
-    const noteCls = t.note ? 'has-note' : '';
+    const hasNotePhoto = (DATA.photos || []).some(p => p.taskId === t.taskId);
+    const noteLabel = (t.note || hasNotePhoto) ? ('&#128221; Notes saved' + (hasNotePhoto ? ' &#128247;' : '')) : '+ Add notes';
+    const noteCls = (t.note || hasNotePhoto) ? 'has-note' : '';
     const dragHandle = '<span class="drag-handle" data-handle="'+t.taskId+'"><span></span><span></span><span></span></span>';
     const isTimed = String(t.billMode || '').trim().toLowerCase() !== 'complete'; // missing/oddly-cased billMode defaults to timed, same as before this feature existed
 
@@ -1015,9 +1075,42 @@ function openNotes(taskId, name, note){
   notesTaskRef = taskId;
   notesTaskTitle.textContent = 'Notes — ' + name;
   notesTextarea.value = note || '';
+  renderNotesPhotoList();
   notesOverlay.style.display = 'flex';
   setTimeout(()=>notesTextarea.focus(), 50);
 }
+function renderNotesPhotoList(){
+  const wrap = document.getElementById('notesPhotoList');
+  const photos = (DATA.photos || []).filter(p => p.taskId === notesTaskRef);
+  wrap.innerHTML = photos.length === 0 ? '' :
+    '<div class="notes-photo-grid">' + photos.map(p =>
+      '<div class="notes-photo-thumb"><img src="'+p.url+'" alt="Task photo">' +
+        '<button class="thumb-del" onclick="deleteNotePhoto(\''+p.photoId+'\')" title="Delete">&times;</button></div>'
+    ).join('') + '</div>';
+}
+async function deleteNotePhoto(photoId){
+  if (!confirm('Delete this photo?')) return;
+  await postToSheet('deletePhoto', { photoId });
+  DATA.photos = (DATA.photos || []).filter(p => p.photoId !== photoId);
+  renderNotesPhotoList();
+}
+document.getElementById('notesAddPhotoBtn').addEventListener('click', ()=> document.getElementById('notesPhotoInput').click());
+document.getElementById('notesPhotoInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  const btn = document.getElementById('notesAddPhotoBtn');
+  const originalText = btn.textContent;
+  btn.textContent = 'Uploading…'; btn.disabled = true;
+  const task = findTask(notesTaskRef);
+  uploadPhoto(file, task ? task.boatId : currentCtx.boatId, notesTaskRef, null).then(result => {
+    btn.textContent = originalText; btn.disabled = false;
+    if (result && result.ok){
+      DATA.photos = DATA.photos || [];
+      DATA.photos.push({ boatId: task ? task.boatId : currentCtx.boatId, taskId: notesTaskRef, url: result.url, photoId: result.photoId });
+      renderNotesPhotoList();
+    }
+  });
+});
 document.getElementById('notesCancelBtn').addEventListener('click', ()=> notesOverlay.style.display='none');
 document.getElementById('notesSaveBtn').addEventListener('click', ()=>{
   if (!notesTaskRef) return;
