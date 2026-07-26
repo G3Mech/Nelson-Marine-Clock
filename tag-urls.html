@@ -49,12 +49,12 @@
 <div class="wrap">
   <h1 style="display:flex;justify-content:space-between;align-items:center;">
     <span>NFC Tag URLs</span>
-    <a href="./" style="color:var(--slate);font-size:12px;font-weight:600;text-decoration:underline;">← Job Clock</a>
+    <a href="./" style="color:var(--ink);font-size:15px;font-weight:700;text-decoration:none;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 18px;display:inline-block;">← Job Clock</a>
   </h1>
   <p class="subtext">Tags attach to the boats themselves, so each boat gets one permanent link that stays correct no matter which slip — or the yard — it ends up in later. Search by slip number, boat model, boat name, or customer name, then copy that boat's link into a tag-writing app (e.g. "NFC Tools" on iPhone or Android) to program its tag.</p>
   <div class="note">Writing to tags directly from a web page only works on Android Chrome, not iPhone at all — that's why this is copy/paste into a separate app rather than built in here.</div>
 
-  <input type="text" id="searchBox" placeholder="Search: slip number, boat model, boat name, or customer…" oninput="renderList()">
+  <input type="text" id="searchBox" placeholder="Search: slip number, boat model, boat name, or customer…" oninput="showAll=false; renderList()">
   <div id="status">Loading current slip &amp; boat data…</div>
   <div id="list"></div>
 
@@ -68,6 +68,7 @@
 <script>
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
 let DATA = null;
+let showAll = false; // caps the list at 10 by default; the "Show All" button flips this
 
 document.getElementById('baseUrl').value =
   window.location.href.replace(/tag-urls\.html.*$/, '');
@@ -107,26 +108,32 @@ function renderList(){
     );
   }
 
-  // Boats currently in a slip -- shown by default (a bounded, manageable
-  // list), each tagged with its own permanent ?boat= link regardless of
-  // which slip it happens to be sitting in right now.
+  // Boats currently in a slip, tagged with their own permanent ?boat=
+  // link regardless of which slip they're sitting in right now.
   DATA.locations.filter(l => l.boatId).sort((a,b)=>slipNumOf(a)-slipNumOf(b)).forEach(l => {
     const boat = DATA.boats.find(b => b.boatId === l.boatId);
     if (boat) pushBoatRow(boat, 'Slip ' + slipNumOf(l), false);
   });
 
-  // Boats in the yard only show once you search -- otherwise this list
-  // would be the whole customer roster. Same ?boat= link, same Copy
-  // button -- every boat is equally taggable now, slip or yard.
-  if (term){
-    DATA.boats.filter(b => !slipBoatIds.has(b.boatId)).forEach(b => pushBoatRow(b, 'Yard', true));
-  }
+  // Yard boats -- same ?boat= link, same Copy button. Included always now
+  // (not just while searching); the 10-result cap below is what keeps the
+  // default view from being the whole customer roster.
+  DATA.boats.filter(b => !slipBoatIds.has(b.boatId)).forEach(b => pushBoatRow(b, 'Yard', true));
 
   if (rows.length === 0){
-    list.innerHTML = '<div id="status">' + (term ? 'No matches.' : 'Nothing currently in a slip. Try searching for a boat, model, or customer name.') + '</div>';
+    list.innerHTML = '<div id="status">' + (term ? 'No matches.' : 'Nothing on file yet.') + '</div>';
     return;
   }
-  list.innerHTML = rows.join('');
+
+  const total = rows.length;
+  let displayRows = rows;
+  let moreHtml = '';
+  if (!showAll && total > 10){
+    displayRows = rows.slice(0, 10);
+    moreHtml = '<button type="button" class="btn primary" style="width:100%;margin-top:6px;" onclick="showAll=true; renderList();">Show All (' + total + ')</button>';
+  }
+
+  list.innerHTML = displayRows.join('') + moreHtml;
   list.querySelectorAll('.copy-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> copyUrl(btn));
   });
