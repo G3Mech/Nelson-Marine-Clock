@@ -549,6 +549,7 @@ function reconcileTempTaskId(tempId, realId){
   });
   saveQueue(q);
   saveLocalState();
+  renderChecklist(); // the on-screen button was bound to the old temp id -- refresh so clicking it actually hits the real task
 }
 
 // ======================= connectivity =======================
