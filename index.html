@@ -346,7 +346,7 @@
 
 <div class="overlay" id="partsOverlay" style="display:none;">
   <div class="sheet">
-    <h3 id="partsTaskTitle">Parts Used</h3>
+    <h3 id="partsTaskTitle">⚙️ Parts List</h3>
     <div id="partsList"></div>
     <input type="text" id="partNameInput" placeholder="Part name" list="partNameSuggestions">
     <input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">
@@ -941,13 +941,13 @@ function renderView(){
 }
 // A quick-glance, read-only summary of everything logged for this boat
 // across all its tasks -- actually adding/deleting still happens through
-// the gear-icon Parts popup on each task, this is just visibility.
+// the gear-icon Parts Used popup on each task, this is just visibility.
 function renderBoatPartsBox(){
   const box = document.getElementById('boatPartsBox');
   if (!currentCtx || !currentCtx.boatId){ box.innerHTML = ''; return; }
   const parts = (DATA.parts || []).filter(p => p.boatId === currentCtx.boatId);
   if (parts.length === 0){ box.innerHTML = ''; return; }
-  box.innerHTML = '<div class="boat-parts-box"><div class="boat-parts-title">Parts</div>' +
+  box.innerHTML = '<div class="boat-parts-box"><div class="boat-parts-title">⚙️ Parts List</div>' +
     parts.map(p =>
       '<div class="boat-parts-item"><div><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
         '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div></div>'
@@ -1223,7 +1223,7 @@ document.getElementById('newTaskAddBtn').addEventListener('click', ()=>{
 let partsTaskRef = null; // taskId whose parts list is currently open
 function openPartsOverlay(taskId, name){
   partsTaskRef = taskId;
-  document.getElementById('partsTaskTitle').textContent = 'Parts Used — ' + name;
+  document.getElementById('partsTaskTitle').textContent = '⚙️ Parts List — ' + name;
   ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
   renderPartsList();
   populatePartSuggestions();
