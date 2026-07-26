@@ -10,6 +10,7 @@
     --go:#1c6e4a; --go-dark:#154f37; --stop:#8a2f1f; --amber:#a5690a; --amber-bg:#fbf1de;
     --pause-blue:#1565a8; --pause-blue-dark:#0f4c85;
     --slip-accent:#1c4f72; --slip-bg:#eaf2f7; --yard-accent:#8a5a2b; --yard-bg:#f7f0e4;
+    --caution-bg:#fff6cf; --caution-border:#e8cf5a; --caution-text:#7a5f0a;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
@@ -150,6 +151,12 @@
   .notes-photo-group{display:flex;align-items:center;gap:16px;}
   .quick-photo-btn{background:none;border:none;font-size:21px;padding:4px 2px;cursor:pointer;line-height:1;}
   .quick-parts-btn{background:none;border:none;font-size:21px;padding:4px 2px;cursor:pointer;line-height:1;}
+  .quick-flag-btn{background:none;border:none;font-size:21px;padding:4px 2px;cursor:pointer;line-height:1;opacity:.35;}
+  .quick-flag-btn.active{opacity:1;}
+  .flagged-box{margin:10px 20px 0;border:1px solid var(--caution-border);border-radius:10px;padding:12px 16px;background:var(--caution-bg);}
+  .flagged-box-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--caution-text);margin-bottom:8px;}
+  .flagged-item{padding:6px 0;border-bottom:1px dashed rgba(122,95,10,.25);font-size:13px;color:var(--caution-text);font-weight:600;}
+  .flagged-item:last-child{border-bottom:none;}
   .parts-list-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
   .boat-parts-box{margin:0 20px 16px;border:1px solid var(--line);border-radius:10px;padding:12px 16px;background:var(--paper);}
   .boat-parts-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);margin-bottom:8px;}
@@ -257,6 +264,7 @@
   <div id="boatPartsBox"></div>
   <div class="checklist" id="checklist"></div>
   <button class="add-task-btn" id="addTaskBtn">+ New Task</button>
+  <div id="flaggedBox"></div>
 
   <section class="log">
     <h2>Today, Done Jobs</h2>
@@ -945,6 +953,7 @@ function liveMs(task){ return segMs(task) + (task.taskId===activeTaskId && segSt
 // ======================= view rendering =======================
 function renderView(){
   renderBoatPartsBox();
+  renderFlaggedBox();
   if (!currentCtx || currentCtx.mode === 'none' || currentCtx.mode === 'empty-slip'){ renderLog(); return; }
   if (activeTaskId && findTask(activeTaskId)){
     checklist.style.display='none'; addTaskBtn.style.display='none';
@@ -975,6 +984,18 @@ function renderBoatPartsBox(){
         '<div class="part-name-line"><b>'+p.partName+qtyLabel+'</b>'+taskLabel+'</div>' +
         '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div></div>';
     }).join('') + '</div>';
+}
+// Light-yellow, at-a-glance list of everything currently flagged as
+// incompletable on this boat -- actually flagging/unflagging still
+// happens via the caution icon on each task row, this is just visibility,
+// same relationship the Parts box has to the gear icon.
+function renderFlaggedBox(){
+  const box = document.getElementById('flaggedBox');
+  if (!currentCtx || !currentCtx.tasks){ box.innerHTML = ''; return; }
+  const flagged = currentCtx.tasks.filter(t => t.flagged);
+  if (flagged.length === 0){ box.innerHTML = ''; return; }
+  box.innerHTML = '<div class="flagged-box"><div class="flagged-box-title">&#9888;&#65039; Flagged — Can\'t Complete</div>' +
+    flagged.map(t => '<div class="flagged-item">'+t.name+'</div>').join('') + '</div>';
 }
 function renderFocus(){
   const task = findTask(activeTaskId);
@@ -1014,6 +1035,7 @@ function renderChecklist(){
                 '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
                 '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
                 '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
+                '<button class="quick-flag-btn'+(t.flagged?' active':'')+'" data-act="flag" data-task="'+t.taskId+'" title="Flag as incompletable">&#9888;&#65039;</button>'+
               '</span>'+
             '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
           '</div></div>';
@@ -1030,6 +1052,7 @@ function renderChecklist(){
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
             '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
             '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
+            '<button class="quick-flag-btn'+(t.flagged?' active':'')+'" data-act="flag" data-task="'+t.taskId+'" title="Flag as incompletable">&#9888;&#65039;</button>'+
           '</span>'+
           '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
         '</div></div>';
@@ -1045,6 +1068,7 @@ function renderChecklist(){
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
             '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
             '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
+            '<button class="quick-flag-btn'+(t.flagged?' active':'')+'" data-act="flag" data-task="'+t.taskId+'" title="Flag as incompletable">&#9888;&#65039;</button>'+
           '</span>'+
           '<span></span>'+
         '</div></div>';
@@ -1061,6 +1085,7 @@ function renderChecklist(){
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
             '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
             '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
+            '<button class="quick-flag-btn'+(t.flagged?' active':'')+'" data-act="flag" data-task="'+t.taskId+'" title="Flag as incompletable">&#9888;&#65039;</button>'+
           '</span>'+
           '<button class="complete-link" data-act="ask" data-task="'+t.taskId+'">Job finished — mark complete</button>'+
         '</div></div>';
@@ -1074,6 +1099,7 @@ function renderChecklist(){
           '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
           '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
           '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
+          '<button class="quick-flag-btn'+(t.flagged?' active':'')+'" data-act="flag" data-task="'+t.taskId+'" title="Flag as incompletable">&#9888;&#65039;</button>'+
         '</span>'+
         '<span></span>'+
       '</div></div>';
@@ -1099,6 +1125,7 @@ function handleAction(action, taskId){
     return;
   }
   if (action === 'parts'){ openPartsOverlay(taskId, task.name); return; }
+  if (action === 'flag'){ toggleFlag(taskId); return; }
 
   if (action === 'start' || action === 'resume'){ if (activeTaskId) return; beginSegment(task); }
   else if (action === 'check'){ completeSimpleTask(taskId); }
@@ -1170,6 +1197,17 @@ function completeTask(taskId){
     segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
   });
   playDoneSound(); renderView();
+}
+// A task flagged as incompletable stays in the checklist as normal --
+// this is just a visible "heads up" marker (and the light-yellow summary
+// box above the log) for something blocking the job, not a status change.
+function toggleFlag(taskId){
+  const task = findTask(taskId); if (!task) return;
+  task.flagged = !task.flagged;
+  saveLocalState();
+  enqueue('updateTask', { taskId, flagged: task.flagged });
+  renderChecklist();
+  renderFlaggedBox();
 }
 function undoComplete(taskId){
   const task = findTask(taskId); if (!task) return;
