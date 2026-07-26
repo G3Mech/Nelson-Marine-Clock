@@ -149,7 +149,6 @@
   .notes-link{ background:none;border:none;font-size:21px;color:var(--slate);padding:4px 2px;cursor:pointer;text-align:left;line-height:1; }
   .notes-link.has-note{color:var(--pause-blue);font-weight:600;}
   .notes-photo-group{display:flex;align-items:center;gap:16px;}
-  .quick-photo-btn{background:none;border:none;font-size:21px;padding:4px 2px;cursor:pointer;line-height:1;}
   .quick-parts-btn{background:none;border:none;font-size:21px;padding:4px 2px;cursor:pointer;line-height:1;}
   .quick-flag-btn{background:none;border:none;font-size:21px;padding:4px 2px;cursor:pointer;line-height:1;}
   .flagged-box{margin:10px 20px 0;border:1px solid var(--caution-border);border-radius:10px;padding:12px 16px;background:var(--caution-bg);}
@@ -1067,7 +1066,6 @@ function renderChecklist(){
           '<div class="task-row-secondary">'+
             '<span class="notes-photo-group">'+
                 '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
-                '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
                 '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
                 flagBtn+
               '</span>'+
@@ -1084,7 +1082,6 @@ function renderChecklist(){
         '<div class="task-row-secondary">'+
           '<span class="notes-photo-group">'+
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
-            '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
             '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
             flagBtn+
           '</span>'+
@@ -1100,7 +1097,6 @@ function renderChecklist(){
         '<div class="task-row-secondary">'+
           '<span class="notes-photo-group">'+
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
-            '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
             '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
             flagBtn+
           '</span>'+
@@ -1117,7 +1113,6 @@ function renderChecklist(){
         '<div class="task-row-secondary">'+
           '<span class="notes-photo-group">'+
             '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
-            '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
             '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
             flagBtn+
           '</span>'+
@@ -1131,7 +1126,6 @@ function renderChecklist(){
       '<div class="task-row-secondary">'+
         '<span class="notes-photo-group">'+
           '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
-          '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
           '<button class="quick-parts-btn" data-act="parts" data-task="'+t.taskId+'" title="Track parts">&#9881;&#65039;</button>'+
           flagBtn+
         '</span>'+
@@ -1153,11 +1147,6 @@ function handleAction(action, taskId){
 
   if (action === 'notes'){ openNotes(taskId, task.name, task.note); return; }
   if (!currentUser){ overlay.style.display = 'flex'; return; }
-  if (action === 'photo'){
-    const t = findTask(taskId);
-    openPhotoChoice({ boatId: t ? t.boatId : currentCtx.boatId, taskId, onDone: () => renderChecklist() });
-    return;
-  }
   if (action === 'parts'){ openPartsOverlay(taskId, task.name); return; }
   if (action === 'flag'){ openFlagConfirm(taskId, task.name); return; }
 
