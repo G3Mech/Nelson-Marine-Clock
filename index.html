@@ -930,7 +930,7 @@ function completeTask(taskId){
   const mins = Math.round(segMs(task)/60000);
   const last = (task._segments||[])[task._segments.length-1] || { start: Date.now(), end: Date.now() };
   enqueue('logEntry', {
-    taskId, boatId: currentCtx.boatId, workOrder: currentCtx.workOrder,
+    taskId, boatId: currentCtx.boatId, workOrder: (task.workOrder !== undefined ? task.workOrder : currentCtx.workOrder),
     employee: currentUser, taskName: task.name,
     segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
   });
