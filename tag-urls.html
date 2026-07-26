@@ -28,14 +28,11 @@
     display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:8px;
     padding:10px 12px; margin-bottom:7px; background:var(--white);
   }
-  .tag-row.empty{ border-style:dashed; }
-  .tag-row.yard-noresult{ border-color:var(--yard-accent); background:var(--yard-bg); }
+  .tag-row.in-yard .tag-label{ color:var(--yard-accent); }
   .tag-label{ font-weight:700; color:var(--slip-accent); min-width:64px; flex-shrink:0; font-size:13.5px; }
-  .tag-row.yard-noresult .tag-label{ color:var(--yard-accent); }
   .tag-info{ flex:1; min-width:0; }
   .tag-info .who{ font-size:13.5px; font-weight:600; }
   .tag-info .url{ font-size:11.5px; color:var(--slate); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .no-tag-note{ font-size:12px; color:var(--yard-accent); font-weight:600; flex-shrink:0; }
   .copy-btn{
     flex-shrink:0; padding:7px 13px; border-radius:7px; font-size:12.5px; font-weight:700; cursor:pointer;
     border:1px solid var(--go); background:var(--white); color:var(--go);
@@ -54,7 +51,7 @@
     <span>NFC Tag URLs</span>
     <a href="./" style="color:var(--slate);font-size:12px;font-weight:600;text-decoration:underline;">← Job Clock</a>
   </h1>
-  <p class="subtext">Search by slip number, boat model, boat name, or customer name to find the exact URL for a tag. Copy it, then paste into a tag-writing app (e.g. "NFC Tools" on iPhone or Android) to program the tag — this page doesn't write tags itself, just gives you the exact text to write.</p>
+  <p class="subtext">Tags attach to the boats themselves, so each boat gets one permanent link that stays correct no matter which slip — or the yard — it ends up in later. Search by slip number, boat model, boat name, or customer name, then copy that boat's link into a tag-writing app (e.g. "NFC Tools" on iPhone or Android) to program its tag.</p>
   <div class="note">Writing to tags directly from a web page only works on Android Chrome, not iPhone at all — that's why this is copy/paste into a separate app rather than built in here.</div>
 
   <input type="text" id="searchBox" placeholder="Search: slip number, boat model, boat name, or customer…" oninput="renderList()">
@@ -92,54 +89,44 @@ function renderList(){
   const term = document.getElementById('searchBox').value.trim().toLowerCase();
   const base = document.getElementById('baseUrl').value.trim().replace(/\?.*$/, '');
 
-  const slips = DATA.locations.slice().sort((a,b)=>slipNumOf(a)-slipNumOf(b));
-  const slipBoatIds = new Set(slips.filter(l=>l.boatId).map(l=>l.boatId));
-
+  const slipBoatIds = new Set(DATA.locations.filter(l=>l.boatId).map(l=>l.boatId));
   const rows = [];
 
-  slips.forEach(l => {
-    const num = slipNumOf(l);
-    const boat = l.boatId ? DATA.boats.find(b => b.boatId === l.boatId) : null;
+  function pushBoatRow(boat, locLabel, isYard){
     const d = describeBoat(boat);
-    const haystack = ('slip ' + num + ' ' + d.customerName + ' ' + d.model + ' ' + d.boatName).toLowerCase();
+    const who = d.customerName + ' — ' + d.model + (d.boatName ? ' "' + d.boatName + '"' : '');
+    const haystack = (locLabel + ' ' + who).toLowerCase();
     if (term && haystack.indexOf(term) === -1) return;
-
-    const url = base + '?slip=' + l.slipId;
-    const who = boat ? (d.customerName + ' — ' + d.model + (d.boatName ? ' "' + d.boatName + '"' : '')) : 'Empty';
-    rows.push({
-      html: '<div class="tag-row' + (boat ? '' : ' empty') + '">' +
-        '<span class="tag-label">Slip ' + num + '</span>' +
+    const url = base + '?boat=' + boat.boatId;
+    rows.push(
+      '<div class="tag-row' + (isYard ? ' in-yard' : '') + '">' +
+        '<span class="tag-label">' + locLabel + '</span>' +
         '<div class="tag-info"><div class="who">' + who + '</div><div class="url">' + url + '</div></div>' +
         '<button class="copy-btn" data-url="' + url.replace(/"/g,'&quot;') + '">Copy</button>' +
       '</div>'
-    });
+    );
+  }
+
+  // Boats currently in a slip -- shown by default (a bounded, manageable
+  // list), each tagged with its own permanent ?boat= link regardless of
+  // which slip it happens to be sitting in right now.
+  DATA.locations.filter(l => l.boatId).sort((a,b)=>slipNumOf(a)-slipNumOf(b)).forEach(l => {
+    const boat = DATA.boats.find(b => b.boatId === l.boatId);
+    if (boat) pushBoatRow(boat, 'Slip ' + slipNumOf(l), false);
   });
 
-  // Boats that match the search but aren't in any slip right now -- yard
-  // stands aren't individually tagged, so there's no URL to give out, but
-  // showing them (rather than nothing) avoids "no results" confusion when
-  // someone searches a customer/boat that's just on land at the moment.
+  // Boats in the yard only show once you search -- otherwise this list
+  // would be the whole customer roster. Same ?boat= link, same Copy
+  // button -- every boat is equally taggable now, slip or yard.
   if (term){
-    DATA.boats.filter(b => !slipBoatIds.has(b.boatId)).forEach(b => {
-      const d = describeBoat(b);
-      const haystack = (d.customerName + ' ' + d.model + ' ' + d.boatName).toLowerCase();
-      if (haystack.indexOf(term) === -1) return;
-      const who = d.customerName + ' — ' + d.model + (d.boatName ? ' "' + d.boatName + '"' : '');
-      rows.push({
-        html: '<div class="tag-row yard-noresult">' +
-          '<span class="tag-label">Yard</span>' +
-          '<div class="tag-info"><div class="who">' + who + '</div><div class="url">Not in a slip right now</div></div>' +
-          '<span class="no-tag-note">No tag (yard)</span>' +
-        '</div>'
-      });
-    });
+    DATA.boats.filter(b => !slipBoatIds.has(b.boatId)).forEach(b => pushBoatRow(b, 'Yard', true));
   }
 
   if (rows.length === 0){
-    list.innerHTML = '<div id="status">No matches.</div>';
+    list.innerHTML = '<div id="status">' + (term ? 'No matches.' : 'Nothing currently in a slip. Try searching for a boat, model, or customer name.') + '</div>';
     return;
   }
-  list.innerHTML = rows.map(r => r.html).join('');
+  list.innerHTML = rows.join('');
   list.querySelectorAll('.copy-btn').forEach(btn=>{
     btn.addEventListener('click', ()=> copyUrl(btn));
   });
