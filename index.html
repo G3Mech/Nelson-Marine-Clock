@@ -142,6 +142,8 @@
   .task-row-secondary{ margin-top:9px;padding-top:9px;padding-left:26px;border-top:1px dashed rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:center;gap:10px; }
   .notes-link{ background:none;border:none;font-size:12px;color:var(--slate);text-decoration:underline;padding:2px 0;cursor:pointer;text-align:left; }
   .notes-link.has-note{color:var(--pause-blue);font-weight:600;}
+  .notes-photo-group{display:flex;align-items:center;gap:10px;}
+  .quick-photo-btn{background:none;border:none;font-size:15px;padding:2px 0;cursor:pointer;line-height:1;}
   .complete-link{ background:none;border:none;font-size:12px;color:var(--slate);text-decoration:underline;padding:2px 0;cursor:pointer;text-align:right; }
   .undo-link{ background:none;border:none;font-size:12px;color:var(--amber);text-decoration:underline;padding:2px 0;cursor:pointer;font-weight:600;text-align:right; }
 
@@ -216,6 +218,7 @@
       <div class="photo-placeholder"><span class="plus">+</span><span>Add photo of boat</span></div>
     </div>
     <input type="file" accept="image/*" capture="environment" id="photoInput" style="display:none;">
+    <input type="file" accept="image/*" capture="environment" id="quickPhotoInput" style="display:none;">
     <span class="type-badge" id="typeBadge"></span>
     <div class="boat-customer" id="boatCustomer"></div>
     <div class="boat-model" id="boatModel"></div>
@@ -338,6 +341,7 @@ let segStart = null;             // when the active task's current segment began
 let sessionCompletions = [];     // { taskId, boatId, name, billMode, completedAt }
 let pendingConfirm = null;       // taskId awaiting the "mark complete?" confirmation
 let notesTaskRef = null;         // taskId whose notes sheet is open
+let quickPhotoTaskId = null;     // taskId the camera-icon shortcut is currently targeting
 let isOnline = navigator.onLine;
 let forcedOffline = false;
 let ticker = null;
@@ -811,6 +815,22 @@ photoInput.addEventListener('change', (e)=>{
     renderPhotoSlot();
   });
 });
+// The camera-icon shortcut next to each task -- attaches straight to
+// that task, same as a photo added through the full Notes popup, just
+// without needing to open it first.
+document.getElementById('quickPhotoInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  const taskId = quickPhotoTaskId; if (!taskId) return;
+  const task = findTask(taskId);
+  uploadPhoto(file, task ? task.boatId : currentCtx.boatId, taskId, null).then(result => {
+    if (result && result.ok){
+      DATA.photos = DATA.photos || [];
+      DATA.photos.push({ boatId: task ? task.boatId : currentCtx.boatId, taskId, url: result.url, photoId: result.photoId });
+      renderChecklist();
+    }
+  });
+});
 
 // ======================= timer helpers =======================
 function fmtDuration(ms){ const s=Math.max(0,Math.floor(ms/1000)); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
@@ -862,7 +882,10 @@ function renderChecklist(){
             '<div class="task-sub">Completed</div></div>'+
             '<span class="check-static">&#10003;</span></div>'+
           '<div class="task-row-secondary">'+
-            '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+            '<span class="notes-photo-group">'+
+                '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+                '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+              '</span>'+
             '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
           '</div></div>';
       }
@@ -874,7 +897,10 @@ function renderChecklist(){
           '<div class="task-sub">Total '+mins+' min'+sessionNote+'</div></div>'+
           '<span class="check-static">&#10003;</span></div>'+
         '<div class="task-row-secondary">'+
-          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+          '<span class="notes-photo-group">'+
+            '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+            '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+          '</span>'+
           '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
         '</div></div>';
     }
@@ -885,7 +911,10 @@ function renderChecklist(){
           '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div></div>'+
           '<button class="pill-btn start" data-act="check" data-task="'+t.taskId+'">Mark Done</button></div>'+
         '<div class="task-row-secondary">'+
-          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+          '<span class="notes-photo-group">'+
+            '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+            '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+          '</span>'+
           '<span></span>'+
         '</div></div>';
     }
@@ -897,7 +926,10 @@ function renderChecklist(){
           '<div class="task-sub">'+mins+' min logged — paused</div></div>'+
           '<button class="pill-btn resume" data-act="resume" data-task="'+t.taskId+'">Resume</button></div>'+
         '<div class="task-row-secondary">'+
-          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+          '<span class="notes-photo-group">'+
+            '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+            '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+          '</span>'+
           '<button class="complete-link" data-act="ask" data-task="'+t.taskId+'">Job finished — mark complete</button>'+
         '</div></div>';
     }
@@ -906,7 +938,10 @@ function renderChecklist(){
         '<div class="task-main-content"><div class="task-name">'+priorityDot(t)+t.name+'</div></div>'+
         '<button class="pill-btn start" data-act="start" data-task="'+t.taskId+'">Start</button></div>'+
       '<div class="task-row-secondary">'+
-        '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+        '<span class="notes-photo-group">'+
+          '<button class="notes-link '+noteCls+'" data-act="notes" data-task="'+t.taskId+'">'+noteLabel+'</button>'+
+          '<button class="quick-photo-btn" data-act="photo" data-task="'+t.taskId+'" title="Add photo">&#128247;</button>'+
+        '</span>'+
         '<span></span>'+
       '</div></div>';
   }).join('');
@@ -925,6 +960,7 @@ function handleAction(action, taskId){
 
   if (action === 'notes'){ openNotes(taskId, task.name, task.note); return; }
   if (!currentUser){ overlay.style.display = 'flex'; return; }
+  if (action === 'photo'){ quickPhotoTaskId = taskId; document.getElementById('quickPhotoInput').click(); return; }
 
   if (action === 'start' || action === 'resume'){ if (activeTaskId) return; beginSegment(task); }
   else if (action === 'check'){ completeSimpleTask(taskId); }
