@@ -154,6 +154,7 @@
   .boat-parts-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:13px;}
   .boat-parts-item:last-child{border-bottom:none;}
   .boat-parts-item b{display:block;}
+  .part-task-name{color:#9aa8b2;font-weight:400;font-size:12.5px;}
   .boat-parts-item span{color:var(--slate);font-size:12px;}
   .parts-list-item:last-child{border-bottom:none;}
   .parts-list-item .part-info b{display:block;font-size:14px;}
@@ -948,10 +949,16 @@ function renderBoatPartsBox(){
   const parts = (DATA.parts || []).filter(p => p.boatId === currentCtx.boatId);
   if (parts.length === 0){ box.innerHTML = ''; return; }
   box.innerHTML = '<div class="boat-parts-box"><div class="boat-parts-title">⚙️ Parts List</div>' +
-    parts.map(p =>
-      '<div class="boat-parts-item"><div><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
-        '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div></div>'
-    ).join('') + '</div>';
+    parts.map(p => {
+      // The task lookup only finds tasks still in Active Tasks -- if this
+      // part's task has since been completed and moved out, it just
+      // won't show a task name rather than showing something wrong.
+      const task = findTask(p.taskId);
+      const qtyLabel = p.quantity ? (', x'+p.quantity) : '';
+      const taskLabel = task ? (' <span class="part-task-name">- '+task.name+'</span>') : '';
+      return '<div class="boat-parts-item"><div><b>'+p.partName+qtyLabel+'</b>'+taskLabel+
+        '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div></div>';
+    }).join('') + '</div>';
 }
 function renderFocus(){
   const task = findTask(activeTaskId);
