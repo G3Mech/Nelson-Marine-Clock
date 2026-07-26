@@ -1005,7 +1005,7 @@ function renderBoatPartsBox(){
 function renderFlaggedBox(){
   const box = document.getElementById('flaggedBox');
   if (!currentCtx || !currentCtx.tasks){ box.innerHTML = ''; return; }
-  const flagged = currentCtx.tasks.filter(t => t.flagged);
+  const flagged = currentCtx.tasks.filter(t => t.status === 'flagged');
   if (flagged.length === 0){ box.innerHTML = ''; return; }
   box.innerHTML = '<div class="flagged-box"><div class="flagged-box-title">&#9888;&#65039; Flagged — Can\'t Complete</div>' +
     flagged.map(t => '<div class="flagged-item"><span>'+t.name+'</span>' +
@@ -1035,7 +1035,7 @@ function renderChecklist(){
   // Flagged tasks no longer show up here at all -- they live in the
   // light-yellow box below (renderFlaggedBox) once confirmed via the
   // "Flag job as Incompletable" popup, out of the way of the main list.
-  const tasks = (currentCtx.tasks || []).filter(t => !t.flagged);
+  const tasks = (currentCtx.tasks || []).filter(t => t.status !== 'flagged');
   checklist.innerHTML = tasks.map(t=>{
     const hasNotePhoto = (DATA.photos || []).some(p => p.taskId === t.taskId);
     const noteLabel = '&#128221;' + (hasNotePhoto ? ' &#128247;' : '');
@@ -1225,9 +1225,15 @@ function completeTask(taskId){
 // on the row, since it changes where the task lives, not just how it looks.
 function setFlag(taskId, flagged){
   const task = findTask(taskId); if (!task) return;
-  task.flagged = flagged;
+  if (flagged){
+    task._preFlagStatus = task.status; // remembered so Unflag can restore it, rather than always dropping back to pending
+    task.status = 'flagged';
+  } else {
+    task.status = task._preFlagStatus || 'pending';
+    delete task._preFlagStatus;
+  }
   saveLocalState();
-  enqueue('updateTask', { taskId, flagged: task.flagged });
+  enqueue('updateTask', { taskId, status: task.status });
   renderChecklist();
   renderFlaggedBox();
 }
