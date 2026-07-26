@@ -1041,17 +1041,24 @@ async function boot(){
 
   if (currentUser){ whoName.textContent = currentUser; overlay.style.display = 'none'; }
   else {
+    populateNameButtons();
+    overlay.style.display = 'flex';
+  }
+  hamburgerBtn.addEventListener('click', ()=>{ menuWhoName_sync(); menuOverlay.classList.add('show'); });
+  menuCloseBtn.addEventListener('click', ()=> menuOverlay.classList.remove('show'));
+  menuSwitchUser.addEventListener('click', ()=>{
+    menuOverlay.classList.remove('show');
+    populateNameButtons();
+    overlay.style.display='flex';
+  });
+  function menuWhoName_sync(){ whoName.textContent = currentUser || '—'; }
+  function populateNameButtons(){
     nameButtons.innerHTML = (DATA && DATA.employees ? DATA.employees : []).map(n =>
       '<button class="name-btn" data-name="'+n+'">'+n+'</button>').join('');
     nameButtons.querySelectorAll('.name-btn').forEach(btn=>{
       btn.addEventListener('click', ()=>{ currentUser = btn.dataset.name; whoName.textContent = currentUser; overlay.style.display='none'; saveLocalState(); });
     });
-    overlay.style.display = 'flex';
   }
-  hamburgerBtn.addEventListener('click', ()=>{ menuWhoName_sync(); menuOverlay.classList.add('show'); });
-  menuCloseBtn.addEventListener('click', ()=> menuOverlay.classList.remove('show'));
-  menuSwitchUser.addEventListener('click', ()=>{ menuOverlay.classList.remove('show'); overlay.style.display='flex'; });
-  function menuWhoName_sync(){ whoName.textContent = currentUser || '—'; }
 
   renderBoatCard();
   renderView();
