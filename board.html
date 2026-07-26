@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Nelson Marine — Work Board</title>
+<style>
+  :root{
+    --ink:#0f2438; --deep:#0a1a2b; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
+    --go:#1c6e4a; --go-bg:#e3f2ea; --stop:#8a2f1f; --amber:#a5690a; --amber-bg:#fbf1de;
+    --pause-blue:#1565a8; --slip-accent:#1c4f72; --slip-bg:#eaf2f7; --yard-accent:#8a5a2b; --yard-bg:#f7f0e4;
+    --caution-bg:#fff6cf; --caution-border:#e8cf5a; --caution-text:#7a5f0a;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;}
+  body{
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--paper); color:var(--ink);
+    display:flex; flex-direction:column; height:100vh; width:100vw;
+  }
+
+  /* ---- header bar ---- */
+  header{
+    flex-shrink:0; display:flex; align-items:center; justify-content:space-between;
+    padding:14px 26px; background:var(--deep); color:var(--white);
+  }
+  .brand{ font-size:20px; font-weight:800; letter-spacing:.01em; }
+  .brand .sub{ font-size:13px; font-weight:600; color:#9fb4c4; margin-left:12px; letter-spacing:.04em; }
+  .status{ display:flex; align-items:center; gap:10px; font-size:14px; color:#cfe0ea; font-weight:600; }
+  .dot{ width:11px;height:11px;border-radius:50%;background:#4fd18b;flex-shrink:0; }
+  .dot.stale{ background:#e0705a; }
+
+  /* ---- body split ---- */
+  .body{ flex:1; display:flex; min-height:0; }
+  .left{ flex:3 1 0; min-width:0; padding:20px 22px; overflow-y:auto; }
+  .right{ flex:1 1 0; min-width:300px; max-width:420px; border-left:2px solid var(--line); background:var(--white); padding:20px 18px; overflow-y:auto; }
+
+  .panel-title{
+    font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--slate);
+    margin:0 0 14px; display:flex; align-items:center; gap:8px;
+  }
+  .panel-title .count{
+    background:var(--line); color:var(--ink); font-size:12px; font-weight:800; padding:2px 9px; border-radius:20px;
+  }
+
+  /* ---- work order cards (left) ---- */
+  .wo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(380px, 1fr)); gap:16px; align-content:start; }
+  .wo-card{ background:var(--white); border:1px solid var(--line); border-left:6px solid var(--slate); border-radius:12px; padding:16px 18px; }
+  .wo-card.slip{ border-left-color:var(--slip-accent); }
+  .wo-card.yard{ border-left-color:var(--yard-accent); }
+  .wo-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px; }
+  .wo-cust{ font-size:19px; font-weight:800; line-height:1.25; }
+  .wo-boat{ font-size:13.5px; color:var(--slate); margin-top:2px; }
+  .wo-badges{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
+  .wo-num{ font-size:13px; font-weight:800; color:var(--white); background:var(--ink); padding:4px 11px; border-radius:20px; white-space:nowrap; }
+  .wo-loc{ font-size:11.5px; font-weight:700; padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .wo-loc.slip{ background:var(--slip-bg); color:var(--slip-accent); }
+  .wo-loc.yard{ background:var(--yard-bg); color:var(--yard-accent); }
+
+  .wo-tasks{ margin-top:8px; border-top:1px solid var(--line); padding-top:8px; }
+  .wo-task{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:6px 0; font-size:15px; }
+  .wo-task .t-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .status-pill{ font-size:11px; font-weight:800; padding:3px 10px; border-radius:20px; white-space:nowrap; flex-shrink:0; text-transform:uppercase; letter-spacing:.03em; }
+  .status-pill.pending{ background:var(--paper); color:var(--slate); border:1px solid var(--line); }
+  .status-pill.active{ background:var(--go-bg); color:var(--go); }
+  .status-pill.paused{ background:var(--amber-bg); color:var(--amber); }
+  .status-pill.flagged{ background:var(--caution-bg); color:var(--caution-text); border:1px solid var(--caution-border); }
+
+  .empty-note{ color:var(--slate); font-size:15px; padding:30px 4px; }
+
+  /* ---- now running (right) ---- */
+  .run-card{
+    border:1.5px solid var(--go); border-radius:12px; padding:14px 16px; margin-bottom:14px; background:var(--go-bg);
+  }
+  .run-timer{ font-size:34px; font-weight:800; color:var(--go); font-variant-numeric:tabular-nums; line-height:1; }
+  .run-name{ font-size:16px; font-weight:700; margin-top:8px; }
+  .run-meta{ font-size:12.5px; color:var(--slate); margin-top:3px; }
+  .run-empty{ color:var(--slate); font-size:14px; padding:20px 4px; }
+
+  /* smaller screens: stack instead of side-by-side */
+  @media (max-width:900px){
+    .body{ flex-direction:column; }
+    .right{ max-width:none; border-left:none; border-top:2px solid var(--line); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Nelson Marine <span class="sub">WORK BOARD</span></div>
+  <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
+</header>
+
+<div class="body">
+  <div class="left">
+    <div class="panel-title">Work Orders <span class="count" id="woCount">0</span></div>
+    <div id="woGrid" class="wo-grid"></div>
+  </div>
+  <div class="right">
+    <div class="panel-title">Now Running <span class="count" id="runCount">0</span></div>
+    <div id="runList"></div>
+  </div>
+</div>
+
+<script>
+// ======================= CONFIG =======================
+// Same deployed Apps Script Web App URL as the phone page -- this board
+// is read-only, so it only ever calls ?action=getAll, never POSTs.
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+
+const REFRESH_MS = 15000; // how often to re-fetch from the sheet
+
+let DATA = null;
+let lastFetchOk = null;
+let lastFetchAt = null;
+
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const woGrid = document.getElementById('woGrid');
+const woCount = document.getElementById('woCount');
+const runList = document.getElementById('runList');
+const runCount = document.getElementById('runCount');
+
+// ======================= lookups (same pattern as the phone page) =======================
+function boatById(id){ return DATA.boats.find(b => b.boatId === id); }
+function customerById(id){ return DATA.customers.find(c => c.customerId === id); }
+function slipForBoat(boatId){ return DATA.locations.find(l => l.boatId === boatId); }
+
+// A work order number can be a plain integer, something like "WO #4471",
+// or occasionally left blank -- sort numerically on whatever digits are
+// in it, with anything unparsable (or blank) pushed to the end rather
+// than sorting alphabetically ahead of real numbers.
+function workOrderSortKey(wo){
+  const n = parseFloat(String(wo).replace(/[^0-9.]/g, ''));
+  return isNaN(n) ? Infinity : n;
+}
+
+function fmtElapsed(ms){
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = String(m).padStart(2, '0'), ss = String(s).padStart(2, '0');
+  return h > 0 ? (h + ':' + mm + ':' + ss) : (mm + ':' + ss);
+}
+
+// ======================= rendering =======================
+function renderWorkOrders(){
+  // Only boats with an actual work order number, and at least one task
+  // that isn't done yet -- a boat whose work order is fully wrapped up
+  // belongs in Billing, not on a board of what's still to do.
+  const cards = DATA.boats
+    .filter(b => b.currentWorkOrder)
+    .map(b => ({ boat: b, tasks: DATA.tasks.filter(t => t.boatId === b.boatId && t.status !== 'done') }))
+    .filter(c => c.tasks.length > 0)
+    .sort((a, b) => workOrderSortKey(a.boat.currentWorkOrder) - workOrderSortKey(b.boat.currentWorkOrder));
+
+  woCount.textContent = cards.length;
+
+  if (cards.length === 0){
+    woGrid.innerHTML = '<div class="empty-note">No open work orders right now.</div>';
+    return;
+  }
+
+  woGrid.innerHTML = cards.map(({ boat, tasks }) => {
+    const cust = customerById(boat.customerId);
+    const slip = slipForBoat(boat.boatId);
+    const locType = slip ? 'slip' : 'yard';
+    const locLabel = slip ? ('Slip ' + (slip.slipId.match(/\d+/) || ['?'])[0]) : 'Yard';
+    const sortedTasks = tasks.slice().sort((a, b) => (a.priority || 2) - (b.priority || 2) || (a.order || 0) - (b.order || 0));
+
+    return '<div class="wo-card ' + locType + '">' +
+      '<div class="wo-head">' +
+        '<div><div class="wo-cust">' + (cust ? cust.name : '—') + '</div>' +
+        '<div class="wo-boat">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div></div>' +
+        '<div class="wo-badges"><div class="wo-num">WO ' + boat.currentWorkOrder + '</div>' +
+        '<div class="wo-loc ' + locType + '">' + locLabel + '</div></div>' +
+      '</div>' +
+      '<div class="wo-tasks">' +
+        sortedTasks.map(t =>
+          '<div class="wo-task"><span class="t-name">' + t.name + '</span>' +
+            '<span class="status-pill ' + t.status + '">' + t.status + '</span></div>'
+        ).join('') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderRunning(){
+  const running = DATA.tasks
+    .filter(t => t.status === 'active')
+    .sort((a, b) => new Date(a.activeSince || 0) - new Date(b.activeSince || 0)); // longest-running first
+
+  runCount.textContent = running.length;
+
+  if (running.length === 0){
+    runList.innerHTML = '<div class="run-empty">Nothing running right now.</div>';
+    return;
+  }
+
+  runList.innerHTML = running.map(t => {
+    const boat = boatById(t.boatId);
+    const cust = boat ? customerById(boat.customerId) : null;
+    const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
+    return '<div class="run-card" data-since="' + (t.activeSince || '') + '">' +
+      '<div class="run-timer">' + (t.activeSince ? fmtElapsed(Date.now() - new Date(t.activeSince).getTime()) : '—:—') + '</div>' +
+      '<div class="run-name">' + t.name + '</div>' +
+      '<div class="run-meta">' + who + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function render(){
+  if (!DATA) return;
+  renderWorkOrders();
+  renderRunning();
+}
+
+// Re-stamps just the timer text every second without touching the rest
+// of the DOM -- a full render() every second would be wasteful and would
+// interrupt anyone reading the work-order list.
+function tickTimers(){
+  document.querySelectorAll('.run-card').forEach(el => {
+    const since = el.dataset.since;
+    if (!since) return;
+    const timerEl = el.querySelector('.run-timer');
+    if (timerEl) timerEl.textContent = fmtElapsed(Date.now() - new Date(since).getTime());
+  });
+}
+
+function updateStatusBar(){
+  if (lastFetchOk === null){
+    statusDot.className = 'dot';
+    statusText.textContent = 'Loading…';
+    return;
+  }
+  const secsAgo = lastFetchAt ? Math.round((Date.now() - lastFetchAt) / 1000) : null;
+  if (lastFetchOk){
+    statusDot.className = 'dot';
+    statusText.textContent = 'Updated ' + (secsAgo < 5 ? 'just now' : secsAgo + 's ago');
+  } else {
+    statusDot.className = 'dot stale';
+    statusText.textContent = 'Connection lost — showing data from ' + (secsAgo === null ? 'earlier' : secsAgo + 's ago');
+  }
+}
+
+// ======================= fetching =======================
+async function refreshData(){
+  try{
+    const res = await fetch(WEBAPP_URL + '?action=getAll');
+    const json = await res.json();
+    if (json.error) throw new Error(json.error);
+    DATA = json;
+    lastFetchOk = true;
+    lastFetchAt = Date.now();
+  } catch (e){
+    console.warn('Work board: could not refresh from the sheet:', e);
+    lastFetchOk = false;
+    // keep showing whatever DATA already holds -- a stale board is far
+    // more useful on a wall-mounted tablet than a blank one
+  }
+  render();
+  updateStatusBar();
+}
+
+refreshData();
+setInterval(refreshData, REFRESH_MS);
+setInterval(() => { tickTimers(); updateStatusBar(); }, 1000);
+</script>
+</body>
+</html>
