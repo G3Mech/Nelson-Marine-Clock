@@ -688,7 +688,13 @@ function slipById(id){ return DATA.locations.find(l => l.slipId === id); }
 function buildContextForBoat(boatId, mode, slipId){
   const boat = boatById(boatId);
   const cust = boat ? customerById(boat.customerId) : null;
-  const tasks = DATA.tasks.filter(t => t.boatId === boatId).sort((a,b)=> (a.priority||2) - (b.priority||2) || (a.order||0) - (b.order||0));
+  // Tasks this phone already knows it finished (sessionCompletions) are
+  // excluded here even if the cached/fetched DATA still shows them as
+  // pending -- e.g. the cached copy from before the completion synced,
+  // briefly reloaded before the fresh fetch lands. Without this, a
+  // completed task can flash back to "pending" for a moment on reload.
+  const completedIds = new Set(sessionCompletions.map(c => c.taskId));
+  const tasks = DATA.tasks.filter(t => t.boatId === boatId && !completedIds.has(t.taskId)).sort((a,b)=> (a.priority||2) - (b.priority||2) || (a.order||0) - (b.order||0));
   return {
     mode, slipId: slipId || null, boatId,
     customerName: cust ? cust.name : '—',
