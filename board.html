@@ -20,12 +20,20 @@
   }
 
   header{
-    flex-shrink:0; display:flex; align-items:center; justify-content:space-between;
+    flex-shrink:0; display:grid; grid-template-columns:1fr minmax(220px, 480px) 1fr; align-items:center;
     padding:12px 22px; background:var(--deep); color:var(--white); gap:16px;
   }
-  .brand{ font-size:19px; font-weight:800; letter-spacing:.01em; white-space:nowrap; }
+  .brand{ font-size:19px; font-weight:800; letter-spacing:.01em; white-space:nowrap; justify-self:start; }
   .brand .sub{ font-size:12.5px; font-weight:600; color:#9fb4c4; margin-left:10px; letter-spacing:.04em; }
-  .header-right{ display:flex; align-items:center; gap:14px; }
+  .header-right{ display:flex; align-items:center; gap:14px; justify-self:end; }
+  .header-search{ position:relative; justify-self:center; width:100%; }
+  .header-search input{
+    width:100%; padding:9px 14px 9px 36px; border-radius:20px; border:1px solid #2c4c68; background:#16324a;
+    color:var(--white); font-size:14px; font-family:inherit;
+  }
+  .header-search input::placeholder{ color:#7d97ab; }
+  .header-search input:focus{ outline:none; border-color:#4a7ba0; }
+  .header-search .search-icon{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#7d97ab; font-size:14px; pointer-events:none; }
   .status{ display:flex; align-items:center; gap:8px; font-size:13px; color:#cfe0ea; font-weight:600; white-space:nowrap; }
   .dot{ width:10px;height:10px;border-radius:50%;background:#4fd18b;flex-shrink:0; }
   .dot.stale{ background:#e0705a; }
@@ -135,6 +143,10 @@
 
 <header>
   <div class="brand">Nelson Marine Databasin <span class="sub">SHOP MODE</span></div>
+  <div class="header-search">
+    <span class="search-icon">&#128269;</span>
+    <input type="text" id="boardSearch" placeholder="Search customer, boat, or work order…" autocomplete="off">
+  </div>
   <div class="header-right">
     <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
     <button class="whoami-btn" id="whoamiBtn"><span class="who-label">Working as</span><span id="whoamiName">— tap to set —</span></button>
@@ -294,6 +306,7 @@ const whoamiBtn = document.getElementById('whoamiBtn');
 const whoamiName = document.getElementById('whoamiName');
 const whoamiOverlay = document.getElementById('whoamiOverlay');
 const whoamiButtons = document.getElementById('whoamiButtons');
+document.getElementById('boardSearch').addEventListener('input', renderWorkOrders);
 
 function saveLocalState(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentEmployee, taskRuntime, lastStatusChangeAt })); } catch(e){}
@@ -758,16 +771,27 @@ function taskRowHtml(t){
 }
 
 function renderWorkOrders(){
-  const cards = DATA.boats
+  const term = (document.getElementById('boardSearch').value || '').trim().toLowerCase();
+  let cards = DATA.boats
     .filter(b => b.currentWorkOrder)
     .map(b => ({ boat: b, tasks: DATA.tasks.filter(t => t.boatId === b.boatId && t.status !== 'done') }))
     .filter(c => c.tasks.length > 0)
     .sort((a, b) => workOrderSortKey(a.boat.currentWorkOrder) - workOrderSortKey(b.boat.currentWorkOrder));
 
+  if (term){
+    cards = cards.filter(({ boat }) => {
+      const cust = customerById(boat.customerId);
+      const haystack = [
+        cust ? cust.name : '', boat.model, boat.boatName, boat.currentWorkOrder
+      ].filter(Boolean).join(' ').toLowerCase();
+      return haystack.indexOf(term) !== -1;
+    });
+  }
+
   woCount.textContent = cards.length;
 
   if (cards.length === 0){
-    woGrid.innerHTML = '<div class="empty-note">No open work orders right now.</div>';
+    woGrid.innerHTML = '<div class="empty-note">' + (term ? 'No work orders match that search.' : 'No open work orders right now.') + '</div>';
     return;
   }
 
