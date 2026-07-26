@@ -46,9 +46,9 @@
   .panel-title .count{ background:var(--line); color:var(--ink); font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; }
 
   .wo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(400px, 1fr)); gap:14px; align-content:start; }
-  .wo-card{ background:var(--white); border:1px solid var(--line); border-left:6px solid var(--slate); border-radius:12px; padding:14px 16px; }
-  .wo-card.slip{ border-left-color:var(--slip-accent); }
-  .wo-card.yard{ border-left-color:var(--yard-accent); }
+  .wo-card{ background:var(--white); border:1px solid var(--line); border-top:6px solid var(--slate); border-right:6px solid var(--slate); border-radius:12px; padding:14px 16px; }
+  .wo-card.slip{ border-top-color:var(--slip-accent); border-right-color:var(--slip-accent); }
+  .wo-card.yard{ border-top-color:var(--yard-accent); border-right-color:var(--yard-accent); }
   .wo-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px; }
   .wo-cust{ font-size:17px; font-weight:800; line-height:1.25; }
   .wo-boat{ font-size:13px; color:var(--slate); margin-top:2px; }
@@ -256,6 +256,13 @@ let lastFetchAt = null;
 let currentEmployee = null;
 let taskRuntime = {};
 let pendingStatusOverride = {};
+// The last time ANY task's status changed on this board (start, pause,
+// complete, or flag) -- a fresh Start/Complete within 10s of that is
+// assumed to be the same person still working, so it doesn't re-prompt
+// for a name every single tap. Anything slower than that re-asks, since
+// it's likely someone else has stepped up to the tablet since.
+let lastStatusChangeAt = 0;
+const SAME_USER_WINDOW_MS = 10000;
 
 const STORAGE_KEY = 'nelsonMarineBoardState_v1';
 const QUEUE_KEY = 'nelsonMarineBoardQueue_v1';
@@ -273,7 +280,7 @@ const whoamiOverlay = document.getElementById('whoamiOverlay');
 const whoamiButtons = document.getElementById('whoamiButtons');
 
 function saveLocalState(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentEmployee, taskRuntime })); } catch(e){}
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentEmployee, taskRuntime, lastStatusChangeAt })); } catch(e){}
 }
 function loadLocalState(){
   try{
@@ -282,6 +289,7 @@ function loadLocalState(){
     const saved = JSON.parse(raw);
     if (saved.currentEmployee) currentEmployee = saved.currentEmployee;
     if (saved.taskRuntime) taskRuntime = saved.taskRuntime;
+    if (saved.lastStatusChangeAt) lastStatusChangeAt = saved.lastStatusChangeAt;
   } catch(e){}
 }
 function cacheData(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(DATA)); } catch(e){} }
@@ -391,10 +399,18 @@ function openWhoami(){
   whoamiOverlay.style.display = 'flex';
 }
 whoamiBtn.addEventListener('click', () => { pendingWhoamiAction = null; openWhoami(); });
+// Only skips the prompt when someone (anyone) just touched a task's
+// status within the same-user window -- a brand new session, or one
+// that's gone quiet for 10+ seconds, always asks again.
 function requireEmployee(action){
-  if (currentEmployee){ action(); return; }
+  const recentlyActive = currentEmployee && (Date.now() - lastStatusChangeAt < SAME_USER_WINDOW_MS);
+  if (recentlyActive){ action(); return; }
   pendingWhoamiAction = action;
   openWhoami();
+}
+function touchActivity(){
+  lastStatusChangeAt = Date.now();
+  saveLocalState();
 }
 
 function startTask(task){
@@ -404,7 +420,7 @@ function startTask(task){
     rt.employee = currentEmployee;
     task.status = 'active';
     pendingStatusOverride[task.taskId] = 'active';
-    saveLocalState();
+    touchActivity();
     enqueue('updateTask', { taskId: task.taskId, status: 'active' });
     render();
   });
@@ -414,16 +430,18 @@ function pauseTask(task){
   if (rt && rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
   task.status = 'paused';
   pendingStatusOverride[task.taskId] = 'paused';
-  saveLocalState();
+  touchActivity();
   enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
   render();
 }
 function completeSimpleTask(task){
-  task.status = 'done';
-  pendingStatusOverride[task.taskId] = 'done';
-  saveLocalState();
-  enqueue('updateTask', { taskId: task.taskId, status: 'done' });
-  render();
+  requireEmployee(() => {
+    task.status = 'done';
+    pendingStatusOverride[task.taskId] = 'done';
+    touchActivity();
+    enqueue('updateTask', { taskId: task.taskId, status: 'done' });
+    render();
+  });
 }
 let pendingCompleteTaskId = null;
 function openCompleteConfirm(task){
@@ -436,10 +454,14 @@ function completeTimedTask(task){
   if (rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
   const mins = Math.round(segMs(task.taskId) / 60000);
   const last = rt.segments[rt.segments.length - 1] || { start: Date.now(), end: Date.now() };
-  const employee = rt.employee || currentEmployee || 'Unknown';
+  // currentEmployee wins over whoever originally started the segment --
+  // by the time this runs, requireEmployee has already (re)confirmed who
+  // is actually standing here finishing it, which is the more reliable
+  // answer than trusting a name captured whenever the job first started.
+  const employee = currentEmployee || rt.employee || 'Unknown';
   task.status = 'done';
   pendingStatusOverride[task.taskId] = 'done';
-  saveLocalState();
+  touchActivity();
   enqueue('updateTask', { taskId: task.taskId, status: 'done' });
   enqueue('logEntry', {
     taskId: task.taskId, boatId: task.boatId, workOrder: task.workOrder || '',
@@ -465,7 +487,7 @@ function setFlag(task, flagged){
     delete task._preFlagStatus;
   }
   pendingStatusOverride[task.taskId] = task.status;
-  saveLocalState();
+  touchActivity();
   enqueue('updateTask', { taskId: task.taskId, status: task.status });
   render();
 }
@@ -656,12 +678,11 @@ document.getElementById('partsCloseBtn').addEventListener('click', () => documen
 
 document.getElementById('confirmCancelBtn').addEventListener('click', () => { pendingCompleteTaskId = null; document.getElementById('confirmOverlay').style.display = 'none'; });
 document.getElementById('confirmYesBtn').addEventListener('click', () => {
-  if (pendingCompleteTaskId){
-    const task = findTaskById(pendingCompleteTaskId);
-    if (task) completeTimedTask(task);
-  }
+  const taskId = pendingCompleteTaskId;
   pendingCompleteTaskId = null;
   document.getElementById('confirmOverlay').style.display = 'none';
+  const task = taskId ? findTaskById(taskId) : null;
+  if (task) requireEmployee(() => completeTimedTask(task));
 });
 document.getElementById('flagConfirmCancelBtn').addEventListener('click', () => { pendingFlagTaskId = null; document.getElementById('flagConfirmOverlay').style.display = 'none'; });
 document.getElementById('flagConfirmYesBtn').addEventListener('click', () => {
