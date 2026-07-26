@@ -46,9 +46,9 @@
   .panel-title .count{ background:var(--line); color:var(--ink); font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; }
 
   .wo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(400px, 1fr)); gap:14px; align-content:start; }
-  .wo-card{ background:var(--white); border:1px solid var(--line); border-top:6px solid var(--slate); border-right:6px solid var(--slate); border-radius:12px; padding:14px 16px; }
-  .wo-card.slip{ border-top-color:var(--slip-accent); border-right-color:var(--slip-accent); }
-  .wo-card.yard{ border-top-color:var(--yard-accent); border-right-color:var(--yard-accent); }
+  .wo-card{ background:var(--white); border:1px solid var(--line); border-left:6px solid var(--slate); border-radius:12px; padding:14px 16px; }
+  .wo-card.slip{ border-left-color:var(--slip-accent); }
+  .wo-card.yard{ border-left-color:var(--yard-accent); }
   .wo-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:8px; }
   .wo-cust{ font-size:17px; font-weight:800; line-height:1.25; }
   .wo-boat{ font-size:13px; color:var(--slate); margin-top:2px; }
@@ -66,9 +66,10 @@
   .task-main-content{ flex:1; min-width:0; }
   .task-name{ font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .task-sub{ font-size:12px; color:var(--slate); margin-top:2px; }
-  .priority-1{ border-left:8px solid var(--stop); padding-left:8px; margin-left:-16px; }
-  .priority-2{ border-left:8px solid var(--amber); padding-left:8px; margin-left:-16px; }
-  .priority-3{ border-left:8px solid var(--slate); padding-left:8px; margin-left:-16px; }
+  .priority-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:8px; flex-shrink:0; vertical-align:middle; }
+  .priority-dot.p1{ background:var(--stop); }
+  .priority-dot.p2{ background:var(--amber); }
+  .priority-dot.p3{ background:var(--slate); }
 
   .pill-btn{ font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:16px;white-space:nowrap;flex-shrink:0;cursor:pointer;border:1px solid transparent; }
   .pill-btn.start,.pill-btn.resume{ background:var(--white);color:var(--go);border:1px solid var(--go); }
@@ -694,7 +695,7 @@ document.getElementById('flagConfirmYesBtn').addEventListener('click', () => {
   document.getElementById('flagConfirmOverlay').style.display = 'none';
 });
 
-function priorityClass(t){ return 'priority-' + (t.priority || 2); }
+function priorityDotClass(t){ return 'p' + (t.priority || 2); }
 
 function taskRowHtml(t){
   const hasNotePhoto = (DATA.photos || []).some(p => p.taskId === t.taskId);
@@ -725,9 +726,9 @@ function taskRowHtml(t){
 
   const showFlagIcon = t.status !== 'flagged' && t.status !== 'active';
 
-  return '<div class="task-row ' + priorityClass(t) + '" data-rowid="' + t.taskId + '">' +
+  return '<div class="task-row" data-rowid="' + t.taskId + '">' +
     '<div class="task-row-main">' +
-      '<div class="task-main-content"><div class="task-name">' + t.name + '</div></div>' +
+      '<div class="task-main-content"><div class="task-name"><span class="priority-dot ' + priorityDotClass(t) + '" title="Priority ' + (t.priority || 2) + '"></span>' + t.name + '</div></div>' +
       mainRight +
     '</div>' +
     '<div class="task-row-secondary">' +
