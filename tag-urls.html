@@ -52,7 +52,7 @@
 <div class="wrap">
   <h1 style="display:flex;justify-content:space-between;align-items:center;">
     <span>NFC Tag URLs</span>
-    <a href="clock-prototype.html" style="color:var(--slate);font-size:12px;font-weight:600;text-decoration:underline;">← Job Clock</a>
+    <a href="./" style="color:var(--slate);font-size:12px;font-weight:600;text-decoration:underline;">← Job Clock</a>
   </h1>
   <p class="subtext">Search by slip number, boat model, boat name, or customer name to find the exact URL for a tag. Copy it, then paste into a tag-writing app (e.g. "NFC Tools" on iPhone or Android) to program the tag — this page doesn't write tags itself, just gives you the exact text to write.</p>
   <div class="note">Writing to tags directly from a web page only works on Android Chrome, not iPhone at all — that's why this is copy/paste into a separate app rather than built in here.</div>
@@ -63,7 +63,7 @@
 
   <details class="advanced">
     <summary>Advanced: site URL</summary>
-    <label>Site base URL (where clock-prototype.html lives)</label>
+    <label>Site base URL (the folder where the phone app's index.html lives)</label>
     <input type="text" id="baseUrl" oninput="renderList()">
   </details>
 </div>
@@ -73,7 +73,7 @@ const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-
 let DATA = null;
 
 document.getElementById('baseUrl').value =
-  window.location.href.replace(/tag-urls\.html.*$/, 'clock-prototype.html');
+  window.location.href.replace(/tag-urls\.html.*$/, '');
 
 function slipNumOf(l){ return parseInt((l.slipId.match(/\d+/)||['0'])[0], 10); }
 
