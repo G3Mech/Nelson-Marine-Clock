@@ -95,7 +95,16 @@
 
   .slip-chart-view{ flex:1; min-height:0; overflow:auto; padding:16px 20px 40px; }
   .parts-view{ flex:1; min-height:0; overflow:auto; padding:16px 20px 40px; }
-  .parts-toolbar{ margin-bottom:14px; }
+  .parts-toolbar{ margin-bottom:14px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .parts-view-toggle{ display:flex; border:1px solid var(--line); border-radius:20px; overflow:hidden; }
+  .parts-toggle-btn{ padding:8px 16px; font-size:12.5px; font-weight:700; background:var(--white); color:var(--slate); border:none; cursor:pointer; }
+  .parts-toggle-btn.active{ background:var(--ink); color:var(--white); }
+  .form-suggestions{ display:none; position:absolute; left:0; right:0; top:calc(100% + 4px); background:var(--white); border:1px solid var(--line); border-radius:10px; box-shadow:0 10px 22px rgba(10,26,43,.18); max-height:260px; overflow-y:auto; z-index:50; }
+  .form-suggestions.show{ display:block; }
+  .form-suggestions .suggestion-item{ padding:11px 14px; cursor:pointer; border-bottom:1px solid var(--line); font-size:14px; }
+  .form-suggestions .suggestion-item:last-child{ border-bottom:none; }
+  .form-suggestions .suggestion-item:active{ background:var(--paper); }
+  .form-suggestions .s-sub{ font-size:12px; color:var(--slate); margin-top:2px; }
   .parts-toolbar input{
     width:100%; max-width:420px; padding:10px 16px; border-radius:20px; border:1px solid var(--line);
     background:var(--paper); font-size:14px; font-family:inherit;
@@ -293,8 +302,39 @@
 <div class="parts-view" id="partsView" style="display:none;">
   <div class="parts-toolbar">
     <input type="text" id="partsSearch" placeholder="Search parts, boats, or customers…" oninput="renderPartsTab()">
+    <div class="parts-view-toggle">
+      <button class="parts-toggle-btn active" id="partsLogBtn" onclick="setPartsView('log')">Recent Log</button>
+      <button class="parts-toggle-btn" id="partsCatalogBtn" onclick="setPartsView('catalog')">Parts Catalog</button>
+    </div>
+    <button class="add-pier-btn" onclick="openAddPartTab()">+ Add Part</button>
   </div>
   <div id="partsList"></div>
+</div>
+
+<div class="overlay" id="partsTabEditOverlay" style="display:none;">
+  <div class="sheet">
+    <h3 id="partsTabEditTitle">Add a Part</h3>
+    <p>Search for the boat this part belongs to, then optionally tie it to one of that boat's open tasks.</p>
+    <div style="position:relative;">
+      <input type="text" id="partsTabBoatSearch" placeholder="Search for a boat…" autocomplete="off" oninput="renderPartsTabBoatSuggestions()">
+      <div class="form-suggestions" id="partsTabBoatSuggestions"></div>
+    </div>
+    <select id="partsTabTaskSelect">
+      <option value="">General / not tied to a specific task</option>
+    </select>
+    <input type="text" id="partsTabName" placeholder="Part name" list="partsTabNameSuggestions">
+    <input type="text" id="partsTabNumber" placeholder="Part number" list="partsTabNumberSuggestions">
+    <input type="text" id="partsTabSupplier" placeholder="Supplier" list="partsTabSupplierSuggestions">
+    <input type="text" id="partsTabQty" placeholder="Quantity" inputmode="numeric">
+    <datalist id="partsTabNameSuggestions"></datalist>
+    <datalist id="partsTabNumberSuggestions"></datalist>
+    <datalist id="partsTabSupplierSuggestions"></datalist>
+    <div class="btn-row">
+      <button class="btn-secondary" id="partsTabCancelBtn">Cancel</button>
+      <button class="btn-primary" id="partsTabSaveBtn">Save</button>
+    </div>
+    <button class="btn-secondary" id="partsTabDeleteBtn" style="width:100%;margin-top:10px;color:var(--stop);border-color:var(--stop);display:none;">Delete This Part</button>
+  </div>
 </div>
 
 <div class="profile-view" id="profileView" style="display:none;">
@@ -1523,7 +1563,21 @@ async function assignSlipToCell(slipId){
 let activeTab = 'workorders';
 let editMode = false;
 // ======================= Parts tab =======================
+let partsView = 'log';
+function setPartsView(view){
+  partsView = view;
+  document.getElementById('partsLogBtn').classList.toggle('active', view === 'log');
+  document.getElementById('partsCatalogBtn').classList.toggle('active', view === 'catalog');
+  renderPartsTab();
+}
 function renderPartsTab(){
+  if (partsView === 'catalog') renderPartsCatalog();
+  else renderPartsLog();
+}
+// The day-to-day view -- everything logged, most recent first, exactly
+// as the mechanic entered it while working. Each row's pencil lets him
+// fix a typo or correct a quantity after the fact.
+function renderPartsLog(){
   const term = (document.getElementById('partsSearch').value || '').trim().toLowerCase();
   const wrap = document.getElementById('partsList');
   let parts = (DATA.parts || []).slice().sort((a, b) => (b.loggedAt || '').localeCompare(a.loggedAt || ''));
@@ -1536,7 +1590,7 @@ function renderPartsTab(){
     });
   }
   if (parts.length === 0){
-    wrap.innerHTML = '<div class="empty-note">' + (term ? 'No parts match that search.' : 'No parts logged yet.') + '</div>';
+    wrap.innerHTML = '<div class="empty-note">' + (term ? 'No parts match that search.' : 'No parts logged yet -- tap "+ Add Part" to log the first one.') + '</div>';
     return;
   }
   wrap.innerHTML = '<div class="parts-tab-list">' + parts.map(p => {
@@ -1546,9 +1600,169 @@ function renderPartsTab(){
     const when = p.loggedAt ? new Date(p.loggedAt).toLocaleDateString() : '';
     return '<div class="parts-tab-row"><div class="p-main"><b>' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</b>' +
       '<span>' + who + (p.workOrder ? ' · WO ' + p.workOrder : '') + '</span></div>' +
-      '<div class="p-meta">' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + (when ? '<br>' + when : '') + '</div></div>';
+      '<div class="p-meta">' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + (when ? '<br>' + when : '') + '</div>' +
+      '<button class="icon-btn" onclick="openPartsTabEdit(\'' + p.partId + '\')" title="Edit this entry">&#9998;</button>' +
+    '</div>';
   }).join('') + '</div>';
 }
+// The reference view -- every distinct part ever logged, grouped by
+// name, with its most recently used number/supplier and running totals.
+// This is the one meant for "what do we call this, who do we buy it
+// from, and how many have we gone through" when it's time to reorder.
+function renderPartsCatalog(){
+  const term = (document.getElementById('partsSearch').value || '').trim().toLowerCase();
+  const wrap = document.getElementById('partsList');
+  const groups = {};
+  (DATA.parts || []).forEach(p => {
+    const key = (p.partName || '').trim().toLowerCase();
+    if (!key) return;
+    if (!groups[key]) groups[key] = { name: p.partName.trim(), entries: [] };
+    groups[key].entries.push(p);
+  });
+  let rows = Object.values(groups).map(g => {
+    const sorted = g.entries.slice().sort((a, b) => (b.loggedAt || '').localeCompare(a.loggedAt || ''));
+    const latest = sorted[0];
+    const totalQty = g.entries.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
+    return { name: g.name, number: latest.partNumber, supplier: latest.supplier, count: g.entries.length, totalQty, lastUsed: latest.loggedAt };
+  });
+  if (term){
+    rows = rows.filter(r => [r.name, r.number, r.supplier].filter(Boolean).join(' ').toLowerCase().indexOf(term) !== -1);
+  }
+  rows.sort((a, b) => a.name.localeCompare(b.name));
+  if (rows.length === 0){
+    wrap.innerHTML = '<div class="empty-note">' + (term ? 'No parts match that search.' : 'No parts logged yet.') + '</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="parts-tab-list">' + rows.map(r => {
+    const when = r.lastUsed ? new Date(r.lastUsed).toLocaleDateString() : '';
+    return '<div class="parts-tab-row"><div class="p-main"><b>' + r.name + '</b>' +
+      '<span>' + [r.number, r.supplier].filter(Boolean).join(' · ') + '</span></div>' +
+      '<div class="p-meta">Used ' + r.count + '&times; · total qty ' + r.totalQty + (when ? '<br>Last: ' + when : '') + '</div></div>';
+  }).join('') + '</div>';
+}
+
+// ---- add / edit a part directly from the Parts tab ----
+let editingPartId = null;
+let partsTabBoatId = null;
+function openAddPartTab(){
+  editingPartId = null;
+  partsTabBoatId = null;
+  document.getElementById('partsTabEditTitle').textContent = 'Add a Part';
+  document.getElementById('partsTabBoatSearch').value = '';
+  document.getElementById('partsTabBoatSearch').disabled = false;
+  document.getElementById('partsTabTaskSelect').innerHTML = '<option value="">General / not tied to a specific task</option>';
+  ['partsTabName', 'partsTabNumber', 'partsTabSupplier', 'partsTabQty'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('partsTabDeleteBtn').style.display = 'none';
+  populatePartsTabSuggestions();
+  document.getElementById('partsTabEditOverlay').style.display = 'flex';
+}
+function renderPartsTabBoatSuggestions(){
+  const term = document.getElementById('partsTabBoatSearch').value.trim().toLowerCase();
+  const box = document.getElementById('partsTabBoatSuggestions');
+  if (!term){ box.classList.remove('show'); box.innerHTML = ''; return; }
+  const matches = DATA.boats.filter(b => {
+    const cust = customerById(b.customerId);
+    const haystack = [cust ? cust.name : '', b.model, b.boatName].filter(Boolean).join(' ').toLowerCase();
+    return haystack.indexOf(term) !== -1;
+  }).slice(0, 8);
+  box.innerHTML = matches.length === 0
+    ? '<div class="suggestion-item">No boats match "' + term + '"</div>'
+    : matches.map(b => {
+        const cust = customerById(b.customerId);
+        return '<div class="suggestion-item" data-boat="' + b.boatId + '"><div class="s-main">' + (cust ? cust.name : '—') + ' — ' + (b.model || '') + '</div></div>';
+      }).join('');
+  box.classList.add('show');
+  box.querySelectorAll('.suggestion-item[data-boat]').forEach(el => {
+    el.addEventListener('click', () => selectPartsTabBoat(el.dataset.boat));
+  });
+}
+function selectPartsTabBoat(boatId){
+  partsTabBoatId = boatId;
+  const boat = boatById(boatId);
+  const cust = boat ? customerById(boat.customerId) : null;
+  document.getElementById('partsTabBoatSearch').value = (cust ? cust.name : '—') + ' — ' + (boat ? boat.model : '');
+  document.getElementById('partsTabBoatSuggestions').classList.remove('show');
+  const tasks = DATA.tasks.filter(t => t.boatId === boatId && t.status !== 'done');
+  document.getElementById('partsTabTaskSelect').innerHTML = '<option value="">General / not tied to a specific task</option>' +
+    tasks.map(t => '<option value="' + t.taskId + '">' + t.name + '</option>').join('');
+}
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('partsTabBoatSearch');
+  const box = document.getElementById('partsTabBoatSuggestions');
+  if (wrap && box && e.target !== wrap && !box.contains(e.target)) box.classList.remove('show');
+});
+function populatePartsTabSuggestions(){
+  const names = [...new Set((DATA.parts || []).map(p => p.partName).filter(Boolean))].sort();
+  const numbers = [...new Set((DATA.parts || []).map(p => p.partNumber).filter(Boolean))].sort();
+  const suppliers = [...new Set((DATA.parts || []).map(p => p.supplier).filter(Boolean))].sort();
+  document.getElementById('partsTabNameSuggestions').innerHTML = names.map(n => '<option value="' + n + '">').join('');
+  document.getElementById('partsTabNumberSuggestions').innerHTML = numbers.map(n => '<option value="' + n + '">').join('');
+  document.getElementById('partsTabSupplierSuggestions').innerHTML = suppliers.map(n => '<option value="' + n + '">').join('');
+}
+function openPartsTabEdit(partId){
+  const p = (DATA.parts || []).find(x => x.partId === partId);
+  if (!p) return;
+  editingPartId = partId;
+  partsTabBoatId = p.boatId || null;
+  document.getElementById('partsTabEditTitle').textContent = 'Edit Part';
+  const boat = boatById(p.boatId);
+  const cust = boat ? customerById(boat.customerId) : null;
+  document.getElementById('partsTabBoatSearch').value = boat ? ((cust ? cust.name : '—') + ' — ' + boat.model) : '(boat not found)';
+  document.getElementById('partsTabBoatSearch').disabled = true; // moving a logged part to a different boat -- delete and re-add instead
+  const tasks = boat ? DATA.tasks.filter(t => t.boatId === boat.boatId && t.status !== 'done') : [];
+  const sel = document.getElementById('partsTabTaskSelect');
+  sel.innerHTML = '<option value="">General / not tied to a specific task</option>' + tasks.map(t => '<option value="' + t.taskId + '">' + t.name + '</option>').join('');
+  sel.value = p.taskId || '';
+  document.getElementById('partsTabName').value = p.partName || '';
+  document.getElementById('partsTabNumber').value = p.partNumber || '';
+  document.getElementById('partsTabSupplier').value = p.supplier || '';
+  document.getElementById('partsTabQty').value = p.quantity || '';
+  document.getElementById('partsTabDeleteBtn').style.display = 'block';
+  populatePartsTabSuggestions();
+  document.getElementById('partsTabEditOverlay').style.display = 'flex';
+}
+document.getElementById('partsTabCancelBtn').addEventListener('click', () => {
+  editingPartId = null;
+  document.getElementById('partsTabBoatSearch').disabled = false;
+  document.getElementById('partsTabEditOverlay').style.display = 'none';
+});
+document.getElementById('partsTabSaveBtn').addEventListener('click', async () => {
+  const partName = document.getElementById('partsTabName').value.trim();
+  if (!partName){ alert('Enter a part name.'); return; }
+  if (!editingPartId && !partsTabBoatId){ alert('Search for and pick a boat first.'); return; }
+  const partNumber = document.getElementById('partsTabNumber').value.trim();
+  const supplier = document.getElementById('partsTabSupplier').value.trim();
+  const quantity = document.getElementById('partsTabQty').value.trim();
+  const taskId = document.getElementById('partsTabTaskSelect').value;
+  try{
+    const res = editingPartId
+      ? await postToSheet('updatePart', { partId: editingPartId, partName, partNumber, supplier, quantity, taskId })
+      : await postToSheet('addPart', { boatId: partsTabBoatId, taskId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
+    if (res && res.error){ alert(res.error); return; }
+    document.getElementById('partsTabEditOverlay').style.display = 'none';
+    document.getElementById('partsTabBoatSearch').disabled = false;
+    editingPartId = null;
+    await refreshData();
+    renderPartsTab();
+  } catch(err){
+    alert('Could not save: ' + (err && err.message ? err.message : err));
+  }
+});
+document.getElementById('partsTabDeleteBtn').addEventListener('click', async () => {
+  if (!editingPartId) return;
+  if (!confirm('Delete this part entry? This cannot be undone.')) return;
+  try{
+    const res = await postToSheet('deletePart', { partId: editingPartId });
+    if (res && res.error){ alert(res.error); return; }
+    document.getElementById('partsTabEditOverlay').style.display = 'none';
+    document.getElementById('partsTabBoatSearch').disabled = false;
+    editingPartId = null;
+    await refreshData();
+    renderPartsTab();
+  } catch(err){
+    alert('Could not delete: ' + (err && err.message ? err.message : err));
+  }
+});
 
 function renderSlipChartTab(){ if (editMode) renderPierEditor(); else renderSlipChart(); }
 function showTab(tabName){
