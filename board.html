@@ -85,8 +85,13 @@
   .panel-title .count{ background:var(--line); color:var(--ink); font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; }
 
   .tab-bar{ flex-shrink:0; display:flex; background:var(--white); border-bottom:1px solid var(--line); }
-  .tab-btn{ padding:11px 0; flex:0 0 auto; min-width:150px; text-align:center; font-size:13.5px; font-weight:700; color:var(--slate); background:none; border:none; cursor:pointer; border-bottom:3px solid transparent; }
+  .tab-btn{
+    padding:11px 0; flex:0 0 auto; min-width:150px; text-align:center; display:flex; align-items:center; justify-content:center; gap:8px;
+    font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--slate);
+    background:none; border:none; cursor:pointer; border-bottom:3px solid transparent;
+  }
   .tab-btn.active{ color:var(--ink); border-bottom-color:var(--go); }
+  .tab-btn .count{ background:var(--line); color:var(--ink); font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; text-transform:none; letter-spacing:normal; }
 
   .slip-chart-view{ flex:1; min-height:0; overflow:auto; padding:16px 20px 40px; }
   .slip-chart-hint{ color:var(--slate); font-size:13px; max-width:640px; margin:0 0 18px; line-height:1.5; }
@@ -248,8 +253,8 @@
 </header>
 
 <div class="tab-bar">
-  <button class="tab-btn active" id="tabWorkOrdersBtn" onclick="showTab('workorders')">Work Orders</button>
-  <button class="tab-btn" id="tabSlipChartBtn" onclick="showTab('slipchart')">Slip Chart</button>
+  <button class="tab-btn active" id="tabWorkOrdersBtn" onclick="showTab('workorders')">Work Orders <span class="count" id="tabWoCount">0</span></button>
+  <button class="tab-btn" id="tabSlipChartBtn" onclick="showTab('slipchart')">Slip Chart <span class="count" id="tabSlipCount">0</span></button>
 </div>
 
 <div class="body" id="mainView">
@@ -987,6 +992,7 @@ function renderWorkOrders(){
   }
 
   woCount.textContent = cards.length;
+  document.getElementById('tabWoCount').textContent = cards.length;
 
   if (cards.length === 0){
     woGrid.innerHTML = '<div class="empty-note">' + (term ? 'No work orders match that search.' : 'No open work orders right now.') + '</div>';
@@ -1191,7 +1197,12 @@ function buildShapeCells(){
 function slipAtCell(row, col){
   return (DATA.locations || []).find(l => String(l.gridRow) === String(row) && String(l.gridCol) === String(col));
 }
+function updateSlipTabCount(){
+  const placed = (DATA.locations || []).filter(l => l.gridRow !== '' && l.gridRow !== undefined && l.gridRow !== null).length;
+  document.getElementById('tabSlipCount').textContent = placed;
+}
 function renderSlipChart(){
+  updateSlipTabCount();
   const canvas = document.getElementById('slipChartCanvas');
   const cells = buildShapeCells();
   const slipCellsHtml = cells.map(c => {
@@ -1245,6 +1256,7 @@ const CELL_W = 66, CELL_H = 58;
 const NEW_PIER_ROW = 30, NEW_PIER_COL = 1;
 
 function renderPierEditor(){
+  updateSlipTabCount();
   const canvas = document.getElementById('slipChartCanvas');
   const piers = DATA.pierLayout || [];
   canvas.innerHTML = piers.map(p => {
@@ -1524,6 +1536,7 @@ function toggleEditMode(){
 function render(){
   if (!DATA) return;
   saveLocalState();
+  updateSlipTabCount();
   if (currentProfileBoatId){
     renderBoatProfile();
   } else if (activeTab === 'slipchart'){
