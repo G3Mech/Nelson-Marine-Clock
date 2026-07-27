@@ -509,21 +509,41 @@
  *   each time, so there's no risk of two copies drifting apart the way
  *   index.html's did. pendingStatusOverride exists to bridge the one gap
  *   this DOES have: a periodic refetch (every 15s) would otherwise
- *   overwrite a status change this tablet just made locally, before the
- *   queued POST confirming that change has actually reached the server --
- *   mergeFetchedTasks (see refreshData below) re-applies any pending
- *   local override on top of each fresh fetch until the queue confirms it.
+ *   overwrite a status/time change this tablet just made locally, before
+ *   the queued POST confirming that change has actually reached the
+ *   server -- mergeFetchedTasks (see refreshData below) re-applies any
+ *   pending local override on top of each fresh fetch until a confirmed
+ *   fetch shows the server agrees.
  *
- * KNOWN GAP (documented, not fixed in this pass): that override
- *   mechanism only patches STATUS on tasks that already exist in the
- *   fresh fetch. A task added here (openAddTask/newTaskAddBtn, which
- *   pushes a temp_ row straight into DATA.tasks) that hasn't finished its
- *   addTask round-trip yet will be missing from the next 15-second
- *   refetch's json.tasks, and DATA = json (in refreshData) replaces it
- *   wholesale -- so a very-recently-added task could flicker out of view
- *   for one refresh cycle if it's still mid-flight. In practice this is a
- *   narrow window (well under 15s in normal conditions), but it's the
- *   same family of bug as the one fixed in index.html's reconcileTempTaskId,
+ * ELAPSED TIME IS SERVER TRUTH, NOT RECONSTRUCTED LOCALLY: each task
+ *   carries accumulatedMs (total logged time before whatever segment is
+ *   currently open) and activeSince (when the current segment began),
+ *   both maintained by Code.gs's updateTask_/finalizeAccumulatedMs_ on
+ *   every status change, regardless of which device made it. liveMs()
+ *   below just adds accumulatedMs to (now - activeSince) if currently
+ *   active -- there is deliberately no local taskRuntime/segments history
+ *   anymore. This replaced an earlier design where each browser tracked
+ *   its own segment history from only the start/pause actions it
+ *   personally witnessed, which is what let two devices touching the
+ *   same task (e.g. a tablet and a PC open at once) disagree about its
+ *   total time, and let a completed task's billed duration reflect only
+ *   whichever device happened to press Complete. Completing a timed task
+ *   now sends a single 'updateTask' (status: 'done', employee: ...) --
+ *   Code.gs computes the true total server-side and writes the Recorded
+ *   Times entry itself (see logFinalDuration_ in Code.gs); there is no
+ *   separate 'logEntry' call from this file anymore.
+ *
+ * KNOWN GAP (documented, not fixed in this pass): the override
+ *   mechanism (now protecting {status, activeSince, accumulatedMs}
+ *   together) only patches tasks that already exist in the fresh fetch.
+ *   A task added here (openAddTask/newTaskAddBtn, which pushes a temp_
+ *   row straight into DATA.tasks) that hasn't finished its addTask
+ *   round-trip yet will be missing from the next 15-second refetch's
+ *   json.tasks, and DATA = json (in refreshData) replaces it wholesale
+ *   -- so a very-recently-added task could flicker out of view for one
+ *   refresh cycle if it's still mid-flight. In practice this is a narrow
+ *   window (well under 15s in normal conditions), but it's the same
+ *   family of bug as the one fixed in index.html's reconcileTempTaskId,
  *   and worth closing the same way (carry forward any queued 'addTask'
  *   items' temp rows across a refresh, the way pendingStatusOverride
  *   carries forward status) in a future focused session.
@@ -535,7 +555,16 @@ let DATA = null;
 let lastFetchOk = null;
 let lastFetchAt = null;
 let currentEmployee = null;
-let taskRuntime = {};
+// Per-task { status, activeSince, accumulatedMs } guard protecting this
+// device's own just-made change from being clobbered by a stale periodic
+// refetch before the server has confirmed it. There is deliberately no
+// local segment/runtime tracking anymore -- see liveMs() below for why:
+// elapsed time now comes entirely from the server's own accumulatedMs +
+// activeSince on every task, the same for every device, rather than each
+// browser reconstructing its own history from only the segments it
+// personally witnessed (which is what let two devices disagree about a
+// task's total time, and let a completed task's billed duration reflect
+// only whichever device happened to press Complete).
 let pendingStatusOverride = {};
 // The last time ANY task's status changed on this board (start, pause,
 // complete, or flag) -- a fresh Start/Complete within 10s of that is
@@ -583,7 +612,7 @@ document.addEventListener('click', (e) => {
 document.getElementById('backArrowBtn').addEventListener('click', closeBoatProfile);
 
 function saveLocalState(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentEmployee, taskRuntime, lastStatusChangeAt })); } catch(e){}
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentEmployee, lastStatusChangeAt })); } catch(e){}
 }
 function loadLocalState(){
   try{
@@ -591,7 +620,6 @@ function loadLocalState(){
     if (!raw) return;
     const saved = JSON.parse(raw);
     if (saved.currentEmployee) currentEmployee = saved.currentEmployee;
-    if (saved.taskRuntime) taskRuntime = saved.taskRuntime;
     if (saved.lastStatusChangeAt) lastStatusChangeAt = saved.lastStatusChangeAt;
   } catch(e){}
 }
@@ -677,8 +705,13 @@ async function flushQueue(){
         // will never again appear in a future getAll() fetch for
         // mergeFetchedTasks to confirm against -- this is the only place
         // that override ever gets cleaned up, so it still has to happen here.
+        //
+        // The override itself is now an object ({status, activeSince,
+        // accumulatedMs}, not a bare status string) since elapsed time also
+        // needs protecting from the same stale-refetch race, not just status
+        // -- see the accumulated-time rework in this file's header comment.
         if (item.action === 'updateTask' && item.body && item.body.taskId && item.body.status === 'done'
-            && pendingStatusOverride[item.body.taskId] === 'done'){
+            && pendingStatusOverride[item.body.taskId] && pendingStatusOverride[item.body.taskId].status === 'done'){
           delete pendingStatusOverride[item.body.taskId];
         }
         const remaining = loadQueue(); remaining.shift(); saveQueue(remaining);
@@ -693,7 +726,6 @@ async function flushQueue(){
 function reconcileTempTaskId(tempId, realId){
   const t = DATA.tasks.find(t => t.taskId === tempId);
   if (t) t.taskId = realId;
-  if (taskRuntime[tempId]){ taskRuntime[realId] = taskRuntime[tempId]; delete taskRuntime[tempId]; }
   if (pendingStatusOverride[tempId] !== undefined){ pendingStatusOverride[realId] = pendingStatusOverride[tempId]; delete pendingStatusOverride[tempId]; }
   const q = loadQueue();
   q.forEach(item => { if (item.body && item.body.taskId === tempId) item.body.taskId = realId; });
@@ -708,19 +740,17 @@ function slipForBoat(boatId){ return DATA.locations.find(l => l.boatId === boatI
 function findTaskById(taskId){ return DATA.tasks.find(t => t.taskId === taskId); }
 function workOrderSortKey(wo){ const n = parseFloat(String(wo).replace(/[^0-9.]/g, '')); return isNaN(n) ? Infinity : n; }
 
-function ensureRuntime(task){
-  if (taskRuntime[task.taskId]) return taskRuntime[task.taskId];
-  const rt = { segStart: null, segments: [], employee: null };
-  if (task.status === 'active'){
-    rt.segStart = task.activeSince ? new Date(task.activeSince).getTime() : Date.now();
-  }
-  taskRuntime[task.taskId] = rt;
-  return rt;
-}
-function segMs(taskId){ return (taskRuntime[taskId] ? taskRuntime[taskId].segments : []).reduce((s, seg) => s + (seg.end - seg.start), 0); }
+// Elapsed time is entirely server-truth now: accumulatedMs is the total
+// logged before whatever segment is currently open (if any), and
+// activeSince (only meaningful while status is 'active') is when that
+// current segment began. No per-device history to keep in sync, and
+// nothing here can diverge between two browsers looking at the same
+// task, because there's no local state left TO diverge -- every render
+// just re-derives the live number from whatever DATA currently holds.
 function liveMs(task){
-  const rt = taskRuntime[task.taskId];
-  return segMs(task.taskId) + (rt && rt.segStart ? (Date.now() - rt.segStart) : 0);
+  const accumulated = Number(task.accumulatedMs) || 0;
+  const openSince = (task.status === 'active' && task.activeSince) ? new Date(task.activeSince).getTime() : null;
+  return accumulated + (openSince ? Math.max(0, Date.now() - openSince) : 0);
 }
 function fmtElapsed(ms){
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -762,29 +792,42 @@ function touchActivity(){
 
 function startTask(task){
   requireEmployee(() => {
-    const rt = ensureRuntime(task);
-    rt.segStart = Date.now();
-    rt.employee = currentEmployee;
+    const now = new Date().toISOString();
     task.status = 'active';
-    pendingStatusOverride[task.taskId] = 'active';
+    task.activeSince = now;
+    // Optimistic local guess so the timer starts ticking immediately --
+    // the server stamps its own activeSince when the request actually
+    // lands, which the next confirmed fetch will pick up automatically
+    // (see mergeFetchedTasks); this is just so the tap feels instant.
+    pendingStatusOverride[task.taskId] = { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0 };
     touchActivity();
     enqueue('updateTask', { taskId: task.taskId, status: 'active' });
     playStartSound();
     render();
   });
 }
+// Closes out whatever segment was open on this task (if any) and folds
+// it into accumulatedMs -- the same math updateTask_ does server-side,
+// kept in sync here purely so THIS device's own display updates
+// instantly, without waiting on a round trip. Returns the new total.
+function closeOpenSegment_(task){
+  const openSince = (task.status === 'active' && task.activeSince) ? new Date(task.activeSince).getTime() : null;
+  const prior = Number(task.accumulatedMs) || 0;
+  return openSince ? prior + Math.max(0, Date.now() - openSince) : prior;
+}
 function pauseTask(task){
-  const rt = taskRuntime[task.taskId];
-  if (rt && rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
+  const newAccumulated = closeOpenSegment_(task);
   task.status = 'paused';
-  pendingStatusOverride[task.taskId] = 'paused';
+  task.activeSince = '';
+  task.accumulatedMs = newAccumulated;
+  pendingStatusOverride[task.taskId] = { status: 'paused', activeSince: '', accumulatedMs: newAccumulated };
   enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
   playPauseSound();
   render();
 }
 function completeSimpleTask(task){
   task.status = 'done';
-  pendingStatusOverride[task.taskId] = 'done';
+  pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: Number(task.accumulatedMs) || 0 };
   enqueue('updateTask', { taskId: task.taskId, status: 'done' });
   playDoneSound();
   render();
@@ -796,24 +839,27 @@ function openCompleteConfirm(task){
   document.getElementById('confirmOverlay').style.display = 'flex';
 }
 function completeTimedTask(task){
-  const rt = ensureRuntime(task);
-  if (rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
-  const mins = Math.round(segMs(task.taskId) / 60000);
-  const last = rt.segments[rt.segments.length - 1] || { start: Date.now(), end: Date.now() };
+  const finalAccumulated = closeOpenSegment_(task);
   // Completing (and pausing) never require signing in -- only Start does.
-  // Whoever was signed in at Start time is who gets credited for the
-  // logged hours, since that's who actually did the work; currentEmployee
-  // may have since changed (or been cleared) by the time this fires.
-  const employee = rt.employee || currentEmployee || 'Unknown';
+  // Since the billed duration below is the server's own running total
+  // (not reconstructed from any one device's local history), there's no
+  // "whoever started it" to credit anymore -- whoever is signed in on
+  // THIS device when Complete is pressed is who gets credited, which
+  // matches how this system is actually used (who did it doesn't affect
+  // pay here, just that the work got logged and billed correctly).
+  const employee = currentEmployee || 'Unknown';
   task.status = 'done';
-  pendingStatusOverride[task.taskId] = 'done';
-  enqueue('updateTask', { taskId: task.taskId, status: 'done' });
-  enqueue('logEntry', {
-    taskId: task.taskId, boatId: task.boatId, workOrder: task.workOrder || '',
-    employee, taskName: task.name,
-    segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
-  });
-  delete taskRuntime[task.taskId];
+  task.activeSince = '';
+  task.accumulatedMs = finalAccumulated;
+  pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: finalAccumulated };
+  // ONE action now, not two: the server computes and writes the final
+  // Recorded Times entry itself, from its own accumulatedMs, as part of
+  // handling this same status change (see updateTask_/logFinalDuration_
+  // in Code.gs). There used to be a separate 'logEntry' call here
+  // carrying a duration this device computed from its own local segment
+  // history -- that's exactly what let two devices touching the same
+  // task disagree about how long it actually ran.
+  enqueue('updateTask', { taskId: task.taskId, status: 'done', employee });
   playDoneSound();
   render();
 }
@@ -828,12 +874,17 @@ function openFlagConfirm(task){
 function setFlag(task, flagged){
   if (flagged){
     task._preFlagStatus = task.status;
+    // Flagging is only ever offered on a pending/paused task in this UI
+    // (never while actively running), but close out any open segment
+    // defensively anyway rather than assume that never changes.
+    task.accumulatedMs = closeOpenSegment_(task);
+    task.activeSince = '';
     task.status = 'flagged';
   } else {
     task.status = task._preFlagStatus || 'pending';
     delete task._preFlagStatus;
   }
-  pendingStatusOverride[task.taskId] = task.status;
+  pendingStatusOverride[task.taskId] = { status: task.status, activeSince: task.activeSince || '', accumulatedMs: Number(task.accumulatedMs) || 0 };
   enqueue('updateTask', { taskId: task.taskId, status: task.status });
   render();
 }
@@ -1121,7 +1172,7 @@ function taskRowHtml(t){
       '<button class="pill-btn pause" onclick="pauseTask(findTaskById(\'' + t.taskId + '\'))">Pause</button>' +
       '<button class="pill-btn complete" onclick="openCompleteConfirm(findTaskById(\'' + t.taskId + '\'))">Complete</button>';
   } else if (t.status === 'paused'){
-    const mins = Math.round(segMs(t.taskId) / 60000);
+    const mins = Math.round(liveMs(t) / 60000);
     mainRight = '<span class="status-pill paused">' + mins + ' min</span>' +
       '<button class="pill-btn resume" onclick="startTask(findTaskById(\'' + t.taskId + '\'))">Resume</button>';
   } else {
@@ -1190,10 +1241,9 @@ function renderWorkOrders(){
 
 function renderRunning(){
   const running = DATA.tasks.filter(t => t.status === 'active');
-  running.forEach(ensureRuntime);
   running.sort((a, b) => {
-    const aStart = taskRuntime[a.taskId] && taskRuntime[a.taskId].segStart ? taskRuntime[a.taskId].segStart : Infinity;
-    const bStart = taskRuntime[b.taskId] && taskRuntime[b.taskId].segStart ? taskRuntime[b.taskId].segStart : Infinity;
+    const aStart = a.activeSince ? new Date(a.activeSince).getTime() : Infinity;
+    const bStart = b.activeSince ? new Date(b.activeSince).getTime() : Infinity;
     return aStart - bStart;
   });
 
@@ -1208,11 +1258,10 @@ function renderRunning(){
     const boat = boatById(t.boatId);
     const cust = boat ? customerById(boat.customerId) : null;
     const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
-    const rt = taskRuntime[t.taskId];
     return '<div class="run-card" data-task="' + t.taskId + '">' +
       '<div class="run-timer">' + fmtElapsed(liveMs(t)) + '</div>' +
       '<div class="run-name">' + t.name + '</div>' +
-      '<div class="run-meta">' + who + (rt && rt.employee ? ' · ' + rt.employee : '') + '</div>' +
+      '<div class="run-meta">' + who + '</div>' +
       '<div class="run-actions">' +
         '<button class="pill-btn pause" onclick="pauseTask(findTaskById(\'' + t.taskId + '\'))">Pause</button>' +
         '<button class="pill-btn complete" onclick="openCompleteConfirm(findTaskById(\'' + t.taskId + '\'))">Complete</button>' +
@@ -1948,13 +1997,20 @@ function mergeFetchedTasks(freshTasks){
     // Script executions with no guaranteed ordering, so a periodic GET that
     // happens to race an in-flight status-changing POST can occasionally
     // read the sheet before that POST's write has landed, even though the
-    // GET's response reaches the browser afterward. If the sheet's OWN
-    // status already agrees with what we're holding as an override, the
-    // update has genuinely caught up server-side -- safe to drop the
-    // override now rather than waiting on the queue-side cleanup, which
-    // narrows the window on the next refresh too.
-    if (t.status === override){ delete pendingStatusOverride[t.taskId]; return t; }
-    return Object.assign({}, t, { status: override });
+    // GET's response reaches the browser afterward.
+    //
+    // Only STATUS is compared here, not activeSince/accumulatedMs -- the
+    // server computes those authoritatively at whatever moment it actually
+    // processes the request, while this device's own override only holds
+    // an optimistic guess made at tap time, so the two numbers were never
+    // going to match exactly and trying to match them would mean this
+    // never self-clears. Once the fetched STATUS agrees with what we
+    // expect, the accumulatedMs/activeSince alongside it in that SAME
+    // fetch came from the SAME server-side row, in the SAME request -- so
+    // trust the whole fetched task at that point rather than continuing
+    // to hold our own guess forever.
+    if (t.status === override.status){ delete pendingStatusOverride[t.taskId]; return t; }
+    return Object.assign({}, t, { status: override.status, activeSince: override.activeSince, accumulatedMs: override.accumulatedMs });
   });
 }
 async function refreshData(){
