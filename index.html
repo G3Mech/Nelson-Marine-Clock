@@ -385,6 +385,54 @@
 
 
 <script>
+/* ==========================================================================
+ * NELSON MARINE DATABASIN — MOBILE MODE  (this file: index.html)
+ * ==========================================================================
+ * WHAT THIS FILE IS
+ *   The phone-facing page. One technician, one boat at a time: pick a slip
+ *   or yard spot from the dropdown (or arrive via an NFC tag's ?boat= link),
+ *   see that boat's checklist, start/pause/complete tasks, log notes/photos/
+ *   parts. Hosted on GitHub Pages at the repo root (g3mech/Nelson-Marine-Clock)
+ *   as index.html -- deliberately NOT renamed to match this comment, since
+ *   the live URL and NFC tags already point at that filename.
+ *
+ * HOW IT TALKS TO THE OTHER PIECES
+ *   - Code.gs (Google Apps Script, deployed as a Web App) is the only
+ *     backend. All reads go through GET ?action=getAll; all writes go
+ *     through POST with {action, ...} as text/plain (Apps Script Web Apps
+ *     don't handle a CORS preflight, so JSON-typed POSTs get blocked before
+ *     they arrive -- text/plain avoids that).
+ *   - search.html is the "look up any boat" companion to this page. They
+ *     deliberately SHARE localStorage keys (STORAGE_KEY / QUEUE_KEY /
+ *     CACHE_KEY below) so the signed-in employee and the offline action
+ *     queue are one continuous session across both pages, not two separate
+ *     tools. Board.html (Shop Mode, the tablet dashboard) and Code.gs are
+ *     separate files/deployments entirely.
+ *   - After editing Code.gs, Apps Script requires Deploy > Manage
+ *     deployments > New version -- saving alone does NOT update the live
+ *     /exec URL this page calls. Forgetting that step is the single most
+ *     common cause of "unknown action" errors after adding a new route.
+ *
+ * KNOWN ARCHITECTURAL GAP (read before touching data flow here)
+ *   Unlike board.html and search.html, this page does NOT poll the server
+ *   on an interval after its initial load -- there is no setInterval(
+ *   refreshData, ...) anywhere in boot(). DATA is fetched once at boot and
+ *   otherwise only changes through this phone's own optimistic local edits
+ *   and its own queued POSTs. That means a change made elsewhere (Shop
+ *   Mode, another phone, the office dashboard) to a boat this phone has
+ *   open will NOT show up here until the page is reloaded.
+ *   This was a deliberate scope cut for now, not an oversight: this page
+ *   keeps a SEPARATE per-boat working copy (currentCtx.tasks, with runtime
+ *   fields like _segments attached directly to each task object) rather
+ *   than rendering straight from DATA.tasks the way board.html/search.html
+ *   do. Wiring in a periodic refresh safely means carrying forward
+ *   in-progress timer segments and not-yet-synced local edits across the
+ *   refresh (the same pattern board.html/search.html use via
+ *   pendingStatusOverride/mergeFetchedTasks, adapted to this page's
+ *   per-boat-copy model) -- worth doing as its own focused, testable
+ *   change rather than folding it into an unrelated pass.
+ * ========================================================================== */
+
 // ======================= CONFIG =======================
 // Paste the deployed Apps Script Web App URL here (Extensions > Apps Script
 // > Deploy > New deployment > Web app > Execute as: Me > Who has access:
@@ -628,10 +676,29 @@ async function flushQueue(){
     renderLog();
   }
 }
+// Patches every reference to a temp_ id once the server hands back the
+// real one -- currentCtx.tasks (the on-screen list), DATA.tasks (the
+// full synced list this page also keeps), the active-timer pointer, and
+// any OTHER still-queued actions (reorder, a follow-up status update)
+// that were queued against the temp id before this addTask round-trip
+// finished.
+//
+// CONSOLIDATION FIX (see file header): this used to only patch
+// currentCtx.tasks, not DATA.tasks. Since DATA.tasks never received the
+// temp row in the first place (the "add task" handler below only pushed
+// it into currentCtx.tasks), rebuilding currentCtx from DATA -- which
+// happens on locSelect change and every applyData() call -- would drop
+// the task from view again until the next server fetch, even though the
+// same fetch had nothing to do with it. Both sides now get the new task
+// at creation time, and both get the real id once it's confirmed.
 function reconcileTempTaskId(tempId, realId){
   if (currentCtx && currentCtx.tasks){
     const t = currentCtx.tasks.find(t => t.taskId === tempId);
     if (t) t.taskId = realId;
+  }
+  if (DATA && DATA.tasks){
+    const dt = DATA.tasks.find(t => t.taskId === tempId);
+    if (dt) dt.taskId = realId;
   }
   if (activeTaskId === tempId) activeTaskId = realId;
   const q = loadQueue();
@@ -1315,7 +1382,18 @@ document.getElementById('newTaskAddBtn').addEventListener('click', ()=>{
   lastNewTaskBillMode = billMode;
   const tempId = 'temp_' + Date.now();
   currentCtx.tasks = currentCtx.tasks || [];
-  currentCtx.tasks.push({ taskId: tempId, name, status:'pending', order: currentCtx.tasks.length+1, note:'', billMode, _segments:[] });
+  const newTaskObj = { taskId: tempId, boatId: currentCtx.boatId, name, status:'pending', order: currentCtx.tasks.length+1, note:'', billMode, priority: 2, workOrder: currentCtx.workOrder || '', _segments:[] };
+  currentCtx.tasks.push(newTaskObj);
+  // CONSOLIDATION FIX (see file header): also push into DATA.tasks, the
+  // full synced list -- not just currentCtx.tasks, this page's per-boat
+  // working copy. Without this, switching to a different boat and back
+  // (or any other rebuild of currentCtx from DATA, e.g. resolveInitialContext)
+  // reconstructs the task list by filtering DATA.tasks, and a task that
+  // only ever existed in currentCtx.tasks would silently disappear until
+  // the next server fetch confirmed it -- which is exactly the "added
+  // tasks vanish until refresh" bug this was written to close.
+  DATA.tasks = DATA.tasks || [];
+  DATA.tasks.push(Object.assign({}, newTaskObj));
   saveLocalState();
   const q = loadQueue();
   q.push({ action:'addTask', tempId, body: { boatId: currentCtx.boatId, name, billMode } });
