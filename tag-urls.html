@@ -66,6 +66,27 @@
 </div>
 
 <script>
+/* ==========================================================================
+ * NELSON MARINE — NFC TAG URLS  (this file: tag-urls.html)
+ * ==========================================================================
+ * WHAT THIS FILE IS
+ *   A small standalone utility page -- not part of the technician-facing
+ *   flow at all. Looks up every boat currently in a slip or in the yard,
+ *   builds each one's permanent ?boat=<id> tag link (matching the scheme
+ *   index.html reads at boot, see that file's header), and gives a Copy
+ *   button so Gordon can paste the link into a separate NFC tag-writing
+ *   app when physically programming a new tag.
+ *
+ * HOW IT TALKS TO THE OTHER PIECES
+ *   - Read-only: only ever calls GET ?action=getAll on the same Code.gs
+ *     Web App the other three pages use. Never POSTs anything, so there's
+ *     no queue, no localStorage, no offline handling to keep in sync with
+ *     the rest of the site.
+ *   - The "Site base URL" field under "Advanced" defaults to wherever this
+ *     page itself is hosted (stripping its own filename) -- only needs
+ *     changing if this page is ever copied somewhere other than alongside
+ *     index.html.
+ * ========================================================================== */
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
 let DATA = null;
 let showAll = false; // caps the list at 10 by default; the "Show All" button flips this
