@@ -302,6 +302,37 @@
 </div>
 
 <script>
+/* ==========================================================================
+ * NELSON MARINE DATABASIN — SEARCH  (this file: search.html)
+ * ==========================================================================
+ * WHAT THIS FILE IS
+ *   "Find any boat on file" companion to index.html/Mobile Mode -- searches
+ *   every boat regardless of whether it currently has an open work order
+ *   (Mobile Mode's own picker only lists boats with active jobs). Opens a
+ *   full boat profile (active tasks, completed history, parts used) that
+ *   supports the same start/pause/complete/flag/notes/photos/parts actions
+ *   as the other two frontends.
+ *
+ * HOW IT TALKS TO THE OTHER PIECES
+ *   - Same Code.gs backend and WEBAPP_URL as index.html/board.html.
+ *   - DELIBERATELY shares STORAGE_KEY/QUEUE_KEY/CACHE_KEY with index.html
+ *     (see loadSharedState/saveCurrentUser below) so the signed-in
+ *     employee and the offline action queue are one continuous session
+ *     across both pages -- starting a task here and finishing it from the
+ *     main checklist (or vice versa) is meant to feel like one tool, not
+ *     two. It keeps its own separate RUNTIME_KEY, though, since unlike
+ *     index.html this page can have more than one boat's timer live in
+ *     view over a session (any boat you've looked up), not just "the one
+ *     currently on screen".
+ *   - Unlike index.html, this page renders straight from DATA.tasks (see
+ *     renderBoatProfile) rather than keeping a separate per-boat copy --
+ *     same single-source-of-truth pattern as board.html, and the reason
+ *     this page does NOT have the "added task vanishes" bug that
+ *     index.html's currentCtx.tasks copy caused (see index.html's header
+ *     comment for that history).
+ *   - Polls the server every 15s via refreshData(), same as board.html.
+ * ========================================================================== */
+
 // ======================= CONFIG =======================
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
 
