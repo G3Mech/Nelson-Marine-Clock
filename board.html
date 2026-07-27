@@ -23,7 +23,7 @@
     flex-shrink:0; display:grid; grid-template-columns:1fr minmax(220px, 480px) 1fr; align-items:center;
     padding:12px 22px; background:var(--deep); color:var(--white); gap:16px;
   }
-  .header-left{ display:flex; align-items:center; gap:10px; justify-self:start; min-width:0; }
+  .header-left{ display:flex; align-items:center; gap:10px; justify-self:start; }
   .back-arrow{ background:none; border:none; color:var(--white); font-size:30px; font-weight:700; cursor:pointer; line-height:1; padding:2px 8px 2px 2px; flex-shrink:0; }
   .back-arrow:active{ opacity:.6; }
   .brand{ font-size:19px; font-weight:800; letter-spacing:.01em; white-space:nowrap; }
@@ -61,6 +61,9 @@
   .profile-view{ flex:1; min-height:0; overflow-y:auto; padding:22px 26px 40px; }
   #profileContent{ max-width:720px; margin:0 auto; }
   .profile-card{ background:var(--white); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:18px; }
+  .profile-head-row{ display:flex; gap:16px; align-items:flex-start; }
+  .profile-photo{ width:110px; height:110px; border-radius:10px; object-fit:cover; flex-shrink:0; cursor:pointer; border:1px solid var(--line); }
+  .profile-head-info{ flex:1; min-width:0; }
   .profile-cust{ font-size:22px; font-weight:800; }
   .profile-contact{ font-size:13px; color:var(--slate); margin-top:4px; line-height:1.5; }
   .profile-boatline{ font-size:15px; color:var(--ink); margin-top:12px; padding-top:12px; border-top:1px solid var(--line); font-weight:600; }
@@ -951,15 +954,28 @@ function renderBoatProfile(){
     .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
   const parts = (DATA.parts || []).filter(p => p.boatId === boat.boatId);
   const custLabel = (cust ? cust.name : '—') + ' — ' + (boat.model || '');
+  // The general boat photo (no taskId attached) -- same one shown on the
+  // phone page's boat card. Most recently uploaded wins if there's more
+  // than one.
+  const boatPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
+  const boatPhoto = boatPhotos.length ? boatPhotos[boatPhotos.length - 1] : null;
+  const photoHtml = boatPhoto
+    ? '<img class="profile-photo" src="' + boatPhoto.url + '" alt="Boat photo" onclick="openPhotoView(\'' + boatPhoto.photoId + '\')">'
+    : '';
 
   wrap.innerHTML =
     '<div class="profile-card">' +
-      '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
-      '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—') + '</div>' +
-      '<div class="profile-boatline">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div>' +
-      '<div class="profile-badges">' +
-        '<span class="wo-loc ' + locType + '">' + locLabel + '</span>' +
-        (boat.currentWorkOrder ? '<span class="wo-num">WO ' + boat.currentWorkOrder + '</span>' : '<span class="status-pill pending">No active work order</span>') +
+      '<div class="profile-head-row">' +
+        photoHtml +
+        '<div class="profile-head-info">' +
+          '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
+          '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—') + '</div>' +
+          '<div class="profile-boatline">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div>' +
+          '<div class="profile-badges">' +
+            '<span class="wo-loc ' + locType + '">' + locLabel + '</span>' +
+            (boat.currentWorkOrder ? '<span class="wo-num">WO ' + boat.currentWorkOrder + '</span>' : '<span class="status-pill pending">No active work order</span>') +
+          '</div>' +
+        '</div>' +
       '</div>' +
     '</div>' +
     '<div class="profile-section">' +
