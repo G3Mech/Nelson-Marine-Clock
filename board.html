@@ -84,6 +84,28 @@
   }
   .panel-title .count{ background:var(--line); color:var(--ink); font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; }
 
+  .tab-bar{ flex-shrink:0; display:flex; background:var(--white); border-bottom:1px solid var(--line); }
+  .tab-btn{ padding:11px 0; flex:0 0 auto; min-width:150px; text-align:center; font-size:13.5px; font-weight:700; color:var(--slate); background:none; border:none; cursor:pointer; border-bottom:3px solid transparent; }
+  .tab-btn.active{ color:var(--ink); border-bottom-color:var(--go); }
+
+  .slip-chart-view{ flex:1; min-height:0; overflow:auto; padding:16px 20px 40px; }
+  .slip-chart-hint{ color:var(--slate); font-size:13px; max-width:640px; margin:0 0 18px; line-height:1.5; }
+  .slip-chart-canvas{ position:relative; display:inline-grid; grid-auto-rows:52px; gap:6px; }
+  .slip-cell{
+    width:60px; height:52px; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; cursor:pointer; position:relative; text-align:center; line-height:1.25; padding:2px;
+  }
+  .slip-cell.unassigned{ background:var(--paper); border:1.5px dashed var(--line); color:var(--slate); font-weight:600; }
+  .slip-cell.empty{ background:var(--slip-bg); border:1px solid var(--slip-accent); color:var(--slip-accent); }
+  .slip-cell.occupied{ background:var(--slip-accent); border:1px solid var(--slip-accent); color:var(--white); }
+  .slip-cell .slip-cell-num{ font-size:11.5px; font-weight:800; }
+  .slip-cell .slip-cell-who{ font-size:9.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:54px; }
+  .slip-cell-edit{
+    position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; background:var(--white);
+    border:1px solid var(--line); color:var(--slate); font-size:10px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .slip-pier-label{ position:absolute; font-size:10px; font-weight:800; color:var(--slate); text-transform:uppercase; letter-spacing:.05em; }
+
   .wo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(400px, 1fr)); gap:14px; align-content:start; }
   .wo-card{ background:var(--white); border:1px solid var(--line); border-left:6px solid var(--slate); border-radius:12px; padding:14px 16px; }
   .wo-card.slip{ border-left-color:var(--slip-accent); }
@@ -188,6 +210,11 @@
   </div>
 </header>
 
+<div class="tab-bar">
+  <button class="tab-btn active" id="tabWorkOrdersBtn" onclick="showTab('workorders')">Work Orders</button>
+  <button class="tab-btn" id="tabSlipChartBtn" onclick="showTab('slipchart')">Slip Chart</button>
+</div>
+
 <div class="body" id="mainView">
   <div class="left">
     <div class="panel-title">Work Orders <span class="count" id="woCount">0</span></div>
@@ -197,6 +224,11 @@
     <div class="panel-title">Now Running <span class="count" id="runCount">0</span></div>
     <div id="runList"></div>
   </div>
+</div>
+
+<div class="slip-chart-view" id="slipChartView" style="display:none;">
+  <p class="slip-chart-hint">Tap an unassigned square to place a real slip there. Tap an occupied slip to jump to that boat. The small pencil on an already-placed slip lets you move it if it's in the wrong spot.</p>
+  <div class="slip-chart-canvas" id="slipChartCanvas"></div>
 </div>
 
 <div class="profile-view" id="profileView" style="display:none;">
@@ -280,6 +312,17 @@
     <div class="photo-view-actions">
       <button id="photoViewUploadBtn" title="Add another photo">&#128247;</button>
       <button id="photoViewDeleteBtn" class="danger" title="Delete this photo">&#128465;</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="slipAssignOverlay" style="display:none;">
+  <div class="sheet">
+    <h3 id="slipAssignTitle">Assign a slip here</h3>
+    <p id="slipAssignSub">Pick which real slip belongs at this spot on the chart.</p>
+    <div id="slipAssignList"></div>
+    <div class="btn-row">
+      <button class="btn-secondary" id="slipAssignCancelBtn" style="width:100%;">Cancel</button>
     </div>
   </div>
 </div>
@@ -968,6 +1011,7 @@ function renderSearchSuggestions(){
 function openBoatProfile(boatId){
   currentProfileBoatId = boatId;
   document.getElementById('mainView').style.display = 'none';
+  document.getElementById('slipChartView').style.display = 'none';
   document.getElementById('profileView').style.display = 'block';
   document.getElementById('backArrowBtn').style.display = 'inline-flex';
   document.querySelector('header').classList.add('profile-active');
@@ -979,11 +1023,9 @@ function openBoatProfile(boatId){
 function closeBoatProfile(){
   currentProfileBoatId = null;
   document.getElementById('profileView').style.display = 'none';
-  document.getElementById('mainView').style.display = 'flex';
   document.getElementById('backArrowBtn').style.display = 'none';
   document.querySelector('header').classList.remove('profile-active');
-  renderWorkOrders();
-  renderRunning();
+  showTab(activeTab); // restores whichever tab (Work Orders or Slip Chart) was open before, and re-renders it
 }
 function renderBoatProfile(){
   const boat = boatById(currentProfileBoatId);
@@ -1054,11 +1096,128 @@ function renderBoatProfile(){
     '</div>';
 }
 
+// ======================= Slip Chart tab =======================
+// A rough reconstruction of Gordon's hand-drawn pier layout -- not a
+// surveyed, pixel-accurate map, just a shape close enough to recognize
+// at a glance. The two thin unlabeled finger docks in the middle of the
+// sketch had no visible slip divisions, so they're treated as walkways
+// and left out of this grid; say the word if they actually hold slips
+// and this can be extended.
+//
+// Each entry is one straight run of slip positions: which direction it
+// grows, where its first cell sits on an abstract grid, and how many
+// slots long it is. The real slip (slip1, slip42, whatever) that
+// occupies each position is stored server-side (Slips sheet's
+// gridRow/gridCol columns) via setSlipPosition -- this array only
+// defines the SHAPE, never which slip number goes where.
+const SLIP_CHART_SHAPE = [
+  { pier: 'connector', dir: 'v', row: 1, col: 1, count: 7 },   // left vertical run -- hoist/crane dock, linking the two rows below
+  { pier: 'north', dir: 'h', row: 1, col: 2, count: 15 },      // branches right off the TOP of the connector
+  { pier: 'south', dir: 'h', row: 7, col: 2, count: 20 },      // branches right off the BOTTOM of the connector
+  { pier: 'liftwell', dir: 'v', row: 9, col: 15, count: 4 },   // small separate vertical run, "Lift Well" on the sketch
+  { pier: 'east', dir: 'h', row: 12, col: 16, count: 16 },     // branches right off the bottom of the Lift Well run
+  { pier: 'upper', dir: 'v', row: 1, col: 24, count: 7 }       // isolated pier, drawn separately in the top-right of the sketch
+];
+function buildShapeCells(){
+  const cells = [];
+  SLIP_CHART_SHAPE.forEach(p => {
+    for (let i = 0; i < p.count; i++){
+      cells.push(p.dir === 'h' ? { pier: p.pier, row: p.row, col: p.col + i } : { pier: p.pier, row: p.row + i, col: p.col });
+    }
+  });
+  return cells;
+}
+function slipAtCell(row, col){
+  return (DATA.locations || []).find(l => String(l.gridRow) === String(row) && String(l.gridCol) === String(col));
+}
+function renderSlipChart(){
+  const canvas = document.getElementById('slipChartCanvas');
+  const cells = buildShapeCells();
+  canvas.innerHTML = cells.map(c => {
+    const style = 'grid-row:' + c.row + '; grid-column:' + c.col + ';';
+    const slip = slipAtCell(c.row, c.col);
+    if (!slip){
+      return '<div class="slip-cell unassigned" style="' + style + '" onclick="openSlipAssign(' + c.row + ',' + c.col + ')" title="Tap to place a slip here">+</div>';
+    }
+    const num = (slip.slipId.match(/\d+/) || ['?'])[0];
+    const editBtn = '<span class="slip-cell-edit" onclick="event.stopPropagation(); openSlipAssign(' + c.row + ',' + c.col + ')" title="Move a different slip here">&#9998;</span>';
+    if (slip.boatId){
+      const boat = boatById(slip.boatId);
+      const cust = boat ? customerById(boat.customerId) : null;
+      const who = cust ? cust.name : '—';
+      return '<div class="slip-cell occupied" style="' + style + '" onclick="jumpToSlipBoat(\'' + slip.boatId + '\')">' + editBtn +
+        '<span class="slip-cell-num">' + num + '</span><span class="slip-cell-who">' + who + '</span></div>';
+    }
+    return '<div class="slip-cell empty" style="' + style + '">' + editBtn +
+      '<span class="slip-cell-num">' + num + '</span><span class="slip-cell-who">Empty</span></div>';
+  }).join('');
+}
+function jumpToSlipBoat(boatId){
+  openBoatProfile(boatId);
+}
+
+let pendingSlipAssign = null;
+function openSlipAssign(row, col){
+  pendingSlipAssign = { row, col };
+  const current = slipAtCell(row, col);
+  // Eligible choices: any slip not currently placed anywhere on the
+  // chart, plus whichever slip already sits here (so re-confirming or
+  // picking a different one both work from the same list).
+  const eligible = (DATA.locations || []).filter(l => {
+    const unplaced = l.gridRow === '' || l.gridRow === undefined || l.gridRow === null;
+    return unplaced || (current && l.slipId === current.slipId);
+  }).sort((a, b) => {
+    const an = parseInt((a.slipId.match(/\d+/) || ['0'])[0], 10);
+    const bn = parseInt((b.slipId.match(/\d+/) || ['0'])[0], 10);
+    return an - bn;
+  });
+  document.getElementById('slipAssignTitle').textContent = current ? 'Reassign this spot' : 'Assign a slip here';
+  document.getElementById('slipAssignSub').textContent = current
+    ? ('Currently placed here: Slip ' + (current.slipId.match(/\d+/) || ['?'])[0])
+    : 'Pick which real slip belongs at this spot on the chart.';
+  const list = document.getElementById('slipAssignList');
+  list.innerHTML = eligible.length === 0
+    ? '<p style="color:var(--slate);font-size:13px;">Every slip is already placed somewhere on the chart.</p>'
+    : eligible.map(l => '<button class="name-btn" onclick="assignSlipToCell(\'' + l.slipId + '\')">Slip ' + (l.slipId.match(/\d+/) || ['?'])[0] + '</button>').join('');
+  document.getElementById('slipAssignOverlay').style.display = 'flex';
+}
+document.getElementById('slipAssignCancelBtn').addEventListener('click', () => {
+  pendingSlipAssign = null;
+  document.getElementById('slipAssignOverlay').style.display = 'none';
+});
+async function assignSlipToCell(slipId){
+  if (!pendingSlipAssign) return;
+  const { row, col } = pendingSlipAssign;
+  pendingSlipAssign = null;
+  document.getElementById('slipAssignOverlay').style.display = 'none';
+  try{
+    const res = await postToSheet('setSlipPosition', { slipId, gridRow: row, gridCol: col });
+    if (res && res.error){ alert('Could not place that slip: ' + res.error); return; }
+    await refreshData();
+    renderSlipChart();
+  } catch(err){
+    alert('Could not place that slip: ' + (err && err.message ? err.message : err));
+  }
+}
+
+let activeTab = 'workorders';
+function showTab(tabName){
+  activeTab = tabName;
+  document.getElementById('tabWorkOrdersBtn').classList.toggle('active', tabName === 'workorders');
+  document.getElementById('tabSlipChartBtn').classList.toggle('active', tabName === 'slipchart');
+  document.getElementById('mainView').style.display = tabName === 'workorders' ? 'flex' : 'none';
+  document.getElementById('slipChartView').style.display = tabName === 'slipchart' ? 'block' : 'none';
+  if (tabName === 'slipchart') renderSlipChart();
+  else { renderWorkOrders(); renderRunning(); }
+}
+
 function render(){
   if (!DATA) return;
   saveLocalState();
   if (currentProfileBoatId){
     renderBoatProfile();
+  } else if (activeTab === 'slipchart'){
+    renderSlipChart();
   } else {
     renderWorkOrders();
     renderRunning();
