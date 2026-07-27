@@ -64,6 +64,7 @@
   .profile-card{ background:var(--white); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:18px; }
   .profile-head-row{ display:flex; gap:16px; align-items:flex-start; }
   .profile-photo{ width:110px; height:110px; border-radius:10px; object-fit:cover; flex-shrink:0; cursor:pointer; border:1px solid var(--line); }
+  .profile-photo-empty{ display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--paper); border:1.5px dashed var(--line); color:var(--slate); font-size:12px; font-weight:700; text-align:center; line-height:1.3; }
   .profile-head-info{ flex:1; min-width:0; }
   .profile-cust{ font-size:22px; font-weight:800; }
   .profile-contact{ font-size:13px; color:var(--slate); margin-top:4px; line-height:1.5; }
@@ -613,6 +614,15 @@ function openPhotoView(photoId){
   document.getElementById('photoViewImg').src = photo ? photo.url : '';
   document.getElementById('photoViewOverlay').style.display = 'flex';
 }
+// Tapping the empty photo slot on a boat profile -- taskId is left blank
+// so this becomes a general boat photo (same kind the phone's own boat
+// photo slot creates), not attached to any specific task.
+function openBoatPhotoSlot(boatId){
+  openPhotoChoice({
+    boatId, taskId: null,
+    onDone: () => { if (currentProfileBoatId === boatId) renderBoatProfile(); }
+  });
+}
 document.getElementById('photoViewCloseBtn').addEventListener('click', () => document.getElementById('photoViewOverlay').style.display = 'none');
 async function deleteNotePhoto(photoId){
   if (!confirm('Delete this photo?')) return;
@@ -960,18 +970,14 @@ function renderBoatProfile(){
   // The general boat photo (no taskId attached) -- same one shown on the
   // phone page's boat card. Most recently uploaded wins if there's more
   // than one.
-  // Prefer a dedicated general boat photo (no taskId -- the same kind the
-  // phone's boat photo slot creates), but Shop Mode has no equivalent of
-  // that slot yet -- every photo taken here goes through the Notes popup
-  // and is attached to a specific task instead. Fall back to the most
-  // recent photo of ANY kind for this boat so something still shows.
+  // A dedicated general boat photo (no taskId) -- same kind the phone's
+  // boat photo slot creates. This slot is now clickable here too, so a
+  // boat only ever touched through Shop Mode can still get one.
   const generalPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
-  const anyPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId);
-  const boatPhoto = generalPhotos.length ? generalPhotos[generalPhotos.length - 1]
-    : (anyPhotos.length ? anyPhotos[anyPhotos.length - 1] : null);
+  const boatPhoto = generalPhotos.length ? generalPhotos[generalPhotos.length - 1] : null;
   const photoHtml = boatPhoto
     ? '<img class="profile-photo" src="' + boatPhoto.url + '" alt="Boat photo" onclick="openPhotoView(\'' + boatPhoto.photoId + '\')">'
-    : '';
+    : '<div class="profile-photo profile-photo-empty" onclick="openBoatPhotoSlot(\'' + boat.boatId + '\')" title="Add a photo of this boat">+<br>Photo</div>';
 
   wrap.innerHTML =
     '<div class="profile-card">' +
