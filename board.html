@@ -84,7 +84,7 @@
   }
   .panel-title .count{ background:var(--line); color:var(--ink); font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; }
 
-  .tab-bar{ flex-shrink:0; display:flex; background:var(--white); border-bottom:1px solid var(--line); }
+  .tab-bar{ flex-shrink:0; display:flex; background:var(--white); border-bottom:1px solid var(--line); padding-left:20px; }
   .tab-btn{
     padding:11px 0; flex:0 0 auto; min-width:150px; text-align:center; display:flex; align-items:center; justify-content:center; gap:8px;
     font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--slate);
@@ -94,6 +94,18 @@
   .tab-btn .count{ background:var(--line); color:var(--ink); font-size:11.5px; font-weight:800; padding:2px 9px; border-radius:20px; text-transform:none; letter-spacing:normal; }
 
   .slip-chart-view{ flex:1; min-height:0; overflow:auto; padding:16px 20px 40px; }
+  .parts-view{ flex:1; min-height:0; overflow:auto; padding:16px 20px 40px; }
+  .parts-toolbar{ margin-bottom:14px; }
+  .parts-toolbar input{
+    width:100%; max-width:420px; padding:10px 16px; border-radius:20px; border:1px solid var(--line);
+    background:var(--paper); font-size:14px; font-family:inherit;
+  }
+  .parts-tab-list{ border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--white); max-width:720px; }
+  .parts-tab-row{ display:flex; justify-content:space-between; align-items:center; gap:14px; padding:12px 16px; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .parts-tab-row:last-child{ border-bottom:none; }
+  .parts-tab-row .p-main b{ display:block; font-size:14.5px; }
+  .parts-tab-row .p-main span{ color:var(--slate); font-size:12px; }
+  .parts-tab-row .p-meta{ color:var(--slate); font-size:12px; text-align:right; flex-shrink:0; line-height:1.5; }
   .slip-chart-hint{ color:var(--slate); font-size:13px; max-width:640px; margin:0 0 18px; line-height:1.5; }
   .slip-chart-canvas{ position:relative; display:inline-grid; grid-template-columns:repeat(40, 60px); grid-template-rows:repeat(32, 52px); gap:6px; }
   .slip-chart-toolbar{ display:flex; gap:10px; margin-bottom:12px; }
@@ -254,12 +266,12 @@
 
 <div class="tab-bar">
   <button class="tab-btn active" id="tabWorkOrdersBtn" onclick="showTab('workorders')">Work Orders <span class="count" id="tabWoCount">0</span></button>
-  <button class="tab-btn" id="tabSlipChartBtn" onclick="showTab('slipchart')">Slip Chart <span class="count" id="tabSlipCount">0</span></button>
+  <button class="tab-btn" id="tabSlipChartBtn" onclick="showTab('slipchart')">Slip Chart</button>
+  <button class="tab-btn" id="tabPartsBtn" onclick="showTab('parts')">Parts</button>
 </div>
 
 <div class="body" id="mainView">
   <div class="left">
-    <div class="panel-title">Work Orders <span class="count" id="woCount">0</span></div>
     <div id="woGrid" class="wo-grid"></div>
   </div>
   <div class="right">
@@ -276,6 +288,13 @@
   <p class="slip-chart-hint" id="slipChartHint">Tap an unassigned square to place a real slip there. Tap an occupied slip to jump to that boat. The small pencil on an already-placed slip lets you move it if it's in the wrong spot.</p>
   <p class="slip-chart-hint" id="editLayoutHint" style="display:none;">Drag a pier to reposition it. Tap the pencil on a pier to rename it, resize it, or delete it. New piers start in the bottom-left corner — drag them into place.</p>
   <div class="slip-chart-canvas" id="slipChartCanvas"></div>
+</div>
+
+<div class="parts-view" id="partsView" style="display:none;">
+  <div class="parts-toolbar">
+    <input type="text" id="partsSearch" placeholder="Search parts, boats, or customers…" oninput="renderPartsTab()">
+  </div>
+  <div id="partsList"></div>
 </div>
 
 <div class="profile-view" id="profileView" style="display:none;">
@@ -437,7 +456,7 @@ let pendingStatusOverride = {};
 // for a name every single tap. Anything slower than that re-asks, since
 // it's likely someone else has stepped up to the tablet since.
 let lastStatusChangeAt = 0;
-const SAME_USER_WINDOW_MS = 10000;
+const SAME_USER_WINDOW_MS = 5000;
 
 const STORAGE_KEY = 'nelsonMarineBoardState_v1';
 const QUEUE_KEY = 'nelsonMarineBoardQueue_v1';
@@ -461,7 +480,6 @@ function playDoneSound(){ const ctx=getCtx(); tone(ctx,660,ctx.currentTime,0.14)
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 const woGrid = document.getElementById('woGrid');
-const woCount = document.getElementById('woCount');
 const runList = document.getElementById('runList');
 const runCount = document.getElementById('runCount');
 const whoamiBtn = document.getElementById('whoamiBtn');
@@ -597,9 +615,10 @@ function openWhoami(){
   whoamiOverlay.style.display = 'flex';
 }
 whoamiBtn.addEventListener('click', () => { pendingWhoamiAction = null; openWhoami(); });
-// Only skips the prompt when someone (anyone) just touched a task's
-// status within the same-user window -- a brand new session, or one
-// that's gone quiet for 10+ seconds, always asks again.
+// Only skips the prompt when Start was pressed within the last 5
+// seconds -- pausing, completing, and flagging never touch this timer,
+// so a burst of quick Start taps (checking off several jobs in one go)
+// only asks once, but stepping away and coming back always re-asks.
 function requireEmployee(action){
   const recentlyActive = currentEmployee && (Date.now() - lastStatusChangeAt < SAME_USER_WINDOW_MS);
   if (recentlyActive){ action(); return; }
@@ -629,7 +648,6 @@ function pauseTask(task){
   if (rt && rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
   task.status = 'paused';
   pendingStatusOverride[task.taskId] = 'paused';
-  touchActivity();
   enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
   playPauseSound();
   render();
@@ -637,7 +655,6 @@ function pauseTask(task){
 function completeSimpleTask(task){
   task.status = 'done';
   pendingStatusOverride[task.taskId] = 'done';
-  touchActivity();
   enqueue('updateTask', { taskId: task.taskId, status: 'done' });
   playDoneSound();
   render();
@@ -660,7 +677,6 @@ function completeTimedTask(task){
   const employee = rt.employee || currentEmployee || 'Unknown';
   task.status = 'done';
   pendingStatusOverride[task.taskId] = 'done';
-  touchActivity();
   enqueue('updateTask', { taskId: task.taskId, status: 'done' });
   enqueue('logEntry', {
     taskId: task.taskId, boatId: task.boatId, workOrder: task.workOrder || '',
@@ -688,7 +704,6 @@ function setFlag(task, flagged){
     delete task._preFlagStatus;
   }
   pendingStatusOverride[task.taskId] = task.status;
-  touchActivity();
   enqueue('updateTask', { taskId: task.taskId, status: task.status });
   render();
 }
@@ -991,7 +1006,6 @@ function renderWorkOrders(){
     });
   }
 
-  woCount.textContent = cards.length;
   document.getElementById('tabWoCount').textContent = cards.length;
 
   if (cards.length === 0){
@@ -1089,6 +1103,7 @@ function openBoatProfile(boatId){
   currentProfileBoatId = boatId;
   document.getElementById('mainView').style.display = 'none';
   document.getElementById('slipChartView').style.display = 'none';
+  document.getElementById('partsView').style.display = 'none';
   document.getElementById('profileView').style.display = 'block';
   document.getElementById('backArrowBtn').style.display = 'inline-flex';
   document.querySelector('header').classList.add('profile-active');
@@ -1102,7 +1117,7 @@ function closeBoatProfile(){
   document.getElementById('profileView').style.display = 'none';
   document.getElementById('backArrowBtn').style.display = 'none';
   document.querySelector('header').classList.remove('profile-active');
-  showTab(activeTab); // restores whichever tab (Work Orders or Slip Chart) was open before, and re-renders it
+  showTab(activeTab); // restores whichever tab (Work Orders, Slip Chart, or Parts) was open before, and re-renders it
 }
 function renderBoatProfile(){
   const boat = boatById(currentProfileBoatId);
@@ -1197,12 +1212,7 @@ function buildShapeCells(){
 function slipAtCell(row, col){
   return (DATA.locations || []).find(l => String(l.gridRow) === String(row) && String(l.gridCol) === String(col));
 }
-function updateSlipTabCount(){
-  const placed = (DATA.locations || []).filter(l => l.gridRow !== '' && l.gridRow !== undefined && l.gridRow !== null).length;
-  document.getElementById('tabSlipCount').textContent = placed;
-}
 function renderSlipChart(){
-  updateSlipTabCount();
   const canvas = document.getElementById('slipChartCanvas');
   const cells = buildShapeCells();
   const slipCellsHtml = cells.map(c => {
@@ -1256,7 +1266,6 @@ const CELL_W = 66, CELL_H = 58;
 const NEW_PIER_ROW = 30, NEW_PIER_COL = 1;
 
 function renderPierEditor(){
-  updateSlipTabCount();
   const canvas = document.getElementById('slipChartCanvas');
   const piers = DATA.pierLayout || [];
   canvas.innerHTML = piers.map(p => {
@@ -1513,14 +1522,45 @@ async function assignSlipToCell(slipId){
 
 let activeTab = 'workorders';
 let editMode = false;
+// ======================= Parts tab =======================
+function renderPartsTab(){
+  const term = (document.getElementById('partsSearch').value || '').trim().toLowerCase();
+  const wrap = document.getElementById('partsList');
+  let parts = (DATA.parts || []).slice().sort((a, b) => (b.loggedAt || '').localeCompare(a.loggedAt || ''));
+  if (term){
+    parts = parts.filter(p => {
+      const boat = boatById(p.boatId);
+      const cust = boat ? customerById(boat.customerId) : null;
+      const haystack = [p.partName, p.partNumber, p.supplier, boat ? boat.model : '', boat ? boat.boatName : '', cust ? cust.name : ''].filter(Boolean).join(' ').toLowerCase();
+      return haystack.indexOf(term) !== -1;
+    });
+  }
+  if (parts.length === 0){
+    wrap.innerHTML = '<div class="empty-note">' + (term ? 'No parts match that search.' : 'No parts logged yet.') + '</div>';
+    return;
+  }
+  wrap.innerHTML = '<div class="parts-tab-list">' + parts.map(p => {
+    const boat = boatById(p.boatId);
+    const cust = boat ? customerById(boat.customerId) : null;
+    const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
+    const when = p.loggedAt ? new Date(p.loggedAt).toLocaleDateString() : '';
+    return '<div class="parts-tab-row"><div class="p-main"><b>' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</b>' +
+      '<span>' + who + (p.workOrder ? ' · WO ' + p.workOrder : '') + '</span></div>' +
+      '<div class="p-meta">' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + (when ? '<br>' + when : '') + '</div></div>';
+  }).join('') + '</div>';
+}
+
 function renderSlipChartTab(){ if (editMode) renderPierEditor(); else renderSlipChart(); }
 function showTab(tabName){
   activeTab = tabName;
   document.getElementById('tabWorkOrdersBtn').classList.toggle('active', tabName === 'workorders');
   document.getElementById('tabSlipChartBtn').classList.toggle('active', tabName === 'slipchart');
+  document.getElementById('tabPartsBtn').classList.toggle('active', tabName === 'parts');
   document.getElementById('mainView').style.display = tabName === 'workorders' ? 'flex' : 'none';
   document.getElementById('slipChartView').style.display = tabName === 'slipchart' ? 'block' : 'none';
+  document.getElementById('partsView').style.display = tabName === 'parts' ? 'block' : 'none';
   if (tabName === 'slipchart') renderSlipChartTab();
+  else if (tabName === 'parts') renderPartsTab();
   else { renderWorkOrders(); renderRunning(); }
 }
 function toggleEditMode(){
@@ -1536,11 +1576,12 @@ function toggleEditMode(){
 function render(){
   if (!DATA) return;
   saveLocalState();
-  updateSlipTabCount();
   if (currentProfileBoatId){
     renderBoatProfile();
   } else if (activeTab === 'slipchart'){
     renderSlipChartTab();
+  } else if (activeTab === 'parts'){
+    renderPartsTab();
   } else {
     renderWorkOrders();
     renderRunning();
