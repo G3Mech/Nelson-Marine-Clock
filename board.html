@@ -23,10 +23,21 @@
     flex-shrink:0; display:grid; grid-template-columns:1fr minmax(220px, 480px) 1fr; align-items:center;
     padding:12px 22px; background:var(--deep); color:var(--white); gap:16px;
   }
-  .brand{ font-size:19px; font-weight:800; letter-spacing:.01em; white-space:nowrap; justify-self:start; }
+  .header-left{ display:flex; align-items:center; gap:10px; justify-self:start; min-width:0; }
+  .back-arrow{ background:none; border:none; color:var(--white); font-size:30px; font-weight:700; cursor:pointer; line-height:1; padding:2px 8px 2px 2px; flex-shrink:0; }
+  .back-arrow:active{ opacity:.6; }
+  .brand{ font-size:19px; font-weight:800; letter-spacing:.01em; white-space:nowrap; }
   .brand .sub{ font-size:12.5px; font-weight:600; color:#9fb4c4; margin-left:10px; letter-spacing:.04em; }
   .header-right{ display:flex; align-items:center; gap:14px; justify-self:end; }
   .header-search{ position:relative; justify-self:center; width:100%; }
+  .search-suggestions{ display:none; position:absolute; left:0; right:0; top:calc(100% + 6px); background:var(--white); border-radius:10px; box-shadow:0 12px 26px rgba(10,26,43,.3); max-height:360px; overflow-y:auto; z-index:60; }
+  .search-suggestions.show{ display:block; }
+  .search-suggestion-item{ padding:11px 16px; cursor:pointer; border-bottom:1px solid var(--line); }
+  .search-suggestion-item:last-child{ border-bottom:none; }
+  .search-suggestion-item:hover{ background:var(--paper); }
+  .search-suggestion-item .s-main{ font-weight:700; font-size:14px; color:var(--ink); }
+  .search-suggestion-item .s-sub{ font-size:12px; color:var(--slate); margin-top:2px; }
+  .search-suggestion-empty{ padding:14px 16px; color:var(--slate); font-size:13px; }
   .header-search input{
     width:100%; padding:9px 14px 9px 36px; border-radius:20px; border:1px solid #2c4c68; background:#16324a;
     color:var(--white); font-size:14px; font-family:inherit;
@@ -46,6 +57,18 @@
   .body{ flex:1; display:flex; min-height:0; }
   .left{ flex:3 1 0; min-width:0; padding:18px 20px; overflow-y:auto; }
   .right{ flex:1 1 0; min-width:290px; max-width:400px; border-left:2px solid var(--line); background:var(--white); padding:18px 16px; overflow-y:auto; }
+
+  .profile-view{ flex:1; min-height:0; overflow-y:auto; padding:22px 26px 40px; }
+  #profileContent{ max-width:720px; margin:0 auto; }
+  .profile-card{ background:var(--white); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-bottom:18px; }
+  .profile-cust{ font-size:22px; font-weight:800; }
+  .profile-contact{ font-size:13px; color:var(--slate); margin-top:4px; line-height:1.5; }
+  .profile-boatline{ font-size:15px; color:var(--ink); margin-top:12px; padding-top:12px; border-top:1px solid var(--line); font-weight:600; }
+  .profile-badges{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .profile-section{ background:var(--white); border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin-bottom:16px; }
+  .profile-history-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .profile-history-row:last-child{ border-bottom:none; }
+  .profile-history-meta{ color:var(--slate); font-size:12px; flex-shrink:0; }
 
   .panel-title{
     font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--slate);
@@ -142,10 +165,14 @@
 <body>
 
 <header>
-  <div class="brand">Nelson Marine Databasin <span class="sub">SHOP MODE</span></div>
+  <div class="header-left">
+    <button class="back-arrow" id="backArrowBtn" style="display:none;" title="Back to Work Orders">&#8592;</button>
+    <div class="brand">Nelson Marine Databasin <span class="sub">SHOP MODE</span></div>
+  </div>
   <div class="header-search">
     <span class="search-icon">&#128269;</span>
-    <input type="text" id="boardSearch" placeholder="Search customer, boat, or work order…" autocomplete="off">
+    <input type="text" id="boardSearch" placeholder="Search any boat, customer, or work order…" autocomplete="off">
+    <div class="search-suggestions" id="searchSuggestions"></div>
   </div>
   <div class="header-right">
     <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Loading…</span></div>
@@ -153,7 +180,7 @@
   </div>
 </header>
 
-<div class="body">
+<div class="body" id="mainView">
   <div class="left">
     <div class="panel-title">Work Orders <span class="count" id="woCount">0</span></div>
     <div id="woGrid" class="wo-grid"></div>
@@ -162,6 +189,10 @@
     <div class="panel-title">Now Running <span class="count" id="runCount">0</span></div>
     <div id="runList"></div>
   </div>
+</div>
+
+<div class="profile-view" id="profileView" style="display:none;">
+  <div id="profileContent"></div>
 </div>
 
 <div class="overlay" id="whoamiOverlay" style="display:none;">
@@ -306,7 +337,14 @@ const whoamiBtn = document.getElementById('whoamiBtn');
 const whoamiName = document.getElementById('whoamiName');
 const whoamiOverlay = document.getElementById('whoamiOverlay');
 const whoamiButtons = document.getElementById('whoamiButtons');
-document.getElementById('boardSearch').addEventListener('input', renderWorkOrders);
+document.getElementById('boardSearch').addEventListener('input', () => { renderWorkOrders(); renderSearchSuggestions(); });
+document.getElementById('boardSearch').addEventListener('focus', renderSearchSuggestions);
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('boardSearch');
+  const box = document.getElementById('searchSuggestions');
+  if (wrap && box && e.target !== wrap && !box.contains(e.target)) box.classList.remove('show');
+});
+document.getElementById('backArrowBtn').addEventListener('click', closeBoatProfile);
 
 function saveLocalState(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentEmployee, taskRuntime, lastStatusChangeAt })); } catch(e){}
@@ -466,14 +504,12 @@ function pauseTask(task){
   render();
 }
 function completeSimpleTask(task){
-  requireEmployee(() => {
-    task.status = 'done';
-    pendingStatusOverride[task.taskId] = 'done';
-    touchActivity();
-    enqueue('updateTask', { taskId: task.taskId, status: 'done' });
-    playDoneSound();
-    render();
-  });
+  task.status = 'done';
+  pendingStatusOverride[task.taskId] = 'done';
+  touchActivity();
+  enqueue('updateTask', { taskId: task.taskId, status: 'done' });
+  playDoneSound();
+  render();
 }
 let pendingCompleteTaskId = null;
 function openCompleteConfirm(task){
@@ -486,11 +522,11 @@ function completeTimedTask(task){
   if (rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
   const mins = Math.round(segMs(task.taskId) / 60000);
   const last = rt.segments[rt.segments.length - 1] || { start: Date.now(), end: Date.now() };
-  // currentEmployee wins over whoever originally started the segment --
-  // by the time this runs, requireEmployee has already (re)confirmed who
-  // is actually standing here finishing it, which is the more reliable
-  // answer than trusting a name captured whenever the job first started.
-  const employee = currentEmployee || rt.employee || 'Unknown';
+  // Completing (and pausing) never require signing in -- only Start does.
+  // Whoever was signed in at Start time is who gets credited for the
+  // logged hours, since that's who actually did the work; currentEmployee
+  // may have since changed (or been cleared) by the time this fires.
+  const employee = rt.employee || currentEmployee || 'Unknown';
   task.status = 'done';
   pendingStatusOverride[task.taskId] = 'done';
   touchActivity();
@@ -505,6 +541,7 @@ function completeTimedTask(task){
   render();
 }
 
+let currentProfileBoatId = null; // when set, render() shows the boat profile page instead of the main grid
 let pendingFlagTaskId = null;
 function openFlagConfirm(task){
   pendingFlagTaskId = task.taskId;
@@ -715,7 +752,7 @@ document.getElementById('confirmYesBtn').addEventListener('click', () => {
   pendingCompleteTaskId = null;
   document.getElementById('confirmOverlay').style.display = 'none';
   const task = taskId ? findTaskById(taskId) : null;
-  if (task) requireEmployee(() => completeTimedTask(task));
+  if (task) completeTimedTask(task);
 });
 document.getElementById('flagConfirmCancelBtn').addEventListener('click', () => { pendingFlagTaskId = null; document.getElementById('flagConfirmOverlay').style.display = 'none'; });
 document.getElementById('flagConfirmYesBtn').addEventListener('click', () => {
@@ -849,11 +886,118 @@ function renderRunning(){
   }).join('');
 }
 
+// ======================= boat search (every boat, not just open work orders) =======================
+function renderSearchSuggestions(){
+  const term = document.getElementById('boardSearch').value.trim().toLowerCase();
+  const box = document.getElementById('searchSuggestions');
+  if (!term){ box.classList.remove('show'); box.innerHTML = ''; return; }
+
+  const matches = DATA.boats.filter(b => {
+    const cust = customerById(b.customerId);
+    const haystack = [cust ? cust.name : '', b.model, b.boatName, b.currentWorkOrder].filter(Boolean).join(' ').toLowerCase();
+    return haystack.indexOf(term) !== -1;
+  }).slice(0, 8);
+
+  if (matches.length === 0){
+    box.innerHTML = '<div class="search-suggestion-empty">No boats match "' + term + '"</div>';
+  } else {
+    box.innerHTML = matches.map(b => {
+      const cust = customerById(b.customerId);
+      const loc = slipForBoat(b.boatId);
+      const locLabel = loc ? ('Slip ' + (loc.slipId.match(/\d+/) || ['?'])[0]) : 'Yard';
+      return '<div class="search-suggestion-item" data-boat="' + b.boatId + '">' +
+        '<div class="s-main">' + (cust ? cust.name : '—') + ' — ' + (b.model || '') + (b.boatName ? ' "' + b.boatName + '"' : '') + '</div>' +
+        '<div class="s-sub">' + locLabel + (b.currentWorkOrder ? ' · WO ' + b.currentWorkOrder : ' · No active work order') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+  box.classList.add('show');
+  box.querySelectorAll('.search-suggestion-item[data-boat]').forEach(el => {
+    el.addEventListener('click', () => openBoatProfile(el.dataset.boat));
+  });
+}
+
+// ======================= boat profile page =======================
+function openBoatProfile(boatId){
+  currentProfileBoatId = boatId;
+  document.getElementById('mainView').style.display = 'none';
+  document.getElementById('profileView').style.display = 'block';
+  document.getElementById('backArrowBtn').style.display = 'inline-flex';
+  const searchInput = document.getElementById('boardSearch');
+  searchInput.value = '';
+  document.getElementById('searchSuggestions').classList.remove('show');
+  renderBoatProfile();
+}
+function closeBoatProfile(){
+  currentProfileBoatId = null;
+  document.getElementById('profileView').style.display = 'none';
+  document.getElementById('mainView').style.display = 'flex';
+  document.getElementById('backArrowBtn').style.display = 'none';
+  renderWorkOrders();
+  renderRunning();
+}
+function renderBoatProfile(){
+  const boat = boatById(currentProfileBoatId);
+  const wrap = document.getElementById('profileContent');
+  if (!boat){ wrap.innerHTML = '<div class="empty-note">That boat wasn\'t found -- it may have been removed.</div>'; return; }
+
+  const cust = customerById(boat.customerId);
+  const loc = slipForBoat(boat.boatId);
+  const locType = loc ? 'slip' : 'yard';
+  const locLabel = loc ? ('Slip ' + (loc.slipId.match(/\d+/) || ['?'])[0]) : 'Yard';
+  const activeTasks = DATA.tasks.filter(t => t.boatId === boat.boatId && t.status !== 'done')
+    .sort((a, b) => (a.priority || 2) - (b.priority || 2) || (a.order || 0) - (b.order || 0));
+  const completed = (DATA.completedTasks || []).filter(t => t.boatId === boat.boatId)
+    .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+  const parts = (DATA.parts || []).filter(p => p.boatId === boat.boatId);
+  const custLabel = (cust ? cust.name : '—') + ' — ' + (boat.model || '');
+
+  wrap.innerHTML =
+    '<div class="profile-card">' +
+      '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
+      '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—') + '</div>' +
+      '<div class="profile-boatline">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div>' +
+      '<div class="profile-badges">' +
+        '<span class="wo-loc ' + locType + '">' + locLabel + '</span>' +
+        (boat.currentWorkOrder ? '<span class="wo-num">WO ' + boat.currentWorkOrder + '</span>' : '<span class="status-pill pending">No active work order</span>') +
+      '</div>' +
+    '</div>' +
+    '<div class="profile-section">' +
+      '<div class="panel-title">Active Tasks <span class="count">' + activeTasks.length + '</span></div>' +
+      (activeTasks.length === 0
+        ? '<div class="empty-note">Nothing open right now.</div>'
+        : '<div class="wo-tasks">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
+      '<button class="wo-addtask" onclick="openAddTask(\'' + boat.boatId + '\', \'' + custLabel.replace(/'/g, "\\'") + '\')">+ Add Task</button>' +
+    '</div>' +
+    '<div class="profile-section">' +
+      '<div class="panel-title">Completed <span class="count">' + completed.length + '</span></div>' +
+      (completed.length === 0
+        ? '<div class="empty-note">No completed tasks yet.</div>'
+        : completed.map(t =>
+            '<div class="profile-history-row"><span>' + t.name + '</span>' +
+            '<span class="profile-history-meta">' + (t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '') + '</span></div>'
+          ).join('')) +
+    '</div>' +
+    '<div class="profile-section">' +
+      '<div class="panel-title">Parts Used <span class="count">' + parts.length + '</span></div>' +
+      (parts.length === 0
+        ? '<div class="empty-note">None logged yet.</div>'
+        : parts.map(p =>
+            '<div class="profile-history-row"><span>' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</span>' +
+            '<span class="profile-history-meta">' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + '</span></div>'
+          ).join('')) +
+    '</div>';
+}
+
 function render(){
   if (!DATA) return;
   saveLocalState();
-  renderWorkOrders();
-  renderRunning();
+  if (currentProfileBoatId){
+    renderBoatProfile();
+  } else {
+    renderWorkOrders();
+    renderRunning();
+  }
 }
 
 function tickTimers(){
