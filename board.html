@@ -481,6 +481,53 @@
 </div>
 
 <script>
+/* ==========================================================================
+ * NELSON MARINE DATABASIN — SHOP MODE  (this file: board.html)
+ * ==========================================================================
+ * WHAT THIS FILE IS
+ *   The wall-mounted/tablet dashboard: a multi-job status board for the
+ *   whole shop floor at once (as opposed to index.html/Mobile Mode, which
+ *   is one technician on one boat at a time). Tabs: Work Orders (every
+ *   open job, with Start/Pause/Complete/Flag per task), Slip Chart (the
+ *   visual pier layout + drag-to-place slip editor), and Parts.
+ *
+ * HOW IT TALKS TO THE OTHER PIECES
+ *   - Same Code.gs backend and same WEBAPP_URL as index.html/search.html.
+ *   - Its own localStorage keys (STORAGE_KEY/QUEUE_KEY/CACHE_KEY below,
+ *     all suffixed "Board") -- deliberately NOT shared with index.html or
+ *     search.html, since this is a shared station (multiple people use the
+ *     same tablet) rather than one person's phone. "Working as" is chosen
+ *     per action here (openWhoami/requireEmployee), not signed in once.
+ *   - Polls the server every REFRESH_MS (15s, see below) via refreshData(),
+ *     unlike index.html which only fetches once at boot -- see index.html's
+ *     header comment for that gap.
+ *
+ * DATA MODEL: DATA.tasks is the single source of truth here (unlike
+ *   index.html, which keeps a separate per-boat currentCtx.tasks copy).
+ *   Every render function (renderWorkOrders, renderRunning, taskRowHtml,
+ *   renderBoatProfile) filters straight from DATA.tasks/DATA.boats fresh
+ *   each time, so there's no risk of two copies drifting apart the way
+ *   index.html's did. pendingStatusOverride exists to bridge the one gap
+ *   this DOES have: a periodic refetch (every 15s) would otherwise
+ *   overwrite a status change this tablet just made locally, before the
+ *   queued POST confirming that change has actually reached the server --
+ *   mergeFetchedTasks (see refreshData below) re-applies any pending
+ *   local override on top of each fresh fetch until the queue confirms it.
+ *
+ * KNOWN GAP (documented, not fixed in this pass): that override
+ *   mechanism only patches STATUS on tasks that already exist in the
+ *   fresh fetch. A task added here (openAddTask/newTaskAddBtn, which
+ *   pushes a temp_ row straight into DATA.tasks) that hasn't finished its
+ *   addTask round-trip yet will be missing from the next 15-second
+ *   refetch's json.tasks, and DATA = json (in refreshData) replaces it
+ *   wholesale -- so a very-recently-added task could flicker out of view
+ *   for one refresh cycle if it's still mid-flight. In practice this is a
+ *   narrow window (well under 15s in normal conditions), but it's the
+ *   same family of bug as the one fixed in index.html's reconcileTempTaskId,
+ *   and worth closing the same way (carry forward any queued 'addTask'
+ *   items' temp rows across a refresh, the way pendingStatusOverride
+ *   carries forward status) in a future focused session.
+ * ========================================================================== */
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
 const REFRESH_MS = 15000;
 
@@ -858,131 +905,6 @@ document.getElementById('notesSaveBtn').addEventListener('click', () => {
   }
   document.getElementById('notesOverlay').style.display = 'none';
   render();
-});
-
-function compressImage(file, maxDim, quality){
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > height && width > maxDim){ height = Math.round(height * maxDim / width); width = maxDim; }
-        else if (height > maxDim){ width = Math.round(width * maxDim / height); height = maxDim; }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = () => reject(new Error('Could not read that image'));
-      img.src = e.target.result;
-    };
-    reader.onerror = () => reject(new Error('Could not read that file'));
-    reader.readAsDataURL(file);
-  });
-}
-async function uploadPhoto(file, boatId, taskId){
-  try{
-    const dataUrl = await compressImage(file, 1600, 0.72);
-    const base64 = dataUrl.split(',')[1];
-    return await postToSheet('uploadPhoto', { boatId, taskId: taskId || '', imageData: base64, mimeType: 'image/jpeg', employee: currentEmployee || '' });
-  } catch(err){
-    alert('Photo upload failed: ' + err.message);
-    return null;
-  }
-}
-async function uploadPhotoBatch(files, boatId, taskId, progressCb, onSuccessCb){
-  for (let i = 0; i < files.length; i++){
-    if (progressCb) progressCb(i + 1, files.length);
-    const result = await uploadPhoto(files[i], boatId, taskId);
-    if (result && result.ok && onSuccessCb) onSuccessCb(result);
-  }
-}
-let photoUploadContext = null;
-function openPhotoChoice(ctx){ photoUploadContext = ctx; document.getElementById('photoChoiceOverlay').style.display = 'flex'; }
-document.getElementById('photoChoiceCameraBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; document.getElementById('sharedPhotoCameraInput').click(); });
-document.getElementById('photoChoiceLibraryBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; document.getElementById('sharedPhotoLibraryInput').click(); });
-document.getElementById('photoChoiceCancelBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; photoUploadContext = null; });
-function handleChosenFiles(fileList){
-  const files = Array.from(fileList);
-  const ctx = photoUploadContext; photoUploadContext = null;
-  if (!ctx || files.length === 0) return;
-  uploadPhotoBatch(files, ctx.boatId, ctx.taskId, ctx.onProgress, (result) => {
-    DATA.photos = DATA.photos || [];
-    DATA.photos.push({ boatId: ctx.boatId, taskId: ctx.taskId || '', url: result.url, photoId: result.photoId });
-    if (ctx.onEach) ctx.onEach(result);
-  }).then(() => { if (ctx.onDone) ctx.onDone(); });
-}
-document.getElementById('sharedPhotoCameraInput').addEventListener('change', (e) => { handleChosenFiles(e.target.files); e.target.value = ''; });
-document.getElementById('sharedPhotoLibraryInput').addEventListener('change', (e) => { handleChosenFiles(e.target.files); e.target.value = ''; });
-
-let partsTaskRef = null;
-function openParts(task){
-  partsTaskRef = task.taskId;
-  document.getElementById('partsTaskTitle').textContent = '⚙️ Parts List — ' + task.name;
-  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
-  renderPartsList();
-  populatePartSuggestions();
-  document.getElementById('partsOverlay').style.display = 'flex';
-}
-function renderPartsList(){
-  const wrap = document.getElementById('partsList');
-  const parts = (DATA.parts || []).filter(p => p.taskId === partsTaskRef);
-  wrap.innerHTML = parts.length === 0 ? '' : parts.map(p =>
-    '<div class="parts-list-item"><div class="part-info"><b>' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</b>' +
-      '<span>' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + '</span></div>' +
-      '<button class="part-del" onclick="deletePart(\'' + p.partId + '\')" title="Delete">&times;</button></div>'
-  ).join('');
-}
-function populatePartSuggestions(){
-  const names = [...new Set((DATA.parts||[]).map(p=>p.partName).filter(Boolean))].sort();
-  const numbers = [...new Set((DATA.parts||[]).map(p=>p.partNumber).filter(Boolean))].sort();
-  const suppliers = [...new Set((DATA.parts||[]).map(p=>p.supplier).filter(Boolean))].sort();
-  document.getElementById('partNameSuggestions').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
-  document.getElementById('partNumberSuggestions').innerHTML = numbers.map(n=>'<option value="'+n+'">').join('');
-  document.getElementById('partSupplierSuggestions').innerHTML = suppliers.map(n=>'<option value="'+n+'">').join('');
-}
-document.getElementById('partAddBtn').addEventListener('click', () => {
-  const partName = document.getElementById('partNameInput').value.trim();
-  if (!partName) return;
-  const partNumber = document.getElementById('partNumberInput').value.trim();
-  const supplier = document.getElementById('partSupplierInput').value.trim();
-  const quantity = document.getElementById('partQtyInput').value.trim();
-  const task = findTaskById(partsTaskRef);
-  const boatId = task ? task.boatId : null;
-  const tempId = 'temp_' + Date.now();
-  DATA.parts = DATA.parts || [];
-  DATA.parts.push({ partId: tempId, taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
-  enqueue('addPart', { taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
-  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
-  renderPartsList(); populatePartSuggestions();
-});
-async function deletePart(partId){
-  if (!confirm('Delete this part entry?')) return;
-  DATA.parts = (DATA.parts || []).filter(p => p.partId !== partId);
-  renderPartsList();
-  if (String(partId).indexOf('temp_') === 0) return;
-  await postToSheet('deletePart', { partId });
-}
-document.getElementById('partsCloseBtn').addEventListener('click', () => document.getElementById('partsOverlay').style.display = 'none');
-
-document.getElementById('confirmCancelBtn').addEventListener('click', () => { pendingCompleteTaskId = null; document.getElementById('confirmOverlay').style.display = 'none'; });
-document.getElementById('confirmYesBtn').addEventListener('click', () => {
-  const taskId = pendingCompleteTaskId;
-  pendingCompleteTaskId = null;
-  document.getElementById('confirmOverlay').style.display = 'none';
-  const task = taskId ? findTaskById(taskId) : null;
-  if (task) completeTimedTask(task);
-});
-document.getElementById('flagConfirmCancelBtn').addEventListener('click', () => { pendingFlagTaskId = null; document.getElementById('flagConfirmOverlay').style.display = 'none'; });
-document.getElementById('flagConfirmYesBtn').addEventListener('click', () => {
-  if (pendingFlagTaskId){
-    const task = findTaskById(pendingFlagTaskId);
-    if (task) setFlag(task, true);
-  }
-  pendingFlagTaskId = null;
-  document.getElementById('flagConfirmOverlay').style.display = 'none';
 });
 
 function priorityDotClass(t){ return 'p' + (t.priority || 2); }
