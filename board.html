@@ -104,10 +104,27 @@
     cursor:grab; position:relative; padding:4px; touch-action:none; user-select:none;
   }
   .pier-block.dragging{ opacity:.75; cursor:grabbing; z-index:30; box-shadow:0 8px 20px rgba(10,26,43,.3); }
+  .pier-block.type-dock{ background:var(--yard-bg); border-color:var(--yard-accent); color:var(--yard-accent); }
+  .pier-block.type-label{ background:var(--white); border:1.5px dashed var(--line); color:var(--ink); }
   .pier-block-label{ pointer-events:none; line-height:1.3; }
   .pier-block-edit{
     position:absolute; top:-8px; right:-8px; width:22px; height:22px; border-radius:50%; background:var(--white);
     border:1px solid var(--line); color:var(--slate); font-size:11px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .resize-handle{
+    position:absolute; background:var(--white); border:1px solid var(--line); color:var(--slate);
+    display:flex; align-items:center; justify-content:center; font-size:11px; cursor:nwse-resize;
+  }
+  .resize-handle.h{ right:-8px; top:50%; transform:translateY(-50%); width:18px; height:18px; border-radius:50%; cursor:ew-resize; }
+  .resize-handle.v{ bottom:-8px; left:50%; transform:translateX(-50%); width:18px; height:18px; border-radius:50%; cursor:ns-resize; }
+  .resize-handle.corner{ right:-8px; bottom:-8px; width:18px; height:18px; border-radius:4px; cursor:nwse-resize; }
+  .deco-dock{
+    background:var(--yard-bg); border:1px solid var(--yard-accent); color:var(--yard-accent); border-radius:6px;
+    display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; text-align:center; overflow:hidden;
+  }
+  .deco-label{
+    background:none; border:1.5px dashed var(--line); color:var(--slate); border-radius:6px;
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; text-align:center; padding:4px;
   }
   .slip-cell{
     width:60px; height:52px; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -191,6 +208,8 @@
     width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:9px;font-size:15px;font-family:inherit;margin-bottom:14px;
   }
   .btn-row{display:flex;gap:10px;}
+  #pierEditDirRow, #pierEditSizeRow{ display:flex; gap:10px; }
+  #pierEditDirRow select, #pierEditDirRow input, #pierEditSizeRow input{ flex:1; width:auto; }
   .btn-secondary{flex:1;padding:12px 0;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:var(--paper);color:var(--ink);}
   .btn-primary{flex:1;padding:12px 0;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;border:none;background:var(--go);color:var(--white);}
   .confirm-label{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--slate);font-weight:700;text-align:center;}
@@ -341,19 +360,30 @@
 
 <div class="overlay" id="pierEditOverlay" style="display:none;">
   <div class="sheet">
-    <h3 id="pierEditTitle">Add a pier</h3>
-    <p>Length and orientation only — drag it into position afterward.</p>
-    <input type="text" id="pierEditLabel" placeholder="Label (e.g. North Pier)">
-    <select id="pierEditDir">
-      <option value="h">Horizontal</option>
-      <option value="v">Vertical</option>
+    <h3 id="pierEditTitle">Add to the chart</h3>
+    <p id="pierEditSub">Set the size, then drag it into position afterward.</p>
+    <select id="pierEditType" onchange="onPierEditTypeChange()">
+      <option value="pier">Slip Pier — holds real slips</option>
+      <option value="dock">Dock / Walkway — not a slip</option>
+      <option value="label">Label — text only, no slips</option>
     </select>
-    <input type="text" id="pierEditCount" placeholder="Number of slips" inputmode="numeric">
+    <input type="text" id="pierEditLabel" placeholder="Label (e.g. North Pier)">
+    <div id="pierEditDirRow">
+      <select id="pierEditDir">
+        <option value="h">Horizontal</option>
+        <option value="v">Vertical</option>
+      </select>
+      <input type="text" id="pierEditCount" placeholder="Number of slips" inputmode="numeric">
+    </div>
+    <div id="pierEditSizeRow" style="display:none;">
+      <input type="text" id="pierEditWidth" placeholder="Width (cells)" inputmode="numeric">
+      <input type="text" id="pierEditHeight" placeholder="Height (cells)" inputmode="numeric">
+    </div>
     <div class="btn-row">
       <button class="btn-secondary" id="pierEditCancelBtn">Cancel</button>
       <button class="btn-primary" id="pierEditSaveBtn">Save</button>
     </div>
-    <button class="btn-secondary" id="pierEditDeleteBtn" style="width:100%;margin-top:10px;color:var(--stop);border-color:var(--stop);display:none;">Delete This Pier</button>
+    <button class="btn-secondary" id="pierEditDeleteBtn" style="width:100%;margin-top:10px;color:var(--stop);border-color:var(--stop);display:none;">Delete This</button>
   </div>
 </div>
 
@@ -1145,9 +1175,10 @@ function renderBoatProfile(){
 // only defines the SHAPE (which grid cells exist and what they're
 // grouped into); which real slip occupies each position is a separate
 // thing, stored via setSlipPosition as before.
+function segType(p){ return (p.type === 'dock' || p.type === 'label') ? p.type : 'pier'; } // blank/old rows default to 'pier'
 function buildShapeCells(){
   const cells = [];
-  (DATA.pierLayout || []).forEach(p => {
+  (DATA.pierLayout || []).filter(p => segType(p) === 'pier').forEach(p => {
     const count = Number(p.count) || 0;
     const row = Number(p.row) || 1;
     const col = Number(p.col) || 1;
@@ -1163,7 +1194,7 @@ function slipAtCell(row, col){
 function renderSlipChart(){
   const canvas = document.getElementById('slipChartCanvas');
   const cells = buildShapeCells();
-  canvas.innerHTML = cells.map(c => {
+  const slipCellsHtml = cells.map(c => {
     const style = 'grid-row:' + c.row + '; grid-column:' + c.col + ';';
     const slip = slipAtCell(c.row, c.col);
     if (!slip){
@@ -1180,6 +1211,23 @@ function renderSlipChart(){
     }
     return '<div class="slip-cell empty" style="' + style + '">' + editBtn +
       '<span class="slip-cell-num">' + num + '</span><span class="slip-cell-who">Empty</span></div>';
+  }).join('');
+  canvas.innerHTML = slipCellsHtml + staticDecorationsHtml();
+}
+// Docks and labels aren't slip positions -- outside edit mode they're
+// just shown in place (non-clickable) for context, alongside the real
+// slip squares built from the pier-type segments above.
+function staticDecorationsHtml(){
+  return (DATA.pierLayout || []).filter(p => segType(p) !== 'pier').map(p => {
+    const row = Number(p.row) || 1, col = Number(p.col) || 1, count = Number(p.count) || 1, height = Number(p.height) || 1;
+    if (segType(p) === 'label'){
+      const style = 'grid-row:' + row + ' / span ' + height + '; grid-column:' + col + ' / span ' + count + ';';
+      return '<div class="deco-label" style="' + style + '">' + (p.label || '') + '</div>';
+    }
+    const style = p.dir === 'v'
+      ? ('grid-row:' + row + ' / span ' + count + '; grid-column:' + col + ';')
+      : ('grid-row:' + row + '; grid-column:' + col + ' / span ' + count + ';');
+    return '<div class="deco-dock" style="' + style + '" title="' + (p.label || 'Dock') + '">' + (p.label || '') + '</div>';
   }).join('');
 }
 function jumpToSlipBoat(boatId){
@@ -1200,15 +1248,30 @@ function renderPierEditor(){
   const canvas = document.getElementById('slipChartCanvas');
   const piers = DATA.pierLayout || [];
   canvas.innerHTML = piers.map(p => {
+    const type = segType(p);
     const count = Number(p.count) || 1;
+    const height = Number(p.height) || 1;
     const row = Number(p.row) || 1;
     const col = Number(p.col) || 1;
+
+    if (type === 'label'){
+      const gridStyle = 'grid-row:' + row + ' / span ' + height + '; grid-column:' + col + ' / span ' + count + ';';
+      return '<div class="pier-block type-label" data-pier="' + p.pierId + '" style="' + gridStyle + '" onpointerdown="startPierDrag(event,\'' + p.pierId + '\')">' +
+        '<button class="pier-block-edit" onclick="event.stopPropagation(); openPierEdit(\'' + p.pierId + '\')" title="Edit or delete this label">&#9998;</button>' +
+        '<span class="pier-block-label">' + (p.label || 'Label') + '</span>' +
+        '<span class="resize-handle corner" onpointerdown="event.stopPropagation(); startResizeDrag(event,\'' + p.pierId + '\')" title="Drag to resize">&#8690;</span>' +
+      '</div>';
+    }
     const gridStyle = p.dir === 'v'
       ? ('grid-row:' + row + ' / span ' + count + '; grid-column:' + col + ';')
       : ('grid-row:' + row + '; grid-column:' + col + ' / span ' + count + ';');
-    return '<div class="pier-block" data-pier="' + p.pierId + '" style="' + gridStyle + '" onpointerdown="startPierDrag(event,\'' + p.pierId + '\')">' +
-      '<button class="pier-block-edit" onclick="event.stopPropagation(); openPierEdit(\'' + p.pierId + '\')" title="Edit or delete this pier">&#9998;</button>' +
-      '<span class="pier-block-label">' + (p.label || 'Pier') + '<br>' + count + ' slip' + (count === 1 ? '' : 's') + '</span>' +
+    const typeCls = type === 'dock' ? ' type-dock' : '';
+    const unit = type === 'dock' ? ' cell' + (count === 1 ? '' : 's') : ' slip' + (count === 1 ? '' : 's');
+    const handleCls = p.dir === 'v' ? 'resize-handle v' : 'resize-handle h';
+    return '<div class="pier-block' + typeCls + '" data-pier="' + p.pierId + '" style="' + gridStyle + '" onpointerdown="startPierDrag(event,\'' + p.pierId + '\')">' +
+      '<button class="pier-block-edit" onclick="event.stopPropagation(); openPierEdit(\'' + p.pierId + '\')" title="Edit or delete this">&#9998;</button>' +
+      '<span class="pier-block-label">' + (p.label || (type === 'dock' ? 'Dock' : 'Pier')) + '<br>' + count + unit + '</span>' +
+      '<span class="' + handleCls + '" onpointerdown="event.stopPropagation(); startResizeDrag(event,\'' + p.pierId + '\')" title="Drag to stretch">' + (p.dir === 'v' ? '&#8691;' : '&#8693;') + '</span>' +
     '</div>';
   }).join('');
 }
@@ -1247,7 +1310,7 @@ async function onPierDragEnd(e){
   const newRow = Math.max(1, (Number(pier.row) || 1) + rowDelta);
   const newCol = Math.max(1, (Number(pier.col) || 1) + colDelta);
   try{
-    const res = await postToSheet('savePierSegment', { pierId, label: pier.label, dir: pier.dir, row: newRow, col: newCol, count: pier.count });
+    const res = await postToSheet('savePierSegment', { pierId, label: pier.label, type: segType(pier), dir: pier.dir, row: newRow, col: newCol, count: pier.count, height: pier.height });
     if (res && res.error){ alert('Could not move that pier: ' + res.error); }
     await refreshData();
     renderPierEditor();
@@ -1257,34 +1320,118 @@ async function onPierDragEnd(e){
   }
 }
 
+let resizeDrag = null;
+function startResizeDrag(e, pierId){
+  e.preventDefault();
+  const pier = (DATA.pierLayout || []).find(p => p.pierId === pierId);
+  if (!pier) return;
+  const el = document.querySelector('.pier-block[data-pier="' + pierId + '"]');
+  resizeDrag = { pierId, el, startX: e.clientX, startY: e.clientY, origCount: Number(pier.count) || 1, origHeight: Number(pier.height) || 1 };
+  window.addEventListener('pointermove', onResizeDragMove);
+  window.addEventListener('pointerup', onResizeDragEnd);
+}
+function onResizeDragMove(e){
+  if (!resizeDrag) return;
+  const pier = (DATA.pierLayout || []).find(p => p.pierId === resizeDrag.pierId);
+  if (!pier) return;
+  const type = segType(pier);
+  const dx = e.clientX - resizeDrag.startX;
+  const dy = e.clientY - resizeDrag.startY;
+  if (type === 'label'){
+    const w = Math.max(1, resizeDrag.origCount + Math.round(dx / CELL_W));
+    const h = Math.max(1, resizeDrag.origHeight + Math.round(dy / CELL_H));
+    resizeDrag.el.style.gridColumn = pier.col + ' / span ' + w;
+    resizeDrag.el.style.gridRow = pier.row + ' / span ' + h;
+  } else if (pier.dir === 'v'){
+    const len = Math.max(1, resizeDrag.origCount + Math.round(dy / CELL_H));
+    resizeDrag.el.style.gridRow = pier.row + ' / span ' + len;
+  } else {
+    const len = Math.max(1, resizeDrag.origCount + Math.round(dx / CELL_W));
+    resizeDrag.el.style.gridColumn = pier.col + ' / span ' + len;
+  }
+}
+async function onResizeDragEnd(e){
+  if (!resizeDrag) return;
+  window.removeEventListener('pointermove', onResizeDragMove);
+  window.removeEventListener('pointerup', onResizeDragEnd);
+  const pierId = resizeDrag.pierId;
+  const pier = (DATA.pierLayout || []).find(p => p.pierId === pierId);
+  const dx = e.clientX - resizeDrag.startX;
+  const dy = e.clientY - resizeDrag.startY;
+  resizeDrag = null;
+  if (!pier) { renderPierEditor(); return; }
+  const type = segType(pier);
+  let newCount = Number(pier.count) || 1, newHeight = Number(pier.height) || 1;
+  if (type === 'label'){
+    newCount = Math.max(1, newCount + Math.round(dx / CELL_W));
+    newHeight = Math.max(1, newHeight + Math.round(dy / CELL_H));
+  } else if (pier.dir === 'v'){
+    newCount = Math.max(1, newCount + Math.round(dy / CELL_H));
+  } else {
+    newCount = Math.max(1, newCount + Math.round(dx / CELL_W));
+  }
+  try{
+    const res = await postToSheet('savePierSegment', { pierId, label: pier.label, type, dir: pier.dir, row: pier.row, col: pier.col, count: newCount, height: newHeight });
+    if (res && res.error){ alert('Could not resize that: ' + res.error); }
+  } catch(err){
+    alert('Could not resize that: ' + (err && err.message ? err.message : err));
+  }
+  await refreshData();
+  renderPierEditor();
+}
+
 let editingPierId = null;
+function onPierEditTypeChange(){
+  const type = document.getElementById('pierEditType').value;
+  document.getElementById('pierEditDirRow').style.display = type === 'label' ? 'none' : 'flex';
+  document.getElementById('pierEditSizeRow').style.display = type === 'label' ? 'flex' : 'none';
+  document.getElementById('pierEditCount').placeholder = type === 'dock' ? 'Length (cells)' : 'Number of slips';
+}
 function openPierEdit(pierId){
   editingPierId = pierId;
   const pier = pierId ? (DATA.pierLayout || []).find(p => p.pierId === pierId) : null;
-  document.getElementById('pierEditTitle').textContent = pier ? 'Edit pier' : 'Add a pier';
+  const type = pier ? segType(pier) : 'pier';
+  document.getElementById('pierEditTitle').textContent = pier ? 'Edit this' : 'Add to the chart';
+  document.getElementById('pierEditType').value = type;
+  document.getElementById('pierEditType').disabled = !!pier; // changing type after creation would mix up count/height meaning -- delete and re-add instead
   document.getElementById('pierEditLabel').value = pier ? pier.label : '';
   document.getElementById('pierEditDir').value = pier ? pier.dir : 'h';
   document.getElementById('pierEditCount').value = pier ? pier.count : '';
+  document.getElementById('pierEditWidth').value = pier ? pier.count : '';
+  document.getElementById('pierEditHeight').value = pier ? pier.height : '';
   document.getElementById('pierEditDeleteBtn').style.display = pier ? 'block' : 'none';
+  onPierEditTypeChange();
   document.getElementById('pierEditOverlay').style.display = 'flex';
 }
 document.getElementById('pierEditCancelBtn').addEventListener('click', () => {
   editingPierId = null;
+  document.getElementById('pierEditType').disabled = false;
   document.getElementById('pierEditOverlay').style.display = 'none';
 });
 document.getElementById('pierEditSaveBtn').addEventListener('click', async () => {
   const label = document.getElementById('pierEditLabel').value.trim();
-  const dir = document.getElementById('pierEditDir').value;
-  const count = parseInt(document.getElementById('pierEditCount').value, 10);
-  if (!label){ alert('Give this pier a name.'); return; }
-  if (!count || count < 1){ alert('Enter how many slips this pier has.'); return; }
+  const type = document.getElementById('pierEditType').value;
+  if (!label){ alert('Give this a name.'); return; }
+
+  let dir = 'h', count, height = 1;
+  if (type === 'label'){
+    count = parseInt(document.getElementById('pierEditWidth').value, 10);
+    height = parseInt(document.getElementById('pierEditHeight').value, 10) || 1;
+    if (!count || count < 1){ alert('Enter a width in cells.'); return; }
+  } else {
+    dir = document.getElementById('pierEditDir').value;
+    count = parseInt(document.getElementById('pierEditCount').value, 10);
+    if (!count || count < 1){ alert(type === 'dock' ? 'Enter how many cells long this dock is.' : 'Enter how many slips this pier has.'); return; }
+  }
+
   const pier = editingPierId ? (DATA.pierLayout || []).find(p => p.pierId === editingPierId) : null;
   const row = pier ? pier.row : NEW_PIER_ROW;
   const col = pier ? pier.col : NEW_PIER_COL;
   try{
-    const res = await postToSheet('savePierSegment', { pierId: editingPierId || '', label, dir, row, col, count });
+    const res = await postToSheet('savePierSegment', { pierId: editingPierId || '', label, type, dir, row, col, count, height });
     if (res && res.error){ alert(res.error); return; }
     document.getElementById('pierEditOverlay').style.display = 'none';
+    document.getElementById('pierEditType').disabled = false;
     editingPierId = null;
     await refreshData();
     renderPierEditor();
@@ -1294,11 +1441,12 @@ document.getElementById('pierEditSaveBtn').addEventListener('click', async () =>
 });
 document.getElementById('pierEditDeleteBtn').addEventListener('click', async () => {
   if (!editingPierId) return;
-  if (!confirm('Delete this pier from the chart? Any real slips placed on its squares stay on file but won\'t show on the chart until reassigned somewhere.')) return;
+  if (!confirm('Delete this from the chart? Any real slips placed on its squares stay on file but won\'t show on the chart until reassigned somewhere.')) return;
   try{
     const res = await postToSheet('deletePierSegment', { pierId: editingPierId });
     if (res && res.error){ alert(res.error); return; }
     document.getElementById('pierEditOverlay').style.display = 'none';
+    document.getElementById('pierEditType').disabled = false;
     editingPierId = null;
     await refreshData();
     renderPierEditor();
