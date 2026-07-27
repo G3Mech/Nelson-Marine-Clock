@@ -422,15 +422,17 @@
  *   Mode, another phone, the office dashboard) to a boat this phone has
  *   open will NOT show up here until the page is reloaded.
  *   This was a deliberate scope cut for now, not an oversight: this page
- *   keeps a SEPARATE per-boat working copy (currentCtx.tasks, with runtime
- *   fields like _segments attached directly to each task object) rather
- *   than rendering straight from DATA.tasks the way board.html/search.html
- *   do. Wiring in a periodic refresh safely means carrying forward
- *   in-progress timer segments and not-yet-synced local edits across the
- *   refresh (the same pattern board.html/search.html use via
- *   pendingStatusOverride/mergeFetchedTasks, adapted to this page's
- *   per-boat-copy model) -- worth doing as its own focused, testable
- *   change rather than folding it into an unrelated pass.
+ *   keeps a SEPARATE per-boat working copy (currentCtx.tasks) rather than
+ *   rendering straight from DATA.tasks the way board.html/search.html do.
+ *   Wiring in a periodic refresh safely would still need the same
+ *   pendingStatusOverride/mergeFetchedTasks pattern board.html/search.html
+ *   use, adapted to this page's per-boat-copy model -- worth doing as its
+ *   own focused, testable change rather than folding it into an unrelated
+ *   pass. It IS meaningfully simpler now than it used to be, though: a
+ *   task's elapsed time is server truth now (accumulatedMs/activeSince,
+ *   see liveMs() below), not a local _segments history this page had to
+ *   carry forward across a refresh -- that was the harder part of this
+ *   gap, and it's gone.
  * ========================================================================== */
 
 // ======================= CONFIG =======================
@@ -466,7 +468,8 @@ let DATA = null;                 // { locations, tasks, employees, entries, cust
 let currentUser = null;
 let currentCtx = null;           // { mode:'slip'|'yard', slipId, boatId }
 let activeTaskId = null;         // taskId of whichever task is currently timing
-let segStart = null;             // when the active task's current segment began
+// No separate segStart anymore -- the currently-active task's own
+// activeSince field (server truth, see liveMs()) is where that lives now.
 // Every task completed this session, regardless of which boat it belongs
 // to -- gives instant "Today, Done Jobs" feedback without waiting on the
 // next server fetch to catch up. Merged with DATA.completedTasks (which
@@ -548,7 +551,7 @@ function playDoneSound(){ const ctx=getCtx(); tone(ctx,660,ctx.currentTime,0.14)
 // still waiting to reach it, not the only copy of the truth.
 function saveLocalState(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentUser, currentCtx, activeTaskId, segStart, sessionCompletions }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentUser, currentCtx, activeTaskId, sessionCompletions }));
   } catch(e){ console.warn('Could not save locally:', e); }
 }
 function loadLocalState(){
@@ -559,7 +562,6 @@ function loadLocalState(){
     if (saved.currentUser) currentUser = saved.currentUser;
     if (saved.currentCtx) currentCtx = saved.currentCtx;
     if (saved.activeTaskId) activeTaskId = saved.activeTaskId;
-    if (saved.segStart) segStart = saved.segStart;
     if (saved.sessionCompletions) {
       const today = new Date().toISOString().slice(0,10);
       sessionCompletions = saved.sessionCompletions.filter(c => c.completedAt.slice(0,10) === today);
@@ -1026,8 +1028,24 @@ photoSlot.addEventListener('click', ()=>{
 // ======================= timer helpers =======================
 function fmtDuration(ms){ const s=Math.max(0,Math.floor(ms/1000)); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
 function findTask(taskId){ return currentCtx && currentCtx.tasks ? currentCtx.tasks.find(t=>t.taskId===taskId) : null; }
-function segMs(task){ return (task._segments||[]).reduce((sum,s)=> sum+(s.end-s.start), 0); }
-function liveMs(task){ return segMs(task) + (task.taskId===activeTaskId && segStart ? (Date.now()-segStart) : 0); }
+// Elapsed time is server truth, not reconstructed from this phone's own
+// history: accumulatedMs (total logged before whatever segment is
+// currently open) plus (now - activeSince) if the task is currently
+// active. See this file's header comment for why _segments is gone.
+function liveMs(task){
+  const accumulated = Number(task.accumulatedMs) || 0;
+  const openSince = (task.status === 'active' && task.activeSince) ? new Date(task.activeSince).getTime() : null;
+  return accumulated + (openSince ? Math.max(0, Date.now() - openSince) : 0);
+}
+// Closes out whatever segment was open on this task (if any) and folds
+// it into accumulatedMs -- mirrors updateTask_'s own math server-side,
+// kept here purely so this phone's own display updates instantly rather
+// than waiting on a round trip. Returns the new total.
+function closeOpenSegment_(task){
+  const openSince = (task.status === 'active' && task.activeSince) ? new Date(task.activeSince).getTime() : null;
+  const prior = Number(task.accumulatedMs) || 0;
+  return openSince ? prior + Math.max(0, Date.now() - openSince) : prior;
+}
 
 // ======================= view rendering =======================
 function renderView(){
@@ -1141,12 +1159,11 @@ function renderChecklist(){
             '<button class="undo-link" data-act="undo" data-task="'+t.taskId+'">Undo — reopen</button>'+
           '</div></div>';
       }
-      const mins = Math.round(segMs(t)/60000);
-      const sessionNote = (t._segments||[]).length>1 ? (' · '+t._segments.length+' sessions') : '';
+      const mins = Math.round(liveMs(t)/60000);
       return '<div class="task-row done '+priorityClass(t)+'" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
           '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
-          '<div class="task-sub">Total '+mins+' min'+sessionNote+'</div></div>'+
+          '<div class="task-sub">Total '+mins+' min</div></div>'+
           '<span class="check-static">&#10003;</span></div>'+
         '<div class="task-row-secondary">'+
           '<span class="notes-photo-group">'+
@@ -1173,7 +1190,7 @@ function renderChecklist(){
         '</div></div>';
     }
     if (t.status === 'paused'){
-      const mins = Math.round(segMs(t)/60000);
+      const mins = Math.round(liveMs(t)/60000);
       return '<div class="task-row paused '+priorityClass(t)+'" data-rowid="'+t.taskId+'">' +
         '<div class="task-row-main">'+dragHandle+
           '<div class="task-main-content"><div class="task-name">'+t.name+'</div>'+
@@ -1246,16 +1263,17 @@ function completeSimpleTask(taskId){
 }
 
 function beginSegment(task){
-  task.status='active'; segStart = Date.now(); activeTaskId = task.taskId;
+  const now = new Date().toISOString();
+  task.status='active'; task.activeSince = now; activeTaskId = task.taskId;
   saveLocalState();
   enqueue('updateTask', { taskId: task.taskId, status: 'active' });
   playStartSound(); renderView();
 }
 function pauseTask(taskId){
   const task = findTask(taskId); if (!task) return;
-  task._segments = task._segments || [];
-  task._segments.push({ start: segStart, end: Date.now() });
-  segStart = null; task.status='paused'; activeTaskId=null;
+  task.accumulatedMs = closeOpenSegment_(task);
+  task.activeSince = '';
+  task.status='paused'; activeTaskId=null;
   saveLocalState();
   enqueue('updateTask', { taskId, status: 'paused' });
   playPauseSound(); renderView();
@@ -1272,22 +1290,22 @@ document.getElementById('confirmYesBtn').addEventListener('click', ()=>{
 });
 function completeTask(taskId){
   const task = findTask(taskId); if (!task) return;
-  if (task.taskId === activeTaskId && segStart){
-    task._segments = task._segments || [];
-    task._segments.push({ start: segStart, end: Date.now() });
-    segStart = null; activeTaskId = null;
-  }
+  const finalAccumulated = closeOpenSegment_(task);
+  if (task.taskId === activeTaskId) activeTaskId = null;
   task.status = 'done';
+  task.activeSince = '';
+  task.accumulatedMs = finalAccumulated;
   recordSessionCompletion(taskId, currentCtx.boatId, task.name, task.billMode);
   saveLocalState();
-  enqueue('updateTask', { taskId, status: 'done' });
-  const mins = Math.round(segMs(task)/60000);
-  const last = (task._segments||[])[task._segments.length-1] || { start: Date.now(), end: Date.now() };
-  enqueue('logEntry', {
-    taskId, boatId: currentCtx.boatId, workOrder: (task.workOrder !== undefined ? task.workOrder : currentCtx.workOrder),
-    employee: currentUser, taskName: task.name,
-    segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
-  });
+  // ONE action, not two: the server computes the true total itself (from
+  // its own accumulatedMs, closed out the same way closeOpenSegment_ just
+  // did locally) and writes the Recorded Times entry directly, as part of
+  // handling this same 'done' status change -- see logFinalDuration_ in
+  // Code.gs. There used to be a separate 'logEntry' call here carrying a
+  // duration this phone computed from its own local _segments history --
+  // exactly what let two devices touching the same task (this phone and,
+  // say, Shop Mode) disagree about how long it actually ran.
+  enqueue('updateTask', { taskId, status: 'done', employee: currentUser || 'Unknown' });
   playDoneSound(); renderView();
 }
 // Flagging moves a task out of the checklist entirely into the
@@ -1298,6 +1316,8 @@ function setFlag(taskId, flagged){
   const task = findTask(taskId); if (!task) return;
   if (flagged){
     task._preFlagStatus = task.status; // remembered so Unflag can restore it, rather than always dropping back to pending
+    task.accumulatedMs = closeOpenSegment_(task);
+    task.activeSince = '';
     task.status = 'flagged';
   } else {
     task.status = task._preFlagStatus || 'pending';
@@ -1382,7 +1402,7 @@ document.getElementById('newTaskAddBtn').addEventListener('click', ()=>{
   lastNewTaskBillMode = billMode;
   const tempId = 'temp_' + Date.now();
   currentCtx.tasks = currentCtx.tasks || [];
-  const newTaskObj = { taskId: tempId, boatId: currentCtx.boatId, name, status:'pending', order: currentCtx.tasks.length+1, note:'', billMode, priority: 2, workOrder: currentCtx.workOrder || '', _segments:[] };
+  const newTaskObj = { taskId: tempId, boatId: currentCtx.boatId, name, status:'pending', order: currentCtx.tasks.length+1, note:'', billMode, priority: 2, workOrder: currentCtx.workOrder || '', accumulatedMs: 0, activeSince: '' };
   currentCtx.tasks.push(newTaskObj);
   // CONSOLIDATION FIX (see file header): also push into DATA.tasks, the
   // full synced list -- not just currentCtx.tasks, this page's per-boat
