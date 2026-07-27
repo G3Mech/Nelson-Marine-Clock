@@ -800,6 +800,13 @@ function startTask(task){
     // lands, which the next confirmed fetch will pick up automatically
     // (see mergeFetchedTasks); this is just so the tap feels instant.
     pendingStatusOverride[task.taskId] = { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0 };
+    // TEMPORARY DIAGNOSTIC LOGGING -- safe to remove once the "resets to
+    // 0 on the tab that started it" bug is pinned down. Open DevTools
+    // (F12) > Console on whichever tab you expect to misbehave BEFORE
+    // tapping Start, then watch for [timer-debug] lines. Compare the
+    // taskId/timestamps here against whatever mergeFetchedTasks logs
+    // later for the SAME taskId.
+    console.log('[timer-debug] START', task.taskId, 'at', now, 'override:', JSON.parse(JSON.stringify(pendingStatusOverride[task.taskId])));
     touchActivity();
     enqueue('updateTask', { taskId: task.taskId, status: 'active' });
     playStartSound();
@@ -821,6 +828,7 @@ function pauseTask(task){
   task.activeSince = '';
   task.accumulatedMs = newAccumulated;
   pendingStatusOverride[task.taskId] = { status: 'paused', activeSince: '', accumulatedMs: newAccumulated };
+  console.log('[timer-debug] PAUSE', task.taskId, 'newAccumulated:', newAccumulated, 'override:', JSON.parse(JSON.stringify(pendingStatusOverride[task.taskId])));
   enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
   playPauseSound();
   render();
@@ -2009,7 +2017,16 @@ function mergeFetchedTasks(freshTasks){
     // fetch came from the SAME server-side row, in the SAME request -- so
     // trust the whole fetched task at that point rather than continuing
     // to hold our own guess forever.
-    if (t.status === override.status){ delete pendingStatusOverride[t.taskId]; return t; }
+    if (t.status === override.status){
+      // TEMPORARY DIAGNOSTIC LOGGING -- see startTask/pauseTask for what
+      // to look for. This is the line that decides what you actually see
+      // on screen right after a refresh: compare "fetched" here against
+      // what startTask/pauseTask logged for the same taskId a moment ago.
+      console.log('[timer-debug] MERGE: status confirmed for', t.taskId, '-> trusting fetched:', { status: t.status, activeSince: t.activeSince, accumulatedMs: t.accumulatedMs });
+      delete pendingStatusOverride[t.taskId];
+      return t;
+    }
+    console.log('[timer-debug] MERGE: still protecting', t.taskId, '- fetched status was', t.status, 'expected', override.status, '- showing local guess instead:', override);
     return Object.assign({}, t, { status: override.status, activeSince: override.activeSince, accumulatedMs: override.accumulatedMs });
   });
 }
