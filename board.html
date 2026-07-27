@@ -635,7 +635,29 @@ async function flushQueue(){
         if (item.action === 'addTask' && item.tempId && result && result.id){
           reconcileTempTaskId(item.tempId, result.id);
         }
-        if (item.action === 'updateTask' && item.body && item.body.taskId){
+        // BUG FIX: this used to delete the override unconditionally the
+        // moment ANY updateTask call for this taskId succeeded -- including
+        // a note-only save (no status field at all) or an older queued
+        // status change that a newer local action had already superseded.
+        // Concretely: Start -> enqueue status:'active', override='active'.
+        // If Pause happens before that first POST resolves, override
+        // becomes 'paused' and a second updateTask is queued behind it.
+        // When the FIRST ('active') POST finally resolves, this used to
+        // blindly wipe the override -- even though it's now protecting the
+        // still-in-flight 'paused' update, not the one that just finished.
+        // If the periodic 15s refetch lands in that now-unprotected window,
+        // mergeFetchedTasks has nothing to override with, so the stale
+        // server status ('active') shows through: the just-paused task
+        // flickers back into "Now Running", frozen (its local timer's
+        // segStart was already correctly cleared by pauseTask, so the
+        // reappeared card just displays a static number instead of ticking).
+        // It self-corrects on the NEXT refresh, once the real 'paused'
+        // update has actually landed -- hence "briefly."
+        // Only clear the override here if it still matches the status THIS
+        // completed action set, and only when this action actually carried
+        // a status (a note-only save must never touch the override at all).
+        if (item.action === 'updateTask' && item.body && item.body.taskId && item.body.status !== undefined
+            && pendingStatusOverride[item.body.taskId] === item.body.status){
           delete pendingStatusOverride[item.body.taskId];
         }
         const remaining = loadQueue(); remaining.shift(); saveQueue(remaining);
@@ -1748,10 +1770,21 @@ function updateStatusBar(){
 
 function mergeFetchedTasks(freshTasks){
   return freshTasks.map(t => {
-    if (pendingStatusOverride[t.taskId] !== undefined){
-      return Object.assign({}, t, { status: pendingStatusOverride[t.taskId] });
-    }
-    return t;
+    const override = pendingStatusOverride[t.taskId];
+    if (override === undefined) return t;
+    // A second, independent guard against the same "stale status flickers
+    // back in" bug described above flushQueue's override-deletion logic --
+    // this one for a different cause: doGet and doPost are separate Apps
+    // Script executions with no guaranteed ordering, so a periodic GET that
+    // happens to race an in-flight status-changing POST can occasionally
+    // read the sheet before that POST's write has landed, even though the
+    // GET's response reaches the browser afterward. If the sheet's OWN
+    // status already agrees with what we're holding as an override, the
+    // update has genuinely caught up server-side -- safe to drop the
+    // override now rather than waiting on the queue-side cleanup, which
+    // narrows the window on the next refresh too.
+    if (t.status === override){ delete pendingStatusOverride[t.taskId]; return t; }
+    return Object.assign({}, t, { status: override });
   });
 }
 async function refreshData(){
