@@ -30,6 +30,7 @@
   .brand .sub{ font-size:12.5px; font-weight:600; color:#9fb4c4; margin-left:10px; letter-spacing:.04em; }
   .header-right{ display:flex; align-items:center; gap:14px; justify-self:end; }
   .header-search{ position:relative; justify-self:center; width:100%; }
+  header.profile-active .header-search{ margin-left:36px; }
   .search-suggestions{ display:none; position:absolute; left:0; right:0; top:calc(100% + 6px); background:var(--white); border-radius:10px; box-shadow:0 12px 26px rgba(10,26,43,.3); max-height:360px; overflow-y:auto; z-index:60; }
   .search-suggestions.show{ display:block; }
   .search-suggestion-item{ padding:11px 16px; cursor:pointer; border-bottom:1px solid var(--line); }
@@ -926,6 +927,7 @@ function openBoatProfile(boatId){
   document.getElementById('mainView').style.display = 'none';
   document.getElementById('profileView').style.display = 'block';
   document.getElementById('backArrowBtn').style.display = 'inline-flex';
+  document.querySelector('header').classList.add('profile-active');
   const searchInput = document.getElementById('boardSearch');
   searchInput.value = '';
   document.getElementById('searchSuggestions').classList.remove('show');
@@ -936,6 +938,7 @@ function closeBoatProfile(){
   document.getElementById('profileView').style.display = 'none';
   document.getElementById('mainView').style.display = 'flex';
   document.getElementById('backArrowBtn').style.display = 'none';
+  document.querySelector('header').classList.remove('profile-active');
   renderWorkOrders();
   renderRunning();
 }
@@ -957,8 +960,15 @@ function renderBoatProfile(){
   // The general boat photo (no taskId attached) -- same one shown on the
   // phone page's boat card. Most recently uploaded wins if there's more
   // than one.
-  const boatPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
-  const boatPhoto = boatPhotos.length ? boatPhotos[boatPhotos.length - 1] : null;
+  // Prefer a dedicated general boat photo (no taskId -- the same kind the
+  // phone's boat photo slot creates), but Shop Mode has no equivalent of
+  // that slot yet -- every photo taken here goes through the Notes popup
+  // and is attached to a specific task instead. Fall back to the most
+  // recent photo of ANY kind for this boat so something still shows.
+  const generalPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
+  const anyPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId);
+  const boatPhoto = generalPhotos.length ? generalPhotos[generalPhotos.length - 1]
+    : (anyPhotos.length ? anyPhotos[anyPhotos.length - 1] : null);
   const photoHtml = boatPhoto
     ? '<img class="profile-photo" src="' + boatPhoto.url + '" alt="Boat photo" onclick="openPhotoView(\'' + boatPhoto.photoId + '\')">'
     : '';
