@@ -656,8 +656,29 @@ async function flushQueue(){
         // Only clear the override here if it still matches the status THIS
         // completed action set, and only when this action actually carried
         // a status (a note-only save must never touch the override at all).
-        if (item.action === 'updateTask' && item.body && item.body.taskId && item.body.status !== undefined
-            && pendingStatusOverride[item.body.taskId] === item.body.status){
+        //
+        // FOLLOW-UP FIX: even with the above guard, this was still clearing
+        // the override the moment OUR OWN POST reported success -- which
+        // turned out not to be strong enough proof. Apps Script doesn't
+        // lock across separate executions by default, so "our updateTask
+        // POST came back OK" does not guarantee that a background refresh's
+        // independent doGet, landing right behind it, is guaranteed to read
+        // that same write yet. That's a narrow, genuinely occasional gap --
+        // not the queued-actions race described above, a real one -- and it
+        // reproduced as the identical symptom: a just-paused task flickering
+        // back into "Now Running", frozen, rarely, on a single device with
+        // nothing else queued.
+        //
+        // The fix: don't trust our own POST's success as proof for anything
+        // that stays in Active Tasks (active/paused/flagged/pending) -- only
+        // drop the guard once a REAL subsequent fetch confirms it, via
+        // mergeFetchedTasks's own self-clearing below. The one exception is
+        // 'done': a completed task moves OUT of Active Tasks entirely, so it
+        // will never again appear in a future getAll() fetch for
+        // mergeFetchedTasks to confirm against -- this is the only place
+        // that override ever gets cleaned up, so it still has to happen here.
+        if (item.action === 'updateTask' && item.body && item.body.taskId && item.body.status === 'done'
+            && pendingStatusOverride[item.body.taskId] === 'done'){
           delete pendingStatusOverride[item.body.taskId];
         }
         const remaining = loadQueue(); remaining.shift(); saveQueue(remaining);
