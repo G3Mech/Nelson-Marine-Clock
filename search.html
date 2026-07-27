@@ -320,17 +320,29 @@
  *     employee and the offline action queue are one continuous session
  *     across both pages -- starting a task here and finishing it from the
  *     main checklist (or vice versa) is meant to feel like one tool, not
- *     two. It keeps its own separate RUNTIME_KEY, though, since unlike
- *     index.html this page can have more than one boat's timer live in
- *     view over a session (any boat you've looked up), not just "the one
- *     currently on screen".
+ *     two.
  *   - Unlike index.html, this page renders straight from DATA.tasks (see
  *     renderBoatProfile) rather than keeping a separate per-boat copy --
  *     same single-source-of-truth pattern as board.html, and the reason
  *     this page does NOT have the "added task vanishes" bug that
  *     index.html's currentCtx.tasks copy caused (see index.html's header
  *     comment for that history).
- *   - Polls the server every 15s via refreshData(), same as board.html.
+ *   - Polls the server every 15s via refreshData(), same as board.html --
+ *     and, as of this pass, ALSO applies pendingStatusOverride to what it
+ *     fetches (mergeFetchedTasks), which it never actually did before.
+ *
+ * ELAPSED TIME IS SERVER TRUTH, NOT RECONSTRUCTED LOCALLY: same as
+ *   board.html now -- each task carries accumulatedMs/activeSince,
+ *   maintained by Code.gs regardless of which device changed it, and
+ *   liveMs() below just derives the live number from those two fields.
+ *   This page used to keep its own separate RUNTIME_KEY-backed local
+ *   segment history (justified at the time by this page being able to
+ *   have more than one boat's timer in view over a session) -- that's
+ *   exactly the design that let two devices touching the same task
+ *   disagree about its total time, so it's gone now, along with the
+ *   'logEntry' call a timed completion used to send separately (Code.gs's
+ *   updateTask_ writes the Recorded Times entry itself now, from its own
+ *   accumulated total, as part of the same 'done' status change).
  * ========================================================================== */
 
 // ======================= CONFIG =======================
@@ -345,18 +357,18 @@ const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-
 const STORAGE_KEY = 'nelsonMarineClockState_v2';
 const QUEUE_KEY = 'nelsonMarineClockQueue_v1';
 const CACHE_KEY = 'nelsonMarineClockDataCache_v1';
-// This page's own local timing state -- which task(s) it's currently
-// tracking segments for. Kept separate from index.html's single
-// currentCtx/activeTaskId model since this page can look up ANY boat,
-// not just one "current" one; ensureRuntime() below seeds it from the
-// server's activeSince the same way Shop Mode does, so a task already
-// running (from the main checklist, or from Shop Mode) still shows a
-// live, reasonably accurate timer here.
-const RUNTIME_KEY = 'nelsonMarineSearchRuntime_v1';
+// No RUNTIME_KEY/local segment history anymore -- a task's elapsed time
+// (accumulatedMs/activeSince) comes straight off the fetched task object
+// now, same as every other page, so there's nothing page-specific left to
+// persist for it. See liveMs() below.
 
 let DATA = null;
 let currentUser = null;
-let taskRuntime = {};
+// Per-task { status, activeSince, accumulatedMs } guard, same purpose and
+// shape as board.html's -- see this file's mergeFetchedTasks (added below,
+// there wasn't one here before) and Code.gs's updateTask_ for why elapsed
+// time is server truth now rather than reconstructed from each device's
+// own local segment history.
 let pendingStatusOverride = {};
 let isOnline = navigator.onLine;
 
@@ -392,8 +404,6 @@ function saveCurrentUser(name){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
   } catch(e){}
 }
-function saveRuntime(){ try{ localStorage.setItem(RUNTIME_KEY, JSON.stringify(taskRuntime)); } catch(e){} }
-function loadRuntime(){ try{ const raw = localStorage.getItem(RUNTIME_KEY); if (raw) taskRuntime = JSON.parse(raw); } catch(e){} }
 function cacheData(){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(DATA)); } catch(e){} }
 function loadCachedData(){ try{ const raw = localStorage.getItem(CACHE_KEY); return raw ? JSON.parse(raw) : null; } catch(e){ return null; } }
 
@@ -436,7 +446,19 @@ async function flushQueue(){
         if (item.action === 'addTask' && item.tempId && result && result.id){
           reconcileTempTaskId(item.tempId, result.id);
         }
-        if (item.action === 'updateTask' && item.body && item.body.taskId){
+        // Only clear the override for a 'done' transition, and only once
+        // this exact call's own status still matches what's held -- same
+        // fix as board.html, for the same reason: 'done' is the one case
+        // that HAS to be cleared here, since a completed task moves out of
+        // Active Tasks entirely and will never again appear in a future
+        // getAll() fetch for mergeFetchedTasks (below) to confirm against.
+        // Everything else (active/paused/flagged/pending) is left alone
+        // here and only cleared once a real subsequent fetch confirms it --
+        // "our own POST came back OK" isn't proof a closely-timed,
+        // independent doGet is guaranteed to see that write yet, since
+        // Apps Script doesn't lock across separate executions.
+        if (item.action === 'updateTask' && item.body && item.body.taskId && item.body.status === 'done'
+            && pendingStatusOverride[item.body.taskId] && pendingStatusOverride[item.body.taskId].status === 'done'){
           delete pendingStatusOverride[item.body.taskId];
         }
         const remaining = loadQueue(); remaining.shift(); saveQueue(remaining);
@@ -450,7 +472,6 @@ async function flushQueue(){
 }
 function reconcileTempTaskId(tempId, realId){
   if (DATA){ const t = DATA.tasks.find(t => t.taskId === tempId); if (t) t.taskId = realId; }
-  if (taskRuntime[tempId]){ taskRuntime[realId] = taskRuntime[tempId]; delete taskRuntime[tempId]; saveRuntime(); }
   if (pendingStatusOverride[tempId] !== undefined){ pendingStatusOverride[realId] = pendingStatusOverride[tempId]; delete pendingStatusOverride[tempId]; }
   const q = loadQueue();
   q.forEach(item => { if (item.body && item.body.taskId === tempId) item.body.taskId = realId; });
@@ -487,9 +508,31 @@ async function fetchAllData(){
   if (json.error) throw new Error(json.error);
   return json;
 }
+// RESTORED/NEW: this page never actually applied pendingStatusOverride to
+// fetched data at all -- the variable existed and got set on every
+// start/pause/flag/complete, but refreshData() below just replaced DATA
+// wholesale with whatever the server returned, so a periodic fetch racing
+// an in-flight status change could silently overwrite it with nothing to
+// protect against that. board.html had a related but different bug (it
+// DID apply the override, but cleared it too eagerly); this page's gap was
+// simpler and bigger -- there was no protection here at all. Same fix
+// pattern as board.html now: only STATUS is compared (activeSince/
+// accumulatedMs are independently-computed guesses that were never going
+// to match exactly), and once status agrees, the whole fetched task is
+// trusted from that point on.
+function mergeFetchedTasks(freshTasks){
+  return freshTasks.map(t => {
+    const override = pendingStatusOverride[t.taskId];
+    if (override === undefined) return t;
+    if (t.status === override.status){ delete pendingStatusOverride[t.taskId]; return t; }
+    return Object.assign({}, t, { status: override.status, activeSince: override.activeSince, accumulatedMs: override.accumulatedMs });
+  });
+}
 async function refreshData(){
   try{
-    DATA = await fetchAllData();
+    const json = await fetchAllData();
+    json.tasks = mergeFetchedTasks(json.tasks);
+    DATA = json;
     cacheData();
     isOnline = true;
   } catch(e){
@@ -508,19 +551,15 @@ function customerById(id){ return DATA.customers.find(c => c.customerId === id);
 function slipForBoat(boatId){ return DATA.locations.find(l => l.boatId === boatId); }
 function findTaskById(taskId){ return DATA.tasks.find(t => t.taskId === taskId); }
 
-function ensureRuntime(task){
-  if (taskRuntime[task.taskId]) return taskRuntime[task.taskId];
-  const rt = { segStart: null, segments: [], employee: null };
-  if (task.status === 'active'){
-    rt.segStart = task.activeSince ? new Date(task.activeSince).getTime() : Date.now();
-  }
-  taskRuntime[task.taskId] = rt;
-  return rt;
-}
-function segMs(taskId){ return (taskRuntime[taskId] ? taskRuntime[taskId].segments : []).reduce((s, seg) => s + (seg.end - seg.start), 0); }
+// Elapsed time is server truth -- accumulatedMs (total logged before
+// whatever segment is currently open) plus (now - activeSince) if the
+// task is currently active. No local segment history to keep in sync,
+// so nothing here can diverge from what board.html or index.html show
+// for the same task.
 function liveMs(task){
-  const rt = taskRuntime[task.taskId];
-  return segMs(task.taskId) + (rt && rt.segStart ? (Date.now() - rt.segStart) : 0);
+  const accumulated = Number(task.accumulatedMs) || 0;
+  const openSince = (task.status === 'active' && task.activeSince) ? new Date(task.activeSince).getTime() : null;
+  return accumulated + (openSince ? Math.max(0, Date.now() - openSince) : 0);
 }
 function fmtElapsed(ms){
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -610,30 +649,36 @@ document.getElementById('backToSearchBtn').addEventListener('click', ()=>{
 // ======================= task actions =======================
 function startTask(task){
   requireUser(() => {
-    const rt = ensureRuntime(task);
-    rt.segStart = Date.now();
-    rt.employee = currentUser;
+    const now = new Date().toISOString();
     task.status = 'active';
-    pendingStatusOverride[task.taskId] = 'active';
-    saveRuntime();
+    task.activeSince = now;
+    pendingStatusOverride[task.taskId] = { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0 };
     enqueue('updateTask', { taskId: task.taskId, status: 'active' });
     playStartSound();
     renderBoatProfile();
   });
 }
+// Closes out whatever segment was open on this task (if any) and folds
+// it into accumulatedMs -- mirrors updateTask_'s own math server-side,
+// kept here purely so this device's own display updates instantly.
+function closeOpenSegment_(task){
+  const openSince = (task.status === 'active' && task.activeSince) ? new Date(task.activeSince).getTime() : null;
+  const prior = Number(task.accumulatedMs) || 0;
+  return openSince ? prior + Math.max(0, Date.now() - openSince) : prior;
+}
 function pauseTask(task){
-  const rt = taskRuntime[task.taskId];
-  if (rt && rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
+  const newAccumulated = closeOpenSegment_(task);
   task.status = 'paused';
-  pendingStatusOverride[task.taskId] = 'paused';
-  saveRuntime();
+  task.activeSince = '';
+  task.accumulatedMs = newAccumulated;
+  pendingStatusOverride[task.taskId] = { status: 'paused', activeSince: '', accumulatedMs: newAccumulated };
   enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
   playPauseSound();
   renderBoatProfile();
 }
 function completeSimpleTask(task){
   task.status = 'done';
-  pendingStatusOverride[task.taskId] = 'done';
+  pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: Number(task.accumulatedMs) || 0 };
   enqueue('updateTask', { taskId: task.taskId, status: 'done' });
   playDoneSound();
   renderBoatProfile();
@@ -645,21 +690,23 @@ function openCompleteConfirm(task){
   document.getElementById('confirmOverlay').style.display = 'flex';
 }
 function completeTimedTask(task){
-  const rt = ensureRuntime(task);
-  if (rt.segStart){ rt.segments.push({ start: rt.segStart, end: Date.now() }); rt.segStart = null; }
-  const mins = Math.round(segMs(task.taskId) / 60000);
-  const last = rt.segments[rt.segments.length - 1] || { start: Date.now(), end: Date.now() };
-  const employee = rt.employee || currentUser || 'Unknown';
+  const finalAccumulated = closeOpenSegment_(task);
+  // Whoever's signed in on THIS device when Complete is pressed gets
+  // credited -- there's no "whoever started it" to track anymore since
+  // the billed duration below is the server's own running total, not
+  // reconstructed from any one device's local history.
+  const employee = currentUser || 'Unknown';
   task.status = 'done';
-  pendingStatusOverride[task.taskId] = 'done';
-  enqueue('updateTask', { taskId: task.taskId, status: 'done' });
-  enqueue('logEntry', {
-    taskId: task.taskId, boatId: task.boatId, workOrder: task.workOrder || '',
-    employee, taskName: task.name,
-    segStart: new Date(last.start).toISOString(), segEnd: new Date(last.end).toISOString(), durationMin: mins
-  });
-  delete taskRuntime[task.taskId];
-  saveRuntime();
+  task.activeSince = '';
+  task.accumulatedMs = finalAccumulated;
+  pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: finalAccumulated };
+  // ONE action, not two -- Code.gs's updateTask_ computes the true total
+  // itself and writes the Recorded Times entry as part of handling this
+  // same status change (see logFinalDuration_ in Code.gs). There used to
+  // be a separate 'logEntry' call here carrying a duration reconstructed
+  // from this device's own local segment history -- exactly what let two
+  // devices touching the same task disagree about how long it ran.
+  enqueue('updateTask', { taskId: task.taskId, status: 'done', employee });
   playDoneSound();
   renderBoatProfile();
 }
@@ -672,12 +719,14 @@ function openFlagConfirm(task){
 function setFlag(task, flagged){
   if (flagged){
     task._preFlagStatus = task.status;
+    task.accumulatedMs = closeOpenSegment_(task);
+    task.activeSince = '';
     task.status = 'flagged';
   } else {
     task.status = task._preFlagStatus || 'pending';
     delete task._preFlagStatus;
   }
-  pendingStatusOverride[task.taskId] = task.status;
+  pendingStatusOverride[task.taskId] = { status: task.status, activeSince: task.activeSince || '', accumulatedMs: Number(task.accumulatedMs) || 0 };
   enqueue('updateTask', { taskId: task.taskId, status: task.status });
   renderBoatProfile();
 }
@@ -941,7 +990,7 @@ function taskRowHtml(t){
       '<button class="pill-btn pause" onclick="pauseTask(findTaskById(\''+t.taskId+'\'))">Pause</button>' +
       '<button class="pill-btn complete" onclick="openCompleteConfirm(findTaskById(\''+t.taskId+'\'))">Done</button>';
   } else if (t.status === 'paused'){
-    const mins = Math.round(segMs(t.taskId) / 60000);
+    const mins = Math.round(liveMs(t) / 60000);
     mainRight = '<span class="status-pill paused">'+mins+' min</span>' +
       '<button class="pill-btn resume" onclick="startTask(findTaskById(\''+t.taskId+'\'))">Resume</button>';
   } else {
@@ -1033,7 +1082,6 @@ function tickTimers(){
 // ======================= boot =======================
 function boot(){
   loadSharedState();
-  loadRuntime();
   const cached = loadCachedData();
   if (cached){ DATA = cached; }
   refreshData();
