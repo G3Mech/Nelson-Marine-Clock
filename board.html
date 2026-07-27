@@ -90,7 +90,25 @@
 
   .slip-chart-view{ flex:1; min-height:0; overflow:auto; padding:16px 20px 40px; }
   .slip-chart-hint{ color:var(--slate); font-size:13px; max-width:640px; margin:0 0 18px; line-height:1.5; }
-  .slip-chart-canvas{ position:relative; display:inline-grid; grid-auto-rows:52px; gap:6px; }
+  .slip-chart-canvas{ position:relative; display:inline-grid; grid-template-columns:repeat(40, 60px); grid-template-rows:repeat(32, 52px); gap:6px; }
+  .slip-chart-toolbar{ display:flex; gap:10px; margin-bottom:12px; }
+  .edit-layout-btn, .add-pier-btn{
+    padding:9px 16px; border-radius:20px; font-size:13px; font-weight:700; cursor:pointer;
+    border:1px solid var(--line); background:var(--white); color:var(--ink);
+  }
+  .edit-layout-btn.active{ background:var(--ink); color:var(--white); border-color:var(--ink); }
+  .add-pier-btn{ border-color:var(--go); color:var(--go); }
+  .pier-block{
+    border-radius:8px; background:var(--slip-bg); border:1.5px solid var(--slip-accent); color:var(--slip-accent);
+    display:flex; align-items:center; justify-content:center; text-align:center; font-size:11px; font-weight:700;
+    cursor:grab; position:relative; padding:4px; touch-action:none; user-select:none;
+  }
+  .pier-block.dragging{ opacity:.75; cursor:grabbing; z-index:30; box-shadow:0 8px 20px rgba(10,26,43,.3); }
+  .pier-block-label{ pointer-events:none; line-height:1.3; }
+  .pier-block-edit{
+    position:absolute; top:-8px; right:-8px; width:22px; height:22px; border-radius:50%; background:var(--white);
+    border:1px solid var(--line); color:var(--slate); font-size:11px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
   .slip-cell{
     width:60px; height:52px; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center;
     font-size:11px; font-weight:700; cursor:pointer; position:relative; text-align:center; line-height:1.25; padding:2px;
@@ -227,7 +245,12 @@
 </div>
 
 <div class="slip-chart-view" id="slipChartView" style="display:none;">
-  <p class="slip-chart-hint">Tap an unassigned square to place a real slip there. Tap an occupied slip to jump to that boat. The small pencil on an already-placed slip lets you move it if it's in the wrong spot.</p>
+  <div class="slip-chart-toolbar">
+    <button class="edit-layout-btn" id="editLayoutBtn" onclick="toggleEditMode()">Edit Layout</button>
+    <button class="add-pier-btn" id="addPierBtn" onclick="openPierEdit(null)" style="display:none;">+ Add Pier</button>
+  </div>
+  <p class="slip-chart-hint" id="slipChartHint">Tap an unassigned square to place a real slip there. Tap an occupied slip to jump to that boat. The small pencil on an already-placed slip lets you move it if it's in the wrong spot.</p>
+  <p class="slip-chart-hint" id="editLayoutHint" style="display:none;">Drag a pier to reposition it. Tap the pencil on a pier to rename it, resize it, or delete it. New piers start in the bottom-left corner — drag them into place.</p>
   <div class="slip-chart-canvas" id="slipChartCanvas"></div>
 </div>
 
@@ -313,6 +336,24 @@
       <button id="photoViewUploadBtn" title="Add another photo">&#128247;</button>
       <button id="photoViewDeleteBtn" class="danger" title="Delete this photo">&#128465;</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="pierEditOverlay" style="display:none;">
+  <div class="sheet">
+    <h3 id="pierEditTitle">Add a pier</h3>
+    <p>Length and orientation only — drag it into position afterward.</p>
+    <input type="text" id="pierEditLabel" placeholder="Label (e.g. North Pier)">
+    <select id="pierEditDir">
+      <option value="h">Horizontal</option>
+      <option value="v">Vertical</option>
+    </select>
+    <input type="text" id="pierEditCount" placeholder="Number of slips" inputmode="numeric">
+    <div class="btn-row">
+      <button class="btn-secondary" id="pierEditCancelBtn">Cancel</button>
+      <button class="btn-primary" id="pierEditSaveBtn">Save</button>
+    </div>
+    <button class="btn-secondary" id="pierEditDeleteBtn" style="width:100%;margin-top:10px;color:var(--stop);border-color:var(--stop);display:none;">Delete This Pier</button>
   </div>
 </div>
 
@@ -1097,32 +1138,21 @@ function renderBoatProfile(){
 }
 
 // ======================= Slip Chart tab =======================
-// A rough reconstruction of Gordon's hand-drawn pier layout -- not a
-// surveyed, pixel-accurate map, just a shape close enough to recognize
-// at a glance. The two thin unlabeled finger docks in the middle of the
-// sketch had no visible slip divisions, so they're treated as walkways
-// and left out of this grid; say the word if they actually hold slips
-// and this can be extended.
-//
-// Each entry is one straight run of slip positions: which direction it
-// grows, where its first cell sits on an abstract grid, and how many
-// slots long it is. The real slip (slip1, slip42, whatever) that
-// occupies each position is stored server-side (Slips sheet's
-// gridRow/gridCol columns) via setSlipPosition -- this array only
-// defines the SHAPE, never which slip number goes where.
-const SLIP_CHART_SHAPE = [
-  { pier: 'connector', dir: 'v', row: 1, col: 1, count: 7 },   // left vertical run -- hoist/crane dock, linking the two rows below
-  { pier: 'north', dir: 'h', row: 1, col: 2, count: 15 },      // branches right off the TOP of the connector
-  { pier: 'south', dir: 'h', row: 7, col: 2, count: 20 },      // branches right off the BOTTOM of the connector
-  { pier: 'liftwell', dir: 'v', row: 9, col: 15, count: 4 },   // small separate vertical run, "Lift Well" on the sketch
-  { pier: 'east', dir: 'h', row: 12, col: 16, count: 16 },     // branches right off the bottom of the Lift Well run
-  { pier: 'upper', dir: 'v', row: 1, col: 24, count: 7 }       // isolated pier, drawn separately in the top-right of the sketch
-];
+// The pier shape itself is no longer hardcoded here -- it's a set of
+// "pier segments" (label, direction, length, and a grid anchor point)
+// stored server-side in the Pier Layout sheet, built and repositioned
+// through the editor below rather than guessed from a photo. This array
+// only defines the SHAPE (which grid cells exist and what they're
+// grouped into); which real slip occupies each position is a separate
+// thing, stored via setSlipPosition as before.
 function buildShapeCells(){
   const cells = [];
-  SLIP_CHART_SHAPE.forEach(p => {
-    for (let i = 0; i < p.count; i++){
-      cells.push(p.dir === 'h' ? { pier: p.pier, row: p.row, col: p.col + i } : { pier: p.pier, row: p.row + i, col: p.col });
+  (DATA.pierLayout || []).forEach(p => {
+    const count = Number(p.count) || 0;
+    const row = Number(p.row) || 1;
+    const col = Number(p.col) || 1;
+    for (let i = 0; i < count; i++){
+      cells.push(p.dir === 'v' ? { pier: p.pierId, row: row + i, col: col } : { pier: p.pierId, row: row, col: col + i });
     }
   });
   return cells;
@@ -1155,6 +1185,127 @@ function renderSlipChart(){
 function jumpToSlipBoat(boatId){
   openBoatProfile(boatId);
 }
+
+// ---------- pier layout editor ----------
+// Grid pitch in pixels -- must match .slip-cell's width/height plus the
+// canvas's gap, since drag distance is converted into row/column deltas
+// by dividing by these. If those CSS values ever change, update here too.
+const CELL_W = 66, CELL_H = 58;
+// New piers are staged off to a fixed, out-of-the-way spot rather than
+// row 1/col 1 (which would stack them on top of whatever's already
+// there) -- easy to spot and drag into place from a predictable corner.
+const NEW_PIER_ROW = 30, NEW_PIER_COL = 1;
+
+function renderPierEditor(){
+  const canvas = document.getElementById('slipChartCanvas');
+  const piers = DATA.pierLayout || [];
+  canvas.innerHTML = piers.map(p => {
+    const count = Number(p.count) || 1;
+    const row = Number(p.row) || 1;
+    const col = Number(p.col) || 1;
+    const gridStyle = p.dir === 'v'
+      ? ('grid-row:' + row + ' / span ' + count + '; grid-column:' + col + ';')
+      : ('grid-row:' + row + '; grid-column:' + col + ' / span ' + count + ';');
+    return '<div class="pier-block" data-pier="' + p.pierId + '" style="' + gridStyle + '" onpointerdown="startPierDrag(event,\'' + p.pierId + '\')">' +
+      '<button class="pier-block-edit" onclick="event.stopPropagation(); openPierEdit(\'' + p.pierId + '\')" title="Edit or delete this pier">&#9998;</button>' +
+      '<span class="pier-block-label">' + (p.label || 'Pier') + '<br>' + count + ' slip' + (count === 1 ? '' : 's') + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+let pierDrag = null;
+function startPierDrag(e, pierId){
+  e.preventDefault();
+  const el = e.currentTarget;
+  const pier = (DATA.pierLayout || []).find(p => p.pierId === pierId);
+  if (!pier) return;
+  pierDrag = { pierId, el, startX: e.clientX, startY: e.clientY, origRow: Number(pier.row) || 1, origCol: Number(pier.col) || 1 };
+  el.classList.add('dragging');
+  window.addEventListener('pointermove', onPierDragMove);
+  window.addEventListener('pointerup', onPierDragEnd);
+}
+function onPierDragMove(e){
+  if (!pierDrag) return;
+  const dx = e.clientX - pierDrag.startX;
+  const dy = e.clientY - pierDrag.startY;
+  pierDrag.el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+}
+async function onPierDragEnd(e){
+  if (!pierDrag) return;
+  window.removeEventListener('pointermove', onPierDragMove);
+  window.removeEventListener('pointerup', onPierDragEnd);
+  const dx = e.clientX - pierDrag.startX;
+  const dy = e.clientY - pierDrag.startY;
+  const colDelta = Math.round(dx / CELL_W);
+  const rowDelta = Math.round(dy / CELL_H);
+  const pierId = pierDrag.pierId;
+  const pier = (DATA.pierLayout || []).find(p => p.pierId === pierId);
+  pierDrag.el.style.transform = '';
+  pierDrag.el.classList.remove('dragging');
+  pierDrag = null;
+  if (!pier || (colDelta === 0 && rowDelta === 0)) return;
+  const newRow = Math.max(1, (Number(pier.row) || 1) + rowDelta);
+  const newCol = Math.max(1, (Number(pier.col) || 1) + colDelta);
+  try{
+    const res = await postToSheet('savePierSegment', { pierId, label: pier.label, dir: pier.dir, row: newRow, col: newCol, count: pier.count });
+    if (res && res.error){ alert('Could not move that pier: ' + res.error); }
+    await refreshData();
+    renderPierEditor();
+  } catch(err){
+    alert('Could not move that pier: ' + (err && err.message ? err.message : err));
+    renderPierEditor();
+  }
+}
+
+let editingPierId = null;
+function openPierEdit(pierId){
+  editingPierId = pierId;
+  const pier = pierId ? (DATA.pierLayout || []).find(p => p.pierId === pierId) : null;
+  document.getElementById('pierEditTitle').textContent = pier ? 'Edit pier' : 'Add a pier';
+  document.getElementById('pierEditLabel').value = pier ? pier.label : '';
+  document.getElementById('pierEditDir').value = pier ? pier.dir : 'h';
+  document.getElementById('pierEditCount').value = pier ? pier.count : '';
+  document.getElementById('pierEditDeleteBtn').style.display = pier ? 'block' : 'none';
+  document.getElementById('pierEditOverlay').style.display = 'flex';
+}
+document.getElementById('pierEditCancelBtn').addEventListener('click', () => {
+  editingPierId = null;
+  document.getElementById('pierEditOverlay').style.display = 'none';
+});
+document.getElementById('pierEditSaveBtn').addEventListener('click', async () => {
+  const label = document.getElementById('pierEditLabel').value.trim();
+  const dir = document.getElementById('pierEditDir').value;
+  const count = parseInt(document.getElementById('pierEditCount').value, 10);
+  if (!label){ alert('Give this pier a name.'); return; }
+  if (!count || count < 1){ alert('Enter how many slips this pier has.'); return; }
+  const pier = editingPierId ? (DATA.pierLayout || []).find(p => p.pierId === editingPierId) : null;
+  const row = pier ? pier.row : NEW_PIER_ROW;
+  const col = pier ? pier.col : NEW_PIER_COL;
+  try{
+    const res = await postToSheet('savePierSegment', { pierId: editingPierId || '', label, dir, row, col, count });
+    if (res && res.error){ alert(res.error); return; }
+    document.getElementById('pierEditOverlay').style.display = 'none';
+    editingPierId = null;
+    await refreshData();
+    renderPierEditor();
+  } catch(err){
+    alert('Could not save: ' + (err && err.message ? err.message : err));
+  }
+});
+document.getElementById('pierEditDeleteBtn').addEventListener('click', async () => {
+  if (!editingPierId) return;
+  if (!confirm('Delete this pier from the chart? Any real slips placed on its squares stay on file but won\'t show on the chart until reassigned somewhere.')) return;
+  try{
+    const res = await postToSheet('deletePierSegment', { pierId: editingPierId });
+    if (res && res.error){ alert(res.error); return; }
+    document.getElementById('pierEditOverlay').style.display = 'none';
+    editingPierId = null;
+    await refreshData();
+    renderPierEditor();
+  } catch(err){
+    alert('Could not delete: ' + (err && err.message ? err.message : err));
+  }
+});
 
 let pendingSlipAssign = null;
 function openSlipAssign(row, col){
@@ -1201,14 +1352,25 @@ async function assignSlipToCell(slipId){
 }
 
 let activeTab = 'workorders';
+let editMode = false;
+function renderSlipChartTab(){ if (editMode) renderPierEditor(); else renderSlipChart(); }
 function showTab(tabName){
   activeTab = tabName;
   document.getElementById('tabWorkOrdersBtn').classList.toggle('active', tabName === 'workorders');
   document.getElementById('tabSlipChartBtn').classList.toggle('active', tabName === 'slipchart');
   document.getElementById('mainView').style.display = tabName === 'workorders' ? 'flex' : 'none';
   document.getElementById('slipChartView').style.display = tabName === 'slipchart' ? 'block' : 'none';
-  if (tabName === 'slipchart') renderSlipChart();
+  if (tabName === 'slipchart') renderSlipChartTab();
   else { renderWorkOrders(); renderRunning(); }
+}
+function toggleEditMode(){
+  editMode = !editMode;
+  document.getElementById('editLayoutBtn').textContent = editMode ? 'Done Editing Layout' : 'Edit Layout';
+  document.getElementById('editLayoutBtn').classList.toggle('active', editMode);
+  document.getElementById('addPierBtn').style.display = editMode ? 'inline-block' : 'none';
+  document.getElementById('slipChartHint').style.display = editMode ? 'none' : 'block';
+  document.getElementById('editLayoutHint').style.display = editMode ? 'block' : 'none';
+  renderSlipChartTab();
 }
 
 function render(){
@@ -1217,7 +1379,7 @@ function render(){
   if (currentProfileBoatId){
     renderBoatProfile();
   } else if (activeTab === 'slipchart'){
-    renderSlipChart();
+    renderSlipChartTab();
   } else {
     renderWorkOrders();
     renderRunning();
