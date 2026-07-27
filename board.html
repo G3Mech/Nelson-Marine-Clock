@@ -465,7 +465,7 @@
 <div class="overlay" id="partsOverlay" style="display:none;">
   <div class="sheet">
     <h3 id="partsTaskTitle">⚙️ Parts List</h3>
-    <div id="partsList"></div>
+    <div id="partsOverlayList"></div>
     <input type="text" id="partNameInput" placeholder="Part name" list="partNameSuggestions">
     <input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">
     <input type="text" id="partSupplierInput" placeholder="Supplier" list="partSupplierSuggestions">
@@ -866,6 +866,75 @@ function openPhotoView(photoId){
   document.getElementById('photoViewImg').src = photo ? photo.url : '';
   document.getElementById('photoViewOverlay').style.display = 'flex';
 }
+// RESTORED BLOCK (see note near the top of this file's header comment, or
+// ask Gordon/Claude for context): compressImage/uploadPhoto/uploadPhotoBatch/
+// openPhotoChoice/handleChosenFiles and the photo-choice + file-input
+// listeners were missing entirely from this file -- present in index.html
+// and search.html, but never actually wired up here, even though the HTML
+// markup (photoChoiceOverlay, the two hidden file inputs) and three call
+// sites (openBoatPhotoSlot, photoViewUploadBtn, notesAddPhotoBtn) all
+// already expected them to exist. Restored to match the same pattern used
+// in index.html/search.html.
+//
+// Shared by the boat photo slot, the per-task camera-icon shortcut, and the
+// Notes popup's Add Photo button alike -- one prompt, one pair of hidden
+// inputs, rather than three separate copies of the same picker wiring.
+function compressImage(file, maxDim, quality){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > height && width > maxDim){ height = Math.round(height * maxDim / width); width = maxDim; }
+        else if (height > maxDim){ width = Math.round(width * maxDim / height); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Could not read that image'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadPhoto(file, boatId, taskId){
+  try{
+    const dataUrl = await compressImage(file, 1600, 0.72);
+    const base64 = dataUrl.split(',')[1];
+    return await postToSheet('uploadPhoto', { boatId, taskId: taskId || '', imageData: base64, mimeType: 'image/jpeg', employee: currentEmployee || '' });
+  } catch(err){
+    alert('Photo upload failed: ' + err.message);
+    return null;
+  }
+}
+async function uploadPhotoBatch(files, boatId, taskId, progressCb, onSuccessCb){
+  for (let i = 0; i < files.length; i++){
+    if (progressCb) progressCb(i + 1, files.length);
+    const result = await uploadPhoto(files[i], boatId, taskId);
+    if (result && result.ok && onSuccessCb) onSuccessCb(result);
+  }
+}
+let photoUploadContext = null;
+function openPhotoChoice(ctx){ photoUploadContext = ctx; document.getElementById('photoChoiceOverlay').style.display = 'flex'; }
+document.getElementById('photoChoiceCameraBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; document.getElementById('sharedPhotoCameraInput').click(); });
+document.getElementById('photoChoiceLibraryBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; document.getElementById('sharedPhotoLibraryInput').click(); });
+document.getElementById('photoChoiceCancelBtn').addEventListener('click', () => { document.getElementById('photoChoiceOverlay').style.display = 'none'; photoUploadContext = null; });
+function handleChosenFiles(fileList){
+  const files = Array.from(fileList);
+  const ctx = photoUploadContext; photoUploadContext = null;
+  if (!ctx || files.length === 0) return;
+  uploadPhotoBatch(files, ctx.boatId, ctx.taskId, ctx.onProgress, (result) => {
+    DATA.photos = DATA.photos || [];
+    DATA.photos.push({ boatId: ctx.boatId, taskId: ctx.taskId || '', url: result.url, photoId: result.photoId });
+    if (ctx.onEach) ctx.onEach(result);
+  }).then(() => { if (ctx.onDone) ctx.onDone(); });
+}
+document.getElementById('sharedPhotoCameraInput').addEventListener('change', (e) => { handleChosenFiles(e.target.files); e.target.value = ''; });
+document.getElementById('sharedPhotoLibraryInput').addEventListener('change', (e) => { handleChosenFiles(e.target.files); e.target.value = ''; });
 // Both buttons act on whichever photo is currently expanded -- works the
 // same whether it's a general boat photo or a task-attached one, since
 // both carry their own boatId/taskId already.
@@ -927,6 +996,86 @@ document.getElementById('notesSaveBtn').addEventListener('click', () => {
   }
   document.getElementById('notesOverlay').style.display = 'none';
   render();
+});
+
+// RESTORED BLOCK: the per-task Parts popup (the gear icon on each task
+// row, distinct from the Parts TAB's own Log/Catalog views further down)
+// was completely unwired -- openParts() itself didn't exist, so tapping
+// the gear icon threw a silent console error and did nothing. Restored to
+// match the same pattern used in index.html/search.html, targeting the
+// popup's own #partsOverlayList (see the duplicate-id fix noted where that
+// div is defined) rather than the Parts tab's #partsList.
+let partsTaskRef = null;
+function openParts(task){
+  partsTaskRef = task.taskId;
+  document.getElementById('partsTaskTitle').textContent = '⚙️ Parts List — ' + task.name;
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
+  renderPartsOverlayList();
+  populatePartSuggestions();
+  document.getElementById('partsOverlay').style.display = 'flex';
+}
+function renderPartsOverlayList(){
+  const wrap = document.getElementById('partsOverlayList');
+  const parts = (DATA.parts || []).filter(p => p.taskId === partsTaskRef);
+  wrap.innerHTML = parts.length === 0 ? '' : parts.map(p =>
+    '<div class="parts-list-item"><div class="part-info"><b>' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</b>' +
+      '<span>' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + '</span></div>' +
+      '<button class="part-del" onclick="deletePart(\'' + p.partId + '\')" title="Delete">&times;</button></div>'
+  ).join('');
+}
+function populatePartSuggestions(){
+  const names = [...new Set((DATA.parts||[]).map(p=>p.partName).filter(Boolean))].sort();
+  const numbers = [...new Set((DATA.parts||[]).map(p=>p.partNumber).filter(Boolean))].sort();
+  const suppliers = [...new Set((DATA.parts||[]).map(p=>p.supplier).filter(Boolean))].sort();
+  document.getElementById('partNameSuggestions').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('partNumberSuggestions').innerHTML = numbers.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('partSupplierSuggestions').innerHTML = suppliers.map(n=>'<option value="'+n+'">').join('');
+}
+document.getElementById('partAddBtn').addEventListener('click', () => {
+  const partName = document.getElementById('partNameInput').value.trim();
+  if (!partName) return;
+  const partNumber = document.getElementById('partNumberInput').value.trim();
+  const supplier = document.getElementById('partSupplierInput').value.trim();
+  const quantity = document.getElementById('partQtyInput').value.trim();
+  const task = findTaskById(partsTaskRef);
+  const boatId = task ? task.boatId : null;
+  const tempId = 'temp_' + Date.now();
+  DATA.parts = DATA.parts || [];
+  DATA.parts.push({ partId: tempId, taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
+  enqueue('addPart', { taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
+  renderPartsOverlayList(); populatePartSuggestions();
+});
+async function deletePart(partId){
+  if (!confirm('Delete this part entry?')) return;
+  DATA.parts = (DATA.parts || []).filter(p => p.partId !== partId);
+  renderPartsOverlayList();
+  if (String(partId).indexOf('temp_') === 0) return;
+  await postToSheet('deletePart', { partId });
+}
+document.getElementById('partsCloseBtn').addEventListener('click', () => document.getElementById('partsOverlay').style.display = 'none');
+
+// RESTORED BLOCK: neither confirmation popup's buttons had any click
+// handler at all -- openCompleteConfirm() and openFlagConfirm() could
+// open their respective overlays, but "Not Yet", "Yes, Job Complete",
+// "Cancel", and "Yes, Flag It" were all inert, leaving the popup stuck
+// open with no visible way to dismiss it (a reload was the only way out).
+document.getElementById('confirmCancelBtn').addEventListener('click', () => { pendingCompleteTaskId = null; document.getElementById('confirmOverlay').style.display = 'none'; });
+document.getElementById('confirmYesBtn').addEventListener('click', () => {
+  const taskId = pendingCompleteTaskId;
+  pendingCompleteTaskId = null;
+  document.getElementById('confirmOverlay').style.display = 'none';
+  const task = taskId ? findTaskById(taskId) : null;
+  if (task) completeTimedTask(task);
+});
+document.getElementById('flagConfirmCancelBtn').addEventListener('click', () => { pendingFlagTaskId = null; document.getElementById('flagConfirmOverlay').style.display = 'none'; });
+document.getElementById('flagConfirmYesBtn').addEventListener('click', () => {
+  if (pendingFlagTaskId){
+    const task = findTaskById(pendingFlagTaskId);
+    if (task) setFlag(task, true);
+  }
+  pendingFlagTaskId = null;
+  document.getElementById('flagConfirmOverlay').style.display = 'none';
 });
 
 function priorityDotClass(t){ return 'p' + (t.priority || 2); }
