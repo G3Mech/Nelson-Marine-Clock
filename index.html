@@ -282,7 +282,7 @@
     <button class="menu-switch-btn" id="menuSwitchUser">Not you? Switch user</button>
   </div>
   <nav class="menu-nav">
-    <a class="menu-item" href="board.html">Shop Mode</a>
+    <a class="menu-item" href="board.html" onclick="return confirmShopMode()">Shop Mode</a>
     <a class="menu-item" href="index.html">Mobile Mode</a>
     <a class="menu-item" href="search.html">Search</a>
     <a class="menu-item" href="find-work.html">Find Work</a>
@@ -1664,6 +1664,18 @@ function applyData(){
   else { populateNameButtons(); overlay.style.display = 'flex'; }
   renderBoatCard();
   renderView();
+}
+
+// Shop Mode (board.html) is built for the shop's shared/wall-mounted
+// tablet, not an individual phone -- and unlike this menu here, it has
+// no hamburger/nav of its own to get back out with, just a back-arrow
+// for boat profiles. Tapping it by mistake on a personal phone leaves
+// you stuck using the browser's own Back button to escape, so this
+// confirms first rather than navigating instantly. Returning false from
+// an onclick on an <a> cancels the navigation entirely; true lets it
+// proceed as normal.
+function confirmShopMode(){
+  return confirm('Switch to Shop Mode?\n\nThis is built for the shop\'s shared tablet, not your own phone. It doesn\'t have a menu to get back out with -- you\'d need your browser\'s Back button.\n\nContinue anyway?');
 }
 
 async function boot(){
