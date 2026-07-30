@@ -137,7 +137,9 @@
   .history-list{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
   .history-meta{ color:var(--slate); font-size:12px; flex-shrink:0; }
   .notepad-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #1d4e89; box-shadow:0 2px 6px rgba(10,26,43,.12); }
-  .notepad-header{ background:#1d4e89; color:var(--white); font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; padding:10px 0; }
+  .notepad-header{ background:#1d4e89; color:var(--white); display:flex; align-items:center; padding:10px 14px; }
+  .notepad-header-label{ flex:1; font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; }
+  .notepad-save-btn{ background:var(--go); color:var(--white); border:none; border-radius:14px; padding:6px 14px; font-size:12.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
   .notepad-yellow-area{
     background-color:#fdf6a3;
     background-image:
@@ -153,7 +155,6 @@
   .notepad-textarea:focus{ outline:none; }
   .notepad-expand-row{ display:flex; justify-content:center; }
   .notepad-expand-btn{ background:none; border:none; color:#6b6320; font-size:14px; padding:4px 10px; cursor:pointer; }
-  .notepad-add-btn{ width:100%; margin-top:8px; padding:10px 0; border-radius:8px; border:none; background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer; }
   .notepad-list{ margin-top:4px; }
   .notepad-row{ padding:6px 0; border-bottom:1px dashed rgba(224,122,122,.5); }
   .notepad-row:last-child{ border-bottom:none; }
@@ -606,7 +607,14 @@ async function refreshData(){
     isOnline = false;
   }
   updateConnBadge();
-  if (currentProfileBoatId) renderBoatProfile();
+  // Skip rebuilding the profile while someone's actively composing a note
+  // with unsaved text in it -- a full re-render replaces the textarea
+  // element entirely, which would silently wipe out whatever they'd
+  // typed but hadn't saved yet. The next periodic refresh, once they've
+  // moved on, picks up the fresh data as normal.
+  const noteInput = document.getElementById('boatNoteInput');
+  const isComposingNote = noteInput && document.activeElement === noteInput && noteInput.value.trim().length > 0;
+  if (currentProfileBoatId && !isComposingNote) renderBoatProfile();
 }
 
 // ======================= lookups =======================
@@ -1157,20 +1165,22 @@ function renderBoatProfile(){
       : '<div class="checklist">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
     '<button class="add-task-btn" onclick="openAddTask(\''+boat.boatId+'\', \''+custLabel.replace(/'/g,"\\'")+'\')">+ New Task</button>' +
     '<div class="notepad-pad">' +
-      '<div class="notepad-header">Notes</div>' +
+      '<div class="notepad-header">' +
+        '<span class="notepad-header-label">Notes</span>' +
+        '<button class="notepad-save-btn" id="boatNoteSaveBtn" style="display:none;" onmousedown="event.preventDefault();" onclick="addBoatNoteHandler(\''+boat.boatId+'\')">Save</button>' +
+      '</div>' +
       '<div class="notepad-yellow-area">' +
-        '<textarea id="boatNoteInput" class="notepad-textarea" rows="1" placeholder="Add a note about this boat…" oninput="handleNoteInput(this)"></textarea>' +
+        '<textarea id="boatNoteInput" class="notepad-textarea" rows="1" placeholder="Type a note — it saves on its own when you tap away…" oninput="handleNoteInput(this)" onblur="addBoatNoteHandler(\''+boat.boatId+'\')"></textarea>' +
         '<div class="notepad-expand-row" id="boatNoteExpandRow" style="display:none;">' +
-          '<button class="notepad-expand-btn" onclick="toggleNoteExpand()">&#9660;</button>' +
+          '<button class="notepad-expand-btn" onmousedown="event.preventDefault();" onclick="toggleNoteExpand()">&#9660;</button>' +
         '</div>' +
-        '<button class="notepad-add-btn" onclick="addBoatNoteHandler(\''+boat.boatId+'\')">Add Note</button>' +
         (boatNotes.length === 0
           ? '<div class="notepad-empty">No notes yet.</div>'
           : '<div class="notepad-list">' + boatNotes.map(n => {
               const isLong = n.text.length > 180;
               return '<div class="notepad-row">' +
                 '<div class="notepad-text'+(isLong ? ' notepad-text-collapsed' : '')+'" id="note-text-'+n.noteId+'">'+n.text+'</div>' +
-                (isLong ? '<button class="notepad-toggle-link" onclick="toggleNoteText(\''+n.noteId+'\')">Show more &#9660;</button>' : '') +
+                (isLong ? '<button class="notepad-toggle-link" onmousedown="event.preventDefault();" onclick="toggleNoteText(\''+n.noteId+'\')">Show more &#9660;</button>' : '') +
                 '<div class="notepad-meta"><span>'+[n.employee, (n.loggedAt ? new Date(n.loggedAt).toLocaleString() : '')].filter(Boolean).join(' · ')+'</span>' +
                 '<button class="notepad-del" onclick="deleteBoatNoteHandler(\''+n.noteId+'\')" title="Delete">&times;</button></div></div>';
             }).join('') + '</div>') +
@@ -1326,6 +1336,13 @@ function handleNoteInput(el){
   }
   if (expandRow) expandRow.style.display = (full > NOTE_COLLAPSED_MAX_PX) ? 'flex' : 'none';
   if (expandBtn) expandBtn.innerHTML = boatNoteExpanded ? '&#9650;' : '&#9660;';
+  // The green Save button in the header is a visible, guaranteed way to
+  // save -- a backstop alongside auto-save-on-blur below, since blur
+  // doesn't always fire reliably on mobile (locking the screen or
+  // switching apps mid-note doesn't guarantee it). Only shown once
+  // there's actually something typed.
+  const saveBtn = document.getElementById('boatNoteSaveBtn');
+  if (saveBtn) saveBtn.style.display = el.value.trim() ? 'inline-block' : 'none';
 }
 function toggleNoteExpand(){
   boatNoteExpanded = !boatNoteExpanded;
