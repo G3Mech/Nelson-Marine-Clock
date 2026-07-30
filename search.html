@@ -92,6 +92,13 @@
   .wo-loc{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
   .wo-loc.slip{ background:var(--slip-bg); color:var(--slip-accent); }
   .wo-loc.yard{ background:var(--yard-bg); color:var(--yard-accent); }
+  .profile-cust-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .profile-edit-btn{ background:none; border:none; font-size:19px; padding:2px 6px; cursor:pointer; color:var(--slate); flex-shrink:0; }
+  .profile-location-row{ display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .profile-location-big{ font-size:19px; font-weight:800; padding:7px 14px; border-radius:10px; }
+  .profile-location-big.slip{ background:var(--slip-bg); color:var(--slip-accent); }
+  .profile-location-big.yard{ background:var(--yard-bg); color:var(--yard-accent); }
+  .loc-change-btn{ font-size:12.5px; font-weight:700; padding:7px 14px; border-radius:16px; cursor:pointer; border:1px solid var(--pause-blue); background:var(--white); color:var(--pause-blue); }
   .wo-num{ font-size:11px; font-weight:800; color:var(--white); background:var(--ink); padding:3px 10px; border-radius:20px; white-space:nowrap; }
 
   .section-title{ font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--slate);margin:20px 20px 8px;display:flex;align-items:center;gap:8px; }
@@ -194,7 +201,7 @@
     <button class="menu-switch-btn" id="menuSwitchUser">Not you? Switch user</button>
   </div>
   <nav class="menu-nav">
-    <a class="menu-item" href="board.html">Shop Mode</a>
+    <a class="menu-item" href="board.html" onclick="return confirmShopMode()">Shop Mode</a>
     <a class="menu-item" href="index.html">Mobile Mode</a>
     <a class="menu-item" href="search.html">Search</a>
     <a class="menu-item" href="find-work.html">Find Work</a>
@@ -297,6 +304,17 @@
     <button class="btn-secondary" id="partAddBtn" style="width:100%;margin-bottom:14px;">+ Add Part</button>
     <div class="btn-row">
       <button class="btn-secondary" id="partsCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="locationPickerOverlay" style="display:none;">
+  <div class="sheet">
+    <h3>Change Location</h3>
+    <p>Pick where this boat actually is. This only corrects the saved record — it does <b>not</b> create a work order or task, unlike reassigning a work order in the Admin Dashboard.</p>
+    <div id="locationPickerList"></div>
+    <div class="btn-row">
+      <button class="btn-secondary" id="locationPickerCancelBtn" style="width:100%;">Cancel</button>
     </div>
   </div>
 </div>
@@ -594,6 +612,17 @@ menuSwitchUser.addEventListener('click', ()=>{
   menuOverlay.classList.remove('show');
   openSetup();
 });
+// Shop Mode (board.html) is built for the shop's shared/wall-mounted
+// tablet, not an individual phone -- and unlike this menu here, it has
+// no hamburger/nav of its own to get back out with, just a back-arrow
+// for boat profiles. Tapping it by mistake on a personal phone leaves
+// you stuck using the browser's own Back button to escape, so this
+// confirms first rather than navigating instantly. Returning false from
+// an onclick on an <a> cancels the navigation entirely; true lets it
+// proceed as normal.
+function confirmShopMode(){
+  return confirm('Switch to Shop Mode?\n\nThis is built for the shop\'s shared tablet, not your own phone. It doesn\'t have a menu to get back out with -- you\'d need your browser\'s Back button.\n\nContinue anyway?');
+}
 
 // ======================= search =======================
 let currentProfileBoatId = null;
@@ -1040,11 +1069,17 @@ function renderBoatProfile(){
     '<div class="profile-card">' +
       photoHtml +
       '<div class="profile-info">' +
-        '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
+        '<div class="profile-cust-row">' +
+          '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
+          '<button class="profile-edit-btn" onclick="openEditBoatProfile(\''+boat.boatId+'\')" title="Edit customer/boat details">&#9998;</button>' +
+        '</div>' +
         '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—') + '</div>' +
         '<div class="profile-boatline">' + (boat.model || '') + (boat.boatName ? ' "'+boat.boatName+'"' : '') + (boat.loa ? ' ('+boat.loa+')' : '') + '</div>' +
+        '<div class="profile-location-row">' +
+          '<span class="profile-location-big '+locType+'">'+locLabel+'</span>' +
+          '<button class="loc-change-btn" onclick="openLocationPicker(\''+boat.boatId+'\')">Change</button>' +
+        '</div>' +
         '<div class="profile-badges">' +
-          '<span class="wo-loc '+locType+'">'+locLabel+'</span>' +
           (boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
         '</div>' +
       '</div>' +
@@ -1077,6 +1112,111 @@ function tickTimers(){
     const task = taskId ? findTaskById(taskId) : null;
     if (task) el.textContent = fmtElapsed(liveMs(task));
   });
+}
+
+// ======================= edit customer/boat details =======================
+// A lighter-weight version of Admin.html's editCustomer/editBoat prompt
+// flows, brought to this page directly so a mistake in a customer's
+// contact info or a boat's model/name/length can get fixed on the spot
+// without needing to open the office dashboard. Uses the same
+// updateCustomer_/updateBoat_ functions Admin.html already calls via
+// google.script.run -- this page can't use that (it's a plain hosted
+// page, not running inside Apps Script's HtmlService), so these are
+// exposed as ordinary doPost actions instead, reusing the exact same
+// server-side logic rather than duplicating it.
+async function openEditBoatProfile(boatId){
+  const boat = boatById(boatId);
+  if (!boat) return;
+  const cust = customerById(boat.customerId);
+
+  const custName = cust ? prompt('Customer name:', cust.name) : null;
+  if (cust && custName === null) return;
+  const custPhone = cust ? prompt('Phone:', cust.phone) : null;
+  if (cust && custPhone === null) return;
+  const custPhoneType = cust ? prompt('Phone type (Cell/Home/Work/Office, or blank):', cust.phoneType || '') : null;
+  if (cust && custPhoneType === null) return;
+  const custEmail = cust ? prompt('Email:', cust.email) : null;
+  if (cust && custEmail === null) return;
+  const custAddress = cust ? prompt('Address:', cust.address) : null;
+  if (cust && custAddress === null) return;
+
+  const model = prompt('Boat model:', boat.model);
+  if (model === null) return;
+  const boatName = prompt('Boat name:', boat.boatName);
+  if (boatName === null) return;
+  const loa = prompt('LOA / length:', boat.loa);
+  if (loa === null) return;
+
+  try{
+    if (cust){
+      await postToSheet('updateCustomer', { id: cust.customerId, name: custName, phone: custPhone, phoneType: custPhoneType, email: custEmail, address: custAddress });
+      Object.assign(cust, { name: custName, phone: custPhone, phoneType: custPhoneType, email: custEmail, address: custAddress });
+    }
+    await postToSheet('updateBoat', { id: boat.boatId, model, boatName, loa });
+    Object.assign(boat, { model, boatName, loa });
+    renderBoatProfile();
+  } catch(err){
+    alert('Could not save those changes: ' + (err && err.message ? err.message : err));
+  }
+}
+
+// ======================= on-the-fly location correction =======================
+// Deliberately separate from the Admin Dashboard's Slip Chart / Assign
+// Work Order flows: reassigning a boat's slip through Assign Work Order
+// auto-adds a real "move the boat" TASK to be done and billed, because
+// that's an actual physical job for the shop. This is for the OPPOSITE
+// case -- the boat is already sitting somewhere and the SAVED RECORD is
+// just wrong (it was moved without going through the formal process, or
+// an early mistake needs a quick fix) -- so this only ever updates the
+// Slips sheet directly (moveBoat_/clearSlip_/placeBoatInSlip_, the exact
+// same functions the Admin Slip Chart itself uses), never creates a
+// task or touches the boat's work order at all.
+let locationPickerBoatId = null;
+function openLocationPicker(boatId){
+  locationPickerBoatId = boatId;
+  const currentLoc = slipForBoat(boatId);
+  const emptySlips = (DATA.locations || []).filter(l => !l.boatId).sort((a,b) => {
+    const an = parseInt((a.slipId.match(/\d+/) || ['0'])[0], 10);
+    const bn = parseInt((b.slipId.match(/\d+/) || ['0'])[0], 10);
+    return an - bn;
+  });
+
+  let html = '';
+  if (currentLoc){
+    html += '<button class="name-btn" style="color:var(--yard-accent);" onclick="setBoatLocation(null)">Send to Yard</button>';
+  }
+  html += emptySlips.map(l => {
+    const n = (l.slipId.match(/\d+/) || ['?'])[0];
+    return '<button class="name-btn" onclick="setBoatLocation(\''+l.slipId+'\')">Slip '+n+'</button>';
+  }).join('');
+  document.getElementById('locationPickerList').innerHTML = html || '<p style="color:var(--slate);font-size:13px;">No empty slips available right now.</p>';
+  document.getElementById('locationPickerOverlay').style.display = 'flex';
+}
+document.getElementById('locationPickerCancelBtn').addEventListener('click', () => {
+  locationPickerBoatId = null;
+  document.getElementById('locationPickerOverlay').style.display = 'none';
+});
+async function setBoatLocation(toSlipId){
+  const boatId = locationPickerBoatId;
+  if (!boatId) return;
+  document.getElementById('locationPickerOverlay').style.display = 'none';
+  locationPickerBoatId = null;
+
+  const currentLoc = slipForBoat(boatId);
+  try{
+    if (toSlipId === null){
+      if (!currentLoc){ return; } // already in the yard -- nothing to change
+      await postToSheet('clearSlip', { locationId: currentLoc.slipId });
+    } else if (currentLoc){
+      await postToSheet('moveBoat', { fromLocationId: currentLoc.slipId, toLocationId: toSlipId });
+    } else {
+      await postToSheet('placeBoatInSlip', { boatId, toLocationId: toSlipId });
+    }
+    await refreshData();
+    if (currentProfileBoatId === boatId) renderBoatProfile();
+  } catch(err){
+    alert('Could not update the location: ' + (err && err.message ? err.message : err));
+  }
 }
 
 // ======================= boot =======================
