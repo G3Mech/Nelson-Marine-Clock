@@ -376,6 +376,23 @@ const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-
 const STORAGE_KEY = 'nelsonMarineClockState_v2';
 const QUEUE_KEY = 'nelsonMarineClockQueue_v1';
 const CACHE_KEY = 'nelsonMarineClockDataCache_v1';
+// Which boat's profile (if any) was open, so a real browser reload --
+// including the silent ones mobile browsers do to a backgrounded tab --
+// comes back to the same boat instead of the empty search bar. Kept in
+// its OWN key, separate from STORAGE_KEY: index.html's own
+// saveLocalState() overwrites that entire blob wholesale with just its
+// own fields every time it saves, which would silently erase anything
+// search.html stored there too.
+const SEARCH_PROFILE_KEY = 'nelsonMarineSearchProfileBoatId_v1';
+function saveSearchProfileBoatId(boatId){
+  try{
+    if (boatId) localStorage.setItem(SEARCH_PROFILE_KEY, boatId);
+    else localStorage.removeItem(SEARCH_PROFILE_KEY);
+  } catch(e){}
+}
+function loadSearchProfileBoatId(){
+  try{ return localStorage.getItem(SEARCH_PROFILE_KEY) || null; } catch(e){ return null; }
+}
 // No RUNTIME_KEY/local segment history anymore -- a task's elapsed time
 // (accumulatedMs/activeSince) comes straight off the fetched task object
 // now, same as every other page, so there's nothing page-specific left to
@@ -662,6 +679,7 @@ document.getElementById('boatSearch').addEventListener('input', renderSearchSugg
 
 function openBoatProfile(boatId){
   currentProfileBoatId = boatId;
+  saveSearchProfileBoatId(boatId);
   document.getElementById('boatSearch').value = '';
   document.getElementById('searchSuggestions').classList.remove('show');
   document.getElementById('searchEmptyHint').style.display = 'none';
@@ -671,6 +689,7 @@ function openBoatProfile(boatId){
 }
 document.getElementById('backToSearchBtn').addEventListener('click', ()=>{
   currentProfileBoatId = null;
+  saveSearchProfileBoatId(null);
   document.querySelector('.search-wrap').style.display = 'block';
   document.getElementById('searchEmptyHint').style.display = 'block';
   document.getElementById('profileArea').style.display = 'none';
@@ -1205,12 +1224,27 @@ async function setBoatLocation(toSlipId){
   }
 }
 
+// Reopens whichever boat profile was open before a reload, if any --
+// tries instantly against cached data first (so it doesn't wait on a
+// network round trip), and again once the live fetch resolves in case
+// there was no cache yet (a boat's own boatId doesn't change fetch to
+// fetch, so calling this twice is harmless -- the guard below just makes
+// the second call a no-op once the first one already succeeded).
+function restoreSearchProfileIfAny(){
+  if (currentProfileBoatId) return;
+  const savedBoatId = loadSearchProfileBoatId();
+  if (!savedBoatId || !DATA || !DATA.boats) return;
+  const boat = boatById(savedBoatId);
+  if (boat) openBoatProfile(savedBoatId);
+  else saveSearchProfileBoatId(null); // that boat no longer exists -- stop trying to reopen it
+}
+
 // ======================= boot =======================
 function boot(){
   loadSharedState();
   const cached = loadCachedData();
-  if (cached){ DATA = cached; }
-  refreshData();
+  if (cached){ DATA = cached; restoreSearchProfileIfAny(); }
+  refreshData().then(restoreSearchProfileIfAny);
   setInterval(refreshData, 15000);
   setInterval(tickTimers, 1000);
   flushQueue();
