@@ -136,6 +136,15 @@
   .history-row:last-child{ border-bottom:none; }
   .history-list{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
   .history-meta{ color:var(--slate); font-size:12px; flex-shrink:0; }
+  .notepad-add-row{ display:flex; gap:8px; margin:0 20px 12px; }
+  .notepad-add-row input{ flex:1; padding:11px 14px; border:1px solid var(--line); border-radius:9px; font-size:14px; font-family:inherit; }
+  .notepad-add-btn{ padding:11px 18px; border-radius:9px; border:none; background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer; flex-shrink:0; }
+  .notepad-list{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .notepad-row{ padding:11px 16px; border-bottom:1px solid var(--line); background:var(--white); }
+  .notepad-row:last-child{ border-bottom:none; }
+  .notepad-text{ font-size:14px; color:var(--ink); line-height:1.4; }
+  .notepad-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--slate); margin-top:6px; }
+  .notepad-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px;max-height:82vh;overflow-y:auto;position:relative; }
@@ -1074,6 +1083,8 @@ function renderBoatProfile(){
   const completed = (DATA.completedTasks || []).filter(t => t.boatId === boat.boatId)
     .sort((a,b)=> (b.completedAt||'').localeCompare(a.completedAt||''));
   const parts = (DATA.parts || []).filter(p => p.boatId === boat.boatId);
+  const boatNotes = (DATA.boatNotes || []).filter(n => n.boatId === boat.boatId)
+    .sort((a,b)=> (b.loggedAt||'').localeCompare(a.loggedAt||''));
   const custLabel = (cust ? cust.name : '—') + ' — ' + (boat.model || '');
 
   // A dedicated general boat photo (no taskId) -- same kind the phone's
@@ -1140,6 +1151,18 @@ function renderBoatProfile(){
       : '<div class="history-list">' + parts.map(p =>
           '<div class="history-row"><span>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</span>' +
           '<span class="history-meta">'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div>'
+        ).join('') + '</div>') +
+    '<div class="section-title">Notes <span class="count">'+boatNotes.length+'</span></div>' +
+    '<div class="notepad-add-row">' +
+      '<input type="text" id="boatNoteInput" placeholder="Add a note about this boat…">' +
+      '<button class="notepad-add-btn" onclick="addBoatNoteHandler(\''+boat.boatId+'\')">Add</button>' +
+    '</div>' +
+    (boatNotes.length === 0
+      ? '<div class="empty-note">No notes yet.</div>'
+      : '<div class="notepad-list">' + boatNotes.map(n =>
+          '<div class="notepad-row"><div class="notepad-text">'+n.text+'</div>' +
+          '<div class="notepad-meta"><span>'+[n.employee, (n.loggedAt ? new Date(n.loggedAt).toLocaleString() : '')].filter(Boolean).join(' · ')+'</span>' +
+          '<button class="notepad-del" onclick="deleteBoatNoteHandler(\''+n.noteId+'\')" title="Delete">&times;</button></div></div>'
         ).join('') + '</div>');
 }
 
@@ -1255,6 +1278,43 @@ function restoreSearchProfileIfAny(){
   const boat = boatById(savedBoatId);
   if (boat) openBoatProfile(savedBoatId);
   else saveSearchProfileBoatId(null); // that boat no longer exists -- stop trying to reopen it
+}
+
+// ======================= boat notes (running log) =======================
+// Optimistic add, same pattern as adding a part: shows up in the list
+// immediately under a temp_ id, then gets its real id once the server
+// confirms it. If the save actually fails, the optimistic entry is
+// rolled back out of the list rather than left there looking saved when
+// it isn't.
+async function addBoatNoteHandler(boatId){
+  const input = document.getElementById('boatNoteInput');
+  const text = input.value.trim();
+  if (!text) return;
+  const tempId = 'temp_' + Date.now();
+  DATA.boatNotes = DATA.boatNotes || [];
+  DATA.boatNotes.push({ noteId: tempId, boatId, text, employee: currentUser || '', loggedAt: new Date().toISOString() });
+  input.value = '';
+  renderBoatProfile();
+  try{
+    const res = await postToSheet('addBoatNote', { boatId, text, employee: currentUser || '' });
+    const note = (DATA.boatNotes || []).find(n => n.noteId === tempId);
+    if (note && res && res.noteId) note.noteId = res.noteId;
+  } catch(err){
+    DATA.boatNotes = (DATA.boatNotes || []).filter(n => n.noteId !== tempId);
+    alert('Could not save that note: ' + (err && err.message ? err.message : err));
+    renderBoatProfile();
+  }
+}
+async function deleteBoatNoteHandler(noteId){
+  if (!confirm('Delete this note?')) return;
+  DATA.boatNotes = (DATA.boatNotes || []).filter(n => n.noteId !== noteId);
+  renderBoatProfile();
+  if (String(noteId).indexOf('temp_') === 0) return; // never reached the server yet -- nothing to delete there
+  try{
+    await postToSheet('deleteBoatNote', { noteId });
+  } catch(err){
+    alert('Could not delete that note: ' + (err && err.message ? err.message : err));
+  }
 }
 
 // ======================= boot =======================
