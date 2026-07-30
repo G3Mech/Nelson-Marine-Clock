@@ -144,7 +144,7 @@
     background-color:#fdf6a3;
     background-image:
       linear-gradient(90deg, transparent 30px, #e07a7a 30px, #e07a7a 32px, transparent 32px),
-      linear-gradient(#8fcdb0 1px, transparent 1px);
+      linear-gradient(transparent 24px, #8fcdb0 24px, #8fcdb0 25px, transparent 25px);
     background-size:100% 100%, 100% 26px;
     padding:14px 16px 16px 46px;
   }
@@ -1170,7 +1170,7 @@ function renderBoatProfile(){
         '<button class="notepad-save-btn" id="boatNoteSaveBtn" style="display:none;" onmousedown="event.preventDefault();" onclick="addBoatNoteHandler(\''+boat.boatId+'\')">Save</button>' +
       '</div>' +
       '<div class="notepad-yellow-area">' +
-        '<textarea id="boatNoteInput" class="notepad-textarea" rows="1" placeholder="Type a note — it saves on its own when you tap away…" oninput="handleNoteInput(this)" onblur="addBoatNoteHandler(\''+boat.boatId+'\')"></textarea>' +
+        '<textarea id="boatNoteInput" class="notepad-textarea" rows="1" oninput="handleNoteInput(this)" onblur="addBoatNoteHandler(\''+boat.boatId+'\')"></textarea>' +
         '<div class="notepad-expand-row" id="boatNoteExpandRow" style="display:none;">' +
           '<button class="notepad-expand-btn" onmousedown="event.preventDefault();" onclick="toggleNoteExpand()">&#9660;</button>' +
         '</div>' +
