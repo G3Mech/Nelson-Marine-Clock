@@ -1104,18 +1104,18 @@ function renderBoatProfile(){
       photoHtml +
       '<div class="profile-info">' +
         '<div class="profile-cust-row">' +
-          '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
+          '<div class="profile-boat-name">'+boatPrimary+'</div>' +
           '<button class="profile-edit-btn" onclick="openEditBoatProfile(\''+boat.boatId+'\')" title="Edit boat details">&#9998;</button>' +
         '</div>' +
-        '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—') + '</div>' +
+        (boatSecondary ? '<div class="profile-boat-sub">'+boatSecondary+'</div>' : '') +
         '<div class="profile-badges">' +
           (boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
         '</div>' +
       '</div>' +
     '</div>' +
     '<div class="profile-subcard">' +
-      '<div class="profile-boat-name">'+boatPrimary+'</div>' +
-      (boatSecondary ? '<div class="profile-boat-sub">'+boatSecondary+'</div>' : '') +
+      '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
+      '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—') + '</div>' +
     '</div>' +
     '<div class="profile-subcard">' +
       '<div class="profile-location-row">' +
