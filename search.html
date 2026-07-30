@@ -136,14 +136,28 @@
   .history-row:last-child{ border-bottom:none; }
   .history-list{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
   .history-meta{ color:var(--slate); font-size:12px; flex-shrink:0; }
-  .notepad-add-row{ display:flex; gap:8px; margin:0 20px 12px; }
-  .notepad-add-row input{ flex:1; padding:11px 14px; border:1px solid var(--line); border-radius:9px; font-size:14px; font-family:inherit; }
-  .notepad-add-btn{ padding:11px 18px; border-radius:9px; border:none; background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer; flex-shrink:0; }
-  .notepad-list{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
-  .notepad-row{ padding:11px 16px; border-bottom:1px solid var(--line); background:var(--white); }
+  .notepad-compose{ margin:0 20px 12px; }
+  .notepad-textarea{
+    width:100%; padding:12px 14px; border:1px solid #e3d98a; border-radius:9px; font-size:14px; font-family:inherit;
+    resize:none; overflow-y:hidden; line-height:26px;
+    background-color:#fdf6d8;
+    background-image:linear-gradient(#e8dfa0 1px, transparent 1px);
+    background-size:100% 26px;
+  }
+  .notepad-textarea:focus{ outline:none; border-color:#c9ba52; }
+  .notepad-expand-row{ display:flex; justify-content:center; margin-top:2px; }
+  .notepad-expand-btn{ background:none; border:none; color:var(--slate); font-size:14px; padding:4px 10px; cursor:pointer; }
+  .notepad-add-btn{ width:100%; margin-top:8px; padding:11px 0; border-radius:9px; border:none; background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer; }
+  .notepad-list{
+    margin:0 20px; border:1px solid #e3d98a; border-radius:10px; overflow:hidden;
+    background-color:#fdf6d8;
+  }
+  .notepad-row{ padding:12px 16px; border-bottom:1px solid #e8dfa0; }
   .notepad-row:last-child{ border-bottom:none; }
-  .notepad-text{ font-size:14px; color:var(--ink); line-height:1.4; }
-  .notepad-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--slate); margin-top:6px; }
+  .notepad-text{ font-size:14px; color:var(--ink); line-height:1.5; white-space:pre-wrap; }
+  .notepad-text-collapsed{ max-height:4.5em; overflow:hidden; }
+  .notepad-toggle-link{ background:none; border:none; color:var(--pause-blue); font-size:12.5px; font-weight:700; padding:4px 0 0; cursor:pointer; }
+  .notepad-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:#8a7d2e; margin-top:8px; }
   .notepad-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
@@ -1138,6 +1152,24 @@ function renderBoatProfile(){
       ? '<div class="empty-note">Nothing open right now.</div>'
       : '<div class="checklist">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
     '<button class="add-task-btn" onclick="openAddTask(\''+boat.boatId+'\', \''+custLabel.replace(/'/g,"\\'")+'\')">+ New Task</button>' +
+    '<div class="section-title">Notes <span class="count">'+boatNotes.length+'</span></div>' +
+    '<div class="notepad-compose">' +
+      '<textarea id="boatNoteInput" class="notepad-textarea" rows="1" placeholder="Add a note about this boat…" oninput="handleNoteInput(this)"></textarea>' +
+      '<div class="notepad-expand-row" id="boatNoteExpandRow" style="display:none;">' +
+        '<button class="notepad-expand-btn" onclick="toggleNoteExpand()">&#9660;</button>' +
+      '</div>' +
+      '<button class="notepad-add-btn" onclick="addBoatNoteHandler(\''+boat.boatId+'\')">Add Note</button>' +
+    '</div>' +
+    (boatNotes.length === 0
+      ? '<div class="empty-note">No notes yet.</div>'
+      : '<div class="notepad-list">' + boatNotes.map(n => {
+          const isLong = n.text.length > 180;
+          return '<div class="notepad-row">' +
+            '<div class="notepad-text'+(isLong ? ' notepad-text-collapsed' : '')+'" id="note-text-'+n.noteId+'">'+n.text+'</div>' +
+            (isLong ? '<button class="notepad-toggle-link" onclick="toggleNoteText(\''+n.noteId+'\')">Show more &#9660;</button>' : '') +
+            '<div class="notepad-meta"><span>'+[n.employee, (n.loggedAt ? new Date(n.loggedAt).toLocaleString() : '')].filter(Boolean).join(' · ')+'</span>' +
+            '<button class="notepad-del" onclick="deleteBoatNoteHandler(\''+n.noteId+'\')" title="Delete">&times;</button></div></div>';
+        }).join('') + '</div>') +
     '<div class="section-title">Completed <span class="count">'+completed.length+'</span></div>' +
     (completed.length === 0
       ? '<div class="empty-note">No completed tasks yet.</div>'
@@ -1151,18 +1183,6 @@ function renderBoatProfile(){
       : '<div class="history-list">' + parts.map(p =>
           '<div class="history-row"><span>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</span>' +
           '<span class="history-meta">'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div>'
-        ).join('') + '</div>') +
-    '<div class="section-title">Notes <span class="count">'+boatNotes.length+'</span></div>' +
-    '<div class="notepad-add-row">' +
-      '<input type="text" id="boatNoteInput" placeholder="Add a note about this boat…">' +
-      '<button class="notepad-add-btn" onclick="addBoatNoteHandler(\''+boat.boatId+'\')">Add</button>' +
-    '</div>' +
-    (boatNotes.length === 0
-      ? '<div class="empty-note">No notes yet.</div>'
-      : '<div class="notepad-list">' + boatNotes.map(n =>
-          '<div class="notepad-row"><div class="notepad-text">'+n.text+'</div>' +
-          '<div class="notepad-meta"><span>'+[n.employee, (n.loggedAt ? new Date(n.loggedAt).toLocaleString() : '')].filter(Boolean).join(' · ')+'</span>' +
-          '<button class="notepad-del" onclick="deleteBoatNoteHandler(\''+n.noteId+'\')" title="Delete">&times;</button></div></div>'
         ).join('') + '</div>');
 }
 
@@ -1281,6 +1301,43 @@ function restoreSearchProfileIfAny(){
 }
 
 // ======================= boat notes (running log) =======================
+// The compose box auto-grows as you type, up to a few lines, then stops
+// growing and offers a small arrow to expand further rather than taking
+// over the whole screen for one long note. Collapsing back down doesn't
+// lose anything you've typed -- it's purely a display height, never
+// touches the actual value.
+const NOTE_COLLAPSED_MAX_PX = 110; // roughly 4 lines before offering the expand arrow
+let boatNoteExpanded = false;
+function handleNoteInput(el){
+  el.style.height = 'auto';
+  const full = el.scrollHeight;
+  const expandRow = document.getElementById('boatNoteExpandRow');
+  const expandBtn = expandRow ? expandRow.querySelector('.notepad-expand-btn') : null;
+  if (boatNoteExpanded || full <= NOTE_COLLAPSED_MAX_PX){
+    el.style.height = full + 'px';
+  } else {
+    el.style.height = NOTE_COLLAPSED_MAX_PX + 'px';
+  }
+  if (expandRow) expandRow.style.display = (full > NOTE_COLLAPSED_MAX_PX) ? 'flex' : 'none';
+  if (expandBtn) expandBtn.innerHTML = boatNoteExpanded ? '&#9650;' : '&#9660;';
+}
+function toggleNoteExpand(){
+  boatNoteExpanded = !boatNoteExpanded;
+  const el = document.getElementById('boatNoteInput');
+  if (el) handleNoteInput(el);
+}
+// Saved notes over ~180 characters start collapsed (see renderBoatProfile)
+// with a "Show more" link rather than always showing the full text --
+// this just toggles that one note's own collapsed class back and forth.
+function toggleNoteText(noteId){
+  const el = document.getElementById('note-text-' + noteId);
+  if (!el) return;
+  const nowCollapsed = el.classList.toggle('notepad-text-collapsed');
+  const btn = el.nextElementSibling;
+  if (btn && btn.classList.contains('notepad-toggle-link')){
+    btn.innerHTML = nowCollapsed ? 'Show more &#9660;' : 'Show less &#9650;';
+  }
+}
 // Optimistic add, same pattern as adding a part: shows up in the list
 // immediately under a temp_ id, then gets its real id once the server
 // confirms it. If the save actually fails, the optimistic entry is
@@ -1293,7 +1350,7 @@ async function addBoatNoteHandler(boatId){
   const tempId = 'temp_' + Date.now();
   DATA.boatNotes = DATA.boatNotes || [];
   DATA.boatNotes.push({ noteId: tempId, boatId, text, employee: currentUser || '', loggedAt: new Date().toISOString() });
-  input.value = '';
+  boatNoteExpanded = false; // the textarea gets rebuilt fresh by renderBoatProfile below, back to its 1-row starting size
   renderBoatProfile();
   try{
     const res = await postToSheet('addBoatNote', { boatId, text, employee: currentUser || '' });
