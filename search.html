@@ -66,16 +66,13 @@
     width:100%;font-size:16px;font-weight:600;padding:12px 14px;border-radius:10px;border:1px solid var(--line);
     background:var(--paper);color:var(--ink);
   }
-  .suggestions-list{ display:none; margin:8px 20px 0; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--white); box-shadow:0 8px 18px rgba(10,26,43,.1); }
+  .suggestions-list{ display:none; position:absolute; top:100%; left:20px; right:20px; margin-top:8px; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--white); box-shadow:0 10px 24px rgba(10,26,43,.22); z-index:20; max-height:70vh; overflow-y:auto; }
   .suggestions-list.show{ display:block; }
   .suggestion-item{ padding:13px 16px; border-bottom:1px solid var(--line); cursor:pointer; }
   .suggestion-item:last-child{ border-bottom:none; }
   .suggestion-item:active{ background:var(--paper); }
   .suggestion-item .s-main{ font-weight:700; font-size:15px; }
   .suggestion-item .s-sub{ font-size:12.5px; color:var(--slate); margin-top:2px; }
-
-  .back-link{ display:flex; align-items:center; gap:8px; padding:14px 20px 4px; color:var(--pause-blue); font-weight:700; font-size:15px; cursor:pointer; }
-  .back-link .arrow{ font-size:22px; line-height:1; }
 
   .boat-card{ margin:14px 20px 0; border:1px solid var(--line); border-left:5px solid var(--slate); border-radius:12px; padding:16px 18px; }
   .boat-card.slip{ border-left-color:var(--slip-accent); }
@@ -220,10 +217,7 @@
     <div class="suggestions-list" id="searchSuggestions"></div>
   </div>
 
-  <div id="profileArea" style="display:none;">
-    <div class="back-link" id="backToSearchBtn"><span class="arrow">&#8592;</span> Back to search</div>
-    <div id="profileContent"></div>
-  </div>
+  <div id="profileContent"></div>
 
 </div>
 
@@ -741,23 +735,28 @@ function renderSearchSuggestions(){
   });
 }
 document.getElementById('boatSearch').addEventListener('input', renderSearchSuggestions);
+// Tapping into the search bar shows the dropdown fresh (active work
+// orders if it's empty, otherwise whatever's already typed) -- it now
+// floats OVER the boat profile below rather than replacing it, since the
+// search bar stays visible all the time instead of being swapped out for
+// a separate "back to search" view.
+document.getElementById('boatSearch').addEventListener('focus', renderSearchSuggestions);
+// Tapping away closes it -- delayed slightly so a tap on a suggestion
+// item (which blurs the input first) has time to register its own click
+// before the dropdown disappears out from under it, same reasoning as
+// the notes Save button elsewhere on this page.
+document.getElementById('boatSearch').addEventListener('blur', () => {
+  setTimeout(() => { document.getElementById('searchSuggestions').classList.remove('show'); }, 150);
+});
 
 function openBoatProfile(boatId){
   currentProfileBoatId = boatId;
   saveSearchProfileBoatId(boatId);
   document.getElementById('boatSearch').value = '';
+  document.getElementById('boatSearch').blur();
   document.getElementById('searchSuggestions').classList.remove('show');
-  document.querySelector('.search-wrap').style.display = 'none';
-  document.getElementById('profileArea').style.display = 'block';
   renderBoatProfile();
 }
-document.getElementById('backToSearchBtn').addEventListener('click', ()=>{
-  currentProfileBoatId = null;
-  saveSearchProfileBoatId(null);
-  document.querySelector('.search-wrap').style.display = 'block';
-  document.getElementById('profileArea').style.display = 'none';
-  renderSearchSuggestions(); // back to the active-work-orders default view
-});
 
 // ======================= task actions =======================
 function startTask(task){
