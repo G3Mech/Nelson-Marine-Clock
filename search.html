@@ -697,6 +697,16 @@ function renderSuggestionRows(boatsList, sectionLabel, subLineFn){
 function renderSearchSuggestions(){
   const term = document.getElementById('boatSearch').value.trim().toLowerCase();
   const box = document.getElementById('searchSuggestions');
+  // currentWorkOrder on a boat is a label stamped on at assignment time
+  // -- it's only ever cleared by the explicit "delete this work order"
+  // admin action, NOT when a boat's tasks simply get finished through
+  // the normal workflow. Trusting it to mean "there's open work here"
+  // would mean every boat that's EVER had a work order keeps showing up
+  // as active forever, long after the work is actually done. What
+  // genuinely means that is whether the boat has any row at all in
+  // Active Tasks -- tasks move out of that sheet the moment they're
+  // marked done, so anything still in DATA.tasks is real, open work.
+  const boatIdsWithOpenTasks = new Set((DATA.tasks || []).map(t => t.boatId));
 
   // Nothing typed yet -- lead with what's actually in progress right now
   // rather than a blank hint, since "what's active" is the far more
@@ -704,7 +714,7 @@ function renderSearchSuggestions(){
   // particular boat name. The moment a letter is typed, this falls
   // through to ordinary name/customer/work-order matching below.
   if (!term){
-    const active = (DATA.boats || []).filter(b => b.currentWorkOrder);
+    const active = (DATA.boats || []).filter(b => boatIdsWithOpenTasks.has(b.boatId));
     if (active.length === 0){
       box.innerHTML = '<div class="suggestion-section-label">Active Work Orders</div><div class="suggestion-item"><div class="s-main">Nothing active right now.</div></div>';
       box.classList.add('show');
@@ -731,7 +741,8 @@ function renderSearchSuggestions(){
   renderSuggestionRows(matches, null, b => {
     const cust = customerById(b.customerId);
     const loc = slipForBoat(b.boatId);
-    return (cust ? cust.name : '—') + ' · ' + (loc ? ('Slip ' + (loc.slipId.match(/\d+/) || ['?'])[0]) : 'Yard') + (b.currentWorkOrder ? ' · WO ' + b.currentWorkOrder : ' · No active work order');
+    const hasOpenWork = boatIdsWithOpenTasks.has(b.boatId);
+    return (cust ? cust.name : '—') + ' · ' + (loc ? ('Slip ' + (loc.slipId.match(/\d+/) || ['?'])[0]) : 'Yard') + (hasOpenWork ? ' · WO ' + b.currentWorkOrder : ' · No active work order');
   });
 }
 document.getElementById('boatSearch').addEventListener('input', renderSearchSuggestions);
@@ -1176,7 +1187,7 @@ function renderBoatProfile(){
       (boatSecondary ? '<div class="profile-boat-sub">'+boatSecondary+'</div>' : '') +
       '<div class="boat-card-cust">' + (cust ? cust.name : '—') + '</div>' +
       '<div class="profile-badges">' +
-        (boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
+        (activeTasks.length > 0 && boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
       '</div>' +
     '</div>' +
     '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
