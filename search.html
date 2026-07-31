@@ -137,7 +137,7 @@
   .history-list{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
   .history-meta{ color:var(--slate); font-size:12px; flex-shrink:0; }
   .notepad-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #1d4e89; box-shadow:0 2px 6px rgba(10,26,43,.12); }
-  .notepad-header{ background:#1d4e89; color:var(--white); display:flex; align-items:center; padding:10px 14px; }
+  .notepad-header{ background:#1d4e89; color:var(--white); display:flex; align-items:center; min-height:20px; padding:12px 14px; }
   .notepad-header-label{ flex:1; font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; }
   .notepad-save-btn{ background:var(--go); color:var(--white); border:none; border-radius:14px; padding:6px 14px; font-size:12.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
   .notepad-yellow-area{
@@ -146,11 +146,11 @@
       linear-gradient(90deg, transparent 30px, #e07a7a 30px, #e07a7a 32px, transparent 32px),
       linear-gradient(transparent 24px, #8fcdb0 24px, #8fcdb0 25px, transparent 25px);
     background-size:100% 100%, 100% 26px;
-    padding:14px 16px 16px 46px;
+    padding:24px 16px 16px 46px;
   }
   .notepad-textarea{
-    width:100%; border:none; background:transparent; font-size:14px; font-family:inherit;
-    resize:none; overflow-y:hidden; line-height:26px; color:var(--ink); padding:0; display:block;
+    width:100%; height:26px; min-height:26px; border:none; background:transparent; font-size:14px; font-family:inherit;
+    resize:none; overflow-y:hidden; line-height:26px; color:var(--ink); padding:0; margin:0; display:block; vertical-align:top;
   }
   .notepad-textarea:focus{ outline:none; }
   .notepad-expand-row{ display:flex; justify-content:center; }
@@ -163,7 +163,6 @@
   .notepad-toggle-link{ background:none; border:none; color:var(--pause-blue); font-size:12.5px; font-weight:700; padding:0; cursor:pointer; }
   .notepad-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#6b6320; margin-top:2px; }
   .notepad-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
-  .notepad-empty{ font-size:13px; color:#6b6320; padding:6px 0; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px;max-height:82vh;overflow-y:auto;position:relative; }
@@ -1175,7 +1174,7 @@ function renderBoatProfile(){
           '<button class="notepad-expand-btn" onmousedown="event.preventDefault();" onclick="toggleNoteExpand()">&#9660;</button>' +
         '</div>' +
         (boatNotes.length === 0
-          ? '<div class="notepad-empty">No notes yet.</div>'
+          ? ''
           : '<div class="notepad-list">' + boatNotes.map(n => {
               const isLong = n.text.length > 180;
               return '<div class="notepad-row">' +
@@ -1366,10 +1365,24 @@ function toggleNoteText(noteId){
 // confirms it. If the save actually fails, the optimistic entry is
 // rolled back out of the list rather than left there looking saved when
 // it isn't.
+//
+// Guarded against firing twice for the same note: on touch devices,
+// tapping the Save button can still trigger the textarea's own blur
+// event AND the button's click, in either order, even with
+// preventDefault on the button's mousedown -- that trick reliably stops
+// it with a mouse, but touch-to-click synthesis doesn't always honor it
+// the same way. Rather than chase exact event timing across browsers,
+// this function just refuses to run again while a save from it is
+// already in progress, so however many times it gets triggered for one
+// tap, only the first one actually does anything.
+let boatNoteSaveInFlight = false;
 async function addBoatNoteHandler(boatId){
+  if (boatNoteSaveInFlight) return;
   const input = document.getElementById('boatNoteInput');
+  if (!input) return;
   const text = input.value.trim();
   if (!text) return;
+  boatNoteSaveInFlight = true;
   const tempId = 'temp_' + Date.now();
   DATA.boatNotes = DATA.boatNotes || [];
   DATA.boatNotes.push({ noteId: tempId, boatId, text, employee: currentUser || '', loggedAt: new Date().toISOString() });
@@ -1383,6 +1396,8 @@ async function addBoatNoteHandler(boatId){
     DATA.boatNotes = (DATA.boatNotes || []).filter(n => n.noteId !== tempId);
     alert('Could not save that note: ' + (err && err.message ? err.message : err));
     renderBoatProfile();
+  } finally {
+    boatNoteSaveInFlight = false;
   }
 }
 async function deleteBoatNoteHandler(noteId){
