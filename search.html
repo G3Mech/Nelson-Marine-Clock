@@ -73,36 +73,40 @@
   .suggestion-item:active{ background:var(--paper); }
   .suggestion-item .s-main{ font-weight:700; font-size:15px; }
   .suggestion-item .s-sub{ font-size:12.5px; color:var(--slate); margin-top:2px; }
-  .search-empty-hint{ color:var(--slate); font-size:13.5px; padding:30px 24px; text-align:center; line-height:1.5; }
 
   .back-link{ display:flex; align-items:center; gap:8px; padding:14px 20px 4px; color:var(--pause-blue); font-weight:700; font-size:15px; cursor:pointer; }
   .back-link .arrow{ font-size:22px; line-height:1; }
 
-  .profile-card{ margin:14px 20px 0; border:1px solid var(--line); border-radius:12px; padding:16px 18px; display:flex; gap:14px; }
-  .profile-photo{ width:88px; height:88px; border-radius:9px; object-fit:cover; flex-shrink:0; border:1px solid var(--line); cursor:pointer; }
-  .profile-photo-empty{ display:flex; flex-direction:column; align-items:center; justify-content:center; background:var(--paper); border:1.5px dashed var(--line); color:var(--slate); font-size:11.5px; font-weight:700; text-align:center; line-height:1.3; }
+  .boat-card{ margin:14px 20px 0; border:1px solid var(--line); border-left:5px solid var(--slate); border-radius:12px; padding:16px 18px; }
+  .boat-card.slip{ border-left-color:var(--slip-accent); }
+  .boat-card.yard{ border-left-color:var(--yard-accent); }
+  .boat-card-photo{
+    width:100%; height:150px; border-radius:9px; margin-bottom:14px; background:var(--paper);
+    border:1.5px dashed var(--line); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; overflow:hidden; position:relative;
+  }
+  .boat-card-photo.has-photo{ border-style:solid; }
+  .boat-card-photo img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .boat-card-photo-placeholder{ display:flex; flex-direction:column; align-items:center; gap:6px; color:var(--slate); font-size:13px; font-weight:600; }
+  .boat-card-photo-placeholder .plus{ font-size:26px; line-height:1; }
+  .boat-card-loc-row{ display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .boat-card-cust{ font-size:14px; color:var(--ink); margin-top:8px; font-weight:600; }
   .photo-view-actions{ position:absolute; right:16px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:16px; }
   .photo-view-actions button{ width:50px; height:50px; border-radius:50%; border:none; background:var(--white); color:var(--ink); font-size:21px; cursor:pointer; box-shadow:0 4px 14px rgba(10,26,43,.25); }
   .photo-view-actions button.danger{ color:var(--stop); }
-  .profile-info{ flex:1; min-width:0; }
-  .profile-cust{ font-size:18px; font-weight:800; }
-  .profile-contact{ font-size:12.5px; color:var(--slate); margin-top:3px; line-height:1.5; }
+  .profile-contact{ font-size:12.5px; color:var(--slate); line-height:1.5; }
   .profile-badges{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
-  .profile-subcard{ margin:14px 20px 0; border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
-  .profile-boat-name{ font-size:19px; font-weight:800; }
+  .profile-boat-name{ font-size:20px; font-weight:800; }
   .profile-boat-sub{ font-size:13px; color:var(--slate); margin-top:3px; }
-  .wo-loc{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
-  .wo-loc.slip{ background:var(--slip-bg); color:var(--slip-accent); }
-  .wo-loc.yard{ background:var(--yard-bg); color:var(--yard-accent); }
   .profile-cust-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .profile-edit-btn{ background:none; border:none; font-size:19px; padding:2px 6px; cursor:pointer; color:var(--slate); flex-shrink:0; }
-  .profile-location-row{ display:flex; align-items:center; gap:10px; }
   .profile-location-big{ font-size:16px; font-weight:800; padding:8px 16px; border-radius:20px; letter-spacing:.02em; }
   .profile-location-big.slip{ background:var(--slip-accent); color:var(--white); }
   .profile-location-big.yard{ background:var(--yard-accent); color:var(--white); }
-  .loc-change-btn{ font-size:13px; font-weight:700; padding:8px 16px; border-radius:20px; cursor:pointer; border:1.5px solid var(--line); background:var(--white); color:var(--slate); }
-  .loc-change-btn:active{ background:var(--paper); }
   .wo-num{ font-size:11px; font-weight:800; color:var(--white); background:var(--ink); padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .suggestion-section-label{ padding:9px 16px 5px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--slate); }
+  .contact-toggle-btn{ width:calc(100% - 40px); margin:16px 20px 0; padding:12px 16px; border:1px solid var(--line); border-radius:10px; background:var(--white); display:flex; justify-content:space-between; align-items:center; font-size:13.5px; font-weight:700; color:var(--ink); cursor:pointer; }
+  .contact-info-panel{ margin:0 20px 20px; padding:12px 16px; border:1px solid var(--line); border-top:none; border-radius:0 0 10px 10px; background:var(--paper); }
 
   .section-title{ font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--slate);margin:20px 20px 8px;display:flex;align-items:center;gap:8px; }
   .section-title .count{ background:var(--line); color:var(--ink); font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:20px; }
@@ -215,7 +219,6 @@
     <input type="text" id="boatSearch" placeholder="Search any boat, customer, or work order…" autocomplete="off">
     <div class="suggestions-list" id="searchSuggestions"></div>
   </div>
-  <div class="search-empty-hint" id="searchEmptyHint">Type above to find any boat on file — whether or not it currently has an open work order.</div>
 
   <div id="profileArea" style="display:none;">
     <div class="back-link" id="backToSearchBtn"><span class="arrow">&#8592;</span> Back to search</div>
@@ -679,12 +682,46 @@ function confirmShopMode(){
 
 // ======================= search =======================
 let currentProfileBoatId = null;
+// Renders a list of boats into the suggestions box and wires up the
+// click-to-open handler -- shared by both the empty-search default view
+// (active work orders) and normal search matches below, so that wiring
+// only lives in one place.
+function renderSuggestionRows(boatsList, sectionLabel, subLineFn){
+  const box = document.getElementById('searchSuggestions');
+  const rows = boatsList.map(b =>
+    '<div class="suggestion-item" data-boat="'+b.boatId+'">' +
+      '<div class="s-main">' + (b.model || '') + (b.boatName ? ' "'+b.boatName+'"' : '') + '</div>' +
+      '<div class="s-sub">' + subLineFn(b) + '</div>' +
+    '</div>'
+  ).join('');
+  box.innerHTML = (sectionLabel ? '<div class="suggestion-section-label">'+sectionLabel+'</div>' : '') + rows;
+  box.classList.add('show');
+  box.querySelectorAll('.suggestion-item[data-boat]').forEach(el=>{
+    el.addEventListener('click', ()=> openBoatProfile(el.dataset.boat));
+  });
+}
 function renderSearchSuggestions(){
   const term = document.getElementById('boatSearch').value.trim().toLowerCase();
   const box = document.getElementById('searchSuggestions');
-  const hint = document.getElementById('searchEmptyHint');
-  if (!term){ box.classList.remove('show'); box.innerHTML=''; hint.style.display='block'; return; }
-  hint.style.display = 'none';
+
+  // Nothing typed yet -- lead with what's actually in progress right now
+  // rather than a blank hint, since "what's active" is the far more
+  // common reason to open this page with an empty search bar than any
+  // particular boat name. The moment a letter is typed, this falls
+  // through to ordinary name/customer/work-order matching below.
+  if (!term){
+    const active = (DATA.boats || []).filter(b => b.currentWorkOrder);
+    if (active.length === 0){
+      box.innerHTML = '<div class="suggestion-section-label">Active Work Orders</div><div class="suggestion-item"><div class="s-main">Nothing active right now.</div></div>';
+      box.classList.add('show');
+      return;
+    }
+    renderSuggestionRows(active, 'Active Work Orders', b => {
+      const loc = slipForBoat(b.boatId);
+      return (loc ? ('Slip ' + (loc.slipId.match(/\d+/) || ['?'])[0]) : 'Yard') + ' · WO ' + b.currentWorkOrder;
+    });
+    return;
+  }
 
   const matches = DATA.boats.filter(b => {
     const cust = customerById(b.customerId);
@@ -694,20 +731,13 @@ function renderSearchSuggestions(){
 
   if (matches.length === 0){
     box.innerHTML = '<div class="suggestion-item"><div class="s-main">No boats match "'+term+'"</div></div>';
-  } else {
-    box.innerHTML = matches.map(b => {
-      const cust = customerById(b.customerId);
-      const loc = slipForBoat(b.boatId);
-      const locLabel = loc ? ('Slip ' + (loc.slipId.match(/\d+/) || ['?'])[0]) : 'Yard';
-      return '<div class="suggestion-item" data-boat="'+b.boatId+'">' +
-        '<div class="s-main">' + (cust ? cust.name : '—') + ' — ' + (b.model || '') + (b.boatName ? ' "'+b.boatName+'"' : '') + '</div>' +
-        '<div class="s-sub">' + locLabel + (b.currentWorkOrder ? ' · WO ' + b.currentWorkOrder : ' · No active work order') + '</div>' +
-      '</div>';
-    }).join('');
+    box.classList.add('show');
+    return;
   }
-  box.classList.add('show');
-  box.querySelectorAll('.suggestion-item[data-boat]').forEach(el=>{
-    el.addEventListener('click', ()=> openBoatProfile(el.dataset.boat));
+  renderSuggestionRows(matches, null, b => {
+    const cust = customerById(b.customerId);
+    const loc = slipForBoat(b.boatId);
+    return (cust ? cust.name : '—') + ' · ' + (loc ? ('Slip ' + (loc.slipId.match(/\d+/) || ['?'])[0]) : 'Yard') + (b.currentWorkOrder ? ' · WO ' + b.currentWorkOrder : ' · No active work order');
   });
 }
 document.getElementById('boatSearch').addEventListener('input', renderSearchSuggestions);
@@ -717,7 +747,6 @@ function openBoatProfile(boatId){
   saveSearchProfileBoatId(boatId);
   document.getElementById('boatSearch').value = '';
   document.getElementById('searchSuggestions').classList.remove('show');
-  document.getElementById('searchEmptyHint').style.display = 'none';
   document.querySelector('.search-wrap').style.display = 'none';
   document.getElementById('profileArea').style.display = 'block';
   renderBoatProfile();
@@ -726,8 +755,8 @@ document.getElementById('backToSearchBtn').addEventListener('click', ()=>{
   currentProfileBoatId = null;
   saveSearchProfileBoatId(null);
   document.querySelector('.search-wrap').style.display = 'block';
-  document.getElementById('searchEmptyHint').style.display = 'block';
   document.getElementById('profileArea').style.display = 'none';
+  renderSearchSuggestions(); // back to the active-work-orders default view
 });
 
 // ======================= task actions =======================
@@ -1119,8 +1148,8 @@ function renderBoatProfile(){
   const generalPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
   const boatPhoto = generalPhotos.length ? generalPhotos[generalPhotos.length-1] : null;
   const photoHtml = boatPhoto
-    ? '<img class="profile-photo" src="'+boatPhoto.url+'" alt="Boat photo" onclick="openPhotoView(\''+boatPhoto.photoId+'\')">'
-    : '<div class="profile-photo profile-photo-empty" onclick="openBoatPhotoSlot(\''+boat.boatId+'\')">+<br>Photo</div>';
+    ? '<div class="boat-card-photo has-photo" onclick="openPhotoView(\''+boatPhoto.photoId+'\')"><img src="'+boatPhoto.url+'" alt="Boat photo"></div>'
+    : '<div class="boat-card-photo" onclick="openBoatPhotoSlot(\''+boat.boatId+'\')"><div class="boat-card-photo-placeholder"><span class="plus">+</span><span>Add photo of boat</span></div></div>';
 
   // The boat's given name is the more prominent, distinctive part of its
   // identity when it has one ("Salt Life" is more recognizable at a
@@ -1135,27 +1164,20 @@ function renderBoatProfile(){
   const boatSecondary = boatSecondaryParts.join(' · ');
 
   wrap.innerHTML =
-    '<div class="profile-card">' +
+    '<div class="boat-card '+locType+'">' +
       photoHtml +
-      '<div class="profile-info">' +
-        '<div class="profile-cust-row">' +
-          '<div class="profile-boat-name">'+boatPrimary+'</div>' +
-          '<button class="profile-edit-btn" onclick="openEditBoatProfile(\''+boat.boatId+'\')" title="Edit boat details">&#9998;</button>' +
-        '</div>' +
-        (boatSecondary ? '<div class="profile-boat-sub">'+boatSecondary+'</div>' : '') +
-        '<div class="profile-badges">' +
-          (boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
-        '</div>' +
-      '</div>' +
-    '</div>' +
-    '<div class="profile-subcard">' +
-      '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
-      '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—') + '</div>' +
-    '</div>' +
-    '<div class="profile-subcard">' +
-      '<div class="profile-location-row">' +
+      '<div class="boat-card-loc-row">' +
         '<span class="profile-location-big '+locType+'">'+locLabel+'</span>' +
-        '<button class="loc-change-btn" onclick="openLocationPicker(\''+boat.boatId+'\')">Change</button>' +
+        '<button class="profile-edit-btn" onclick="openLocationPicker(\''+boat.boatId+'\')" title="Change location">&#9998;</button>' +
+      '</div>' +
+      '<div class="profile-cust-row">' +
+        '<div class="profile-boat-name">'+boatPrimary+'</div>' +
+        '<button class="profile-edit-btn" onclick="openEditBoatProfile(\''+boat.boatId+'\')" title="Edit boat details">&#9998;</button>' +
+      '</div>' +
+      (boatSecondary ? '<div class="profile-boat-sub">'+boatSecondary+'</div>' : '') +
+      '<div class="boat-card-cust">' + (cust ? cust.name : '—') + '</div>' +
+      '<div class="profile-badges">' +
+        (boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
       '</div>' +
     '</div>' +
     '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
@@ -1198,7 +1220,26 @@ function renderBoatProfile(){
       : '<div class="history-list">' + parts.map(p =>
           '<div class="history-row"><span>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</span>' +
           '<span class="history-meta">'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div>'
-        ).join('') + '</div>');
+        ).join('') + '</div>') +
+    '<button class="contact-toggle-btn" id="contactToggleBtn" onclick="toggleContactInfo()">' +
+      '<span>Customer Contact Information</span><span id="contactToggleArrow">&#9660;</span>' +
+    '</button>' +
+    '<div class="contact-info-panel" id="contactInfoPanel" style="display:none;">' +
+      '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : 'No contact info on file.') + '</div>' +
+    '</div>';
+}
+// The customer's phone/email/address is rarely what a technician
+// actually needs while working a boat -- it's collapsed by default here
+// rather than sitting at the top of the page, and stays a simple
+// show/hide rather than persisting the open/closed state anywhere,
+// since it's meant to be checked occasionally, not left open.
+function toggleContactInfo(){
+  const panel = document.getElementById('contactInfoPanel');
+  const arrow = document.getElementById('contactToggleArrow');
+  if (!panel || !arrow) return;
+  const nowOpen = panel.style.display === 'none';
+  panel.style.display = nowOpen ? 'block' : 'none';
+  arrow.innerHTML = nowOpen ? '&#9650;' : '&#9660;';
 }
 
 function tickTimers(){
@@ -1305,14 +1346,20 @@ async function setBoatLocation(toSlipId){
 // network round trip), and again once the live fetch resolves in case
 // there was no cache yet (a boat's own boatId doesn't change fetch to
 // fetch, so calling this twice is harmless -- the guard below just makes
-// the second call a no-op once the first one already succeeded).
+// the second call a no-op once the first one already succeeded). When
+// there's nothing to restore, it renders the default search suggestions
+// (active work orders) instead of leaving the search bar showing
+// nothing until the user types something.
 function restoreSearchProfileIfAny(){
   if (currentProfileBoatId) return;
+  if (!DATA || !DATA.boats) return;
   const savedBoatId = loadSearchProfileBoatId();
-  if (!savedBoatId || !DATA || !DATA.boats) return;
-  const boat = boatById(savedBoatId);
-  if (boat) openBoatProfile(savedBoatId);
-  else saveSearchProfileBoatId(null); // that boat no longer exists -- stop trying to reopen it
+  if (savedBoatId){
+    const boat = boatById(savedBoatId);
+    if (boat){ openBoatProfile(savedBoatId); return; }
+    saveSearchProfileBoatId(null); // that boat no longer exists -- stop trying to reopen it
+  }
+  renderSearchSuggestions();
 }
 
 // ======================= boat notes (running log) =======================
