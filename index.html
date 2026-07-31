@@ -127,6 +127,7 @@
   .task-row-secondary{ margin-top:9px;padding-top:9px;border-top:1px dashed rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:center;gap:12px; }
   .notes-photo-group{display:flex;align-items:center;gap:16px;}
   .icon-btn{ background:none;border:none;font-size:20px;padding:2px;cursor:pointer;line-height:1;opacity:.6; }
+  .delete-task-btn{ opacity:1; color:var(--stop); }
   .icon-btn.has-note{ opacity:1; color:var(--pause-blue); }
 
   .add-task-btn{
@@ -1141,6 +1142,13 @@ function taskRowHtml(t){
     mainRight = '<button class="pill-btn start" onclick="startTask(findTaskById(\''+t.taskId+'\'))">Start</button>';
   }
   const showFlagIcon = t.status !== 'flagged' && t.status !== 'active';
+  // Only a task that was added FROM a phone in the first place can be
+  // deleted from here -- an office-assigned work-order task can't,
+  // enforced server-side too (deleteTaskFromMobile_ in Code.gs), not
+  // just by this button being hidden.
+  const deleteBtn = t.source === 'mobile'
+    ? '<button class="icon-btn delete-task-btn" onclick="deleteTaskHandler(\''+t.taskId+'\')" title="Delete this task">&#128465;&#65039;</button>'
+    : '';
 
   return '<div class="task-row" data-rowid="'+t.taskId+'">' +
     '<div class="task-row-main">' +
@@ -1149,7 +1157,7 @@ function taskRowHtml(t){
     '</div>' +
     '<div class="task-row-secondary">' +
       '<span class="notes-photo-group">'+notesBtn+partsBtn+(showFlagIcon?flagBtn:'')+'</span>' +
-      '<span></span>' +
+      '<span>'+deleteBtn+'</span>' +
     '</div>' +
   '</div>';
 }
@@ -1543,6 +1551,25 @@ async function deleteBoatNoteHandler(noteId){
     await postToSheet('deleteBoatNote', { noteId });
   } catch(err){
     alert('Could not delete that note: ' + (err && err.message ? err.message : err));
+  }
+}
+
+// Only ever shown for a task added from a phone in the first place (see
+// taskRowHtml) -- the server enforces the same rule independently
+// (deleteTaskFromMobile_ in Code.gs), so this can't be used to remove an
+// office-assigned work-order task even if something bypassed the button.
+async function deleteTaskHandler(taskId){
+  const task = findTaskById(taskId);
+  if (!task) return;
+  if (!confirm('Delete "'+task.name+'"? This can\'t be undone.')) return;
+  DATA.tasks = DATA.tasks.filter(t => t.taskId !== taskId);
+  renderBoatProfile();
+  try{
+    await postToSheet('deleteTask', { taskId });
+  } catch(err){
+    DATA.tasks.push(task);
+    renderBoatProfile();
+    alert('Could not delete that task: ' + (err && err.message ? err.message : err));
   }
 }
 
