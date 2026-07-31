@@ -907,7 +907,7 @@ document.getElementById('newTaskAddBtn').addEventListener('click', () => {
   const tempId = 'temp_' + Date.now();
   const boat = boatById(addTaskBoatId);
   const existing = DATA.tasks.filter(t => t.boatId === addTaskBoatId);
-  DATA.tasks.push({ taskId: tempId, boatId: addTaskBoatId, name, status: 'pending', note: '', order: existing.length + 1, billMode, priority: 2, workOrder: boat ? boat.currentWorkOrder : '' });
+  DATA.tasks.push({ taskId: tempId, boatId: addTaskBoatId, name, status: 'pending', note: '', order: existing.length + 1, billMode, priority: 2, workOrder: boat ? boat.currentWorkOrder : '', source: 'mobile' });
   enqueue('addTask', { boatId: addTaskBoatId, name, billMode });
   const q = loadQueue(); q[q.length - 1].tempId = tempId; saveQueue(q);
   document.getElementById('newTaskOverlay').style.display = 'none';
@@ -1134,11 +1134,16 @@ async function deleteTaskHandler(taskId){
   const task = findTaskById(taskId);
   if (!task) return;
   if (!confirm('Delete "'+task.name+'"? This can\'t be undone.')) return;
+  pendingDeletedTaskIds.add(taskId);
   DATA.tasks = DATA.tasks.filter(t => t.taskId !== taskId);
   render();
   try{
     await postToSheet('deleteTask', { taskId });
+    // Left in pendingDeletedTaskIds on purpose -- a genuinely deleted
+    // task will never show up in a future fetch again, so mergeFetchedTasks
+    // cleans this entry up on its own the next time it confirms that.
   } catch(err){
+    pendingDeletedTaskIds.delete(taskId); // it didn't actually get deleted -- stop suppressing it
     DATA.tasks.push(task);
     render();
     alert('Could not delete that task: ' + (err && err.message ? err.message : err));
@@ -2013,7 +2018,25 @@ function updateStatusBar(){
   }
 }
 
+// A task this device has optimistically deleted but not yet confirmed
+// gone from an actual fetch -- same reasoning as the status-override
+// guards above: Apps Script doesn't guarantee read-after-write
+// consistency across separate executions, so a periodic refresh landing
+// in the narrow window before the delete has fully committed
+// server-side would otherwise silently resurrect the task right after
+// it was removed. See deleteTaskHandler for where entries get added/removed.
+let pendingDeletedTaskIds = new Set();
 function mergeFetchedTasks(freshTasks){
+  const stillPresent = new Set();
+  freshTasks = freshTasks.filter(t => {
+    if (pendingDeletedTaskIds.has(t.taskId)){ stillPresent.add(t.taskId); return false; }
+    return true;
+  });
+  // Anything pending-delete that this fetch DIDN'T see at all is
+  // confirmed gone for real now -- stop tracking it (iterating a copy of
+  // the set since it's unsafe to delete from it while iterating live).
+  Array.from(pendingDeletedTaskIds).forEach(id => { if (!stillPresent.has(id)) pendingDeletedTaskIds.delete(id); });
+
   return freshTasks.map(t => {
     const override = pendingStatusOverride[t.taskId];
     if (override === undefined) return t;
