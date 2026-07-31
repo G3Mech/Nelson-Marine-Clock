@@ -207,6 +207,7 @@
   .task-row-secondary{ margin-top:6px; padding-left:0; display:flex; justify-content:space-between; align-items:center; gap:10px; }
   .notes-photo-group{ display:flex; align-items:center; gap:12px; }
   .icon-btn{ background:none;border:none;font-size:17px;padding:2px;cursor:pointer;line-height:1;opacity:.6; }
+  .delete-task-btn{ opacity:1; color:var(--stop); }
   .icon-btn.has-note{ opacity:1; color:var(--pause-blue); }
   .icon-btn.flag-icon{ opacity:.55; }
 
@@ -1125,6 +1126,24 @@ async function deletePart(partId){
   if (String(partId).indexOf('temp_') === 0) return;
   await postToSheet('deletePart', { partId });
 }
+// Only ever shown for a task added from a phone in the first place (see
+// taskRowHtml) -- the server enforces the same rule independently
+// (deleteTaskFromMobile_ in Code.gs), so this can't be used to remove an
+// office-assigned work-order task even if something bypassed the button.
+async function deleteTaskHandler(taskId){
+  const task = findTaskById(taskId);
+  if (!task) return;
+  if (!confirm('Delete "'+task.name+'"? This can\'t be undone.')) return;
+  DATA.tasks = DATA.tasks.filter(t => t.taskId !== taskId);
+  render();
+  try{
+    await postToSheet('deleteTask', { taskId });
+  } catch(err){
+    DATA.tasks.push(task);
+    render();
+    alert('Could not delete that task: ' + (err && err.message ? err.message : err));
+  }
+}
 document.getElementById('partsCloseBtn').addEventListener('click', () => document.getElementById('partsOverlay').style.display = 'none');
 
 // RESTORED BLOCK: neither confirmation popup's buttons had any click
@@ -1180,6 +1199,13 @@ function taskRowHtml(t){
   }
 
   const showFlagIcon = t.status !== 'flagged' && t.status !== 'active';
+  // Only a task that was added FROM a phone in the first place can be
+  // deleted from here -- an office-assigned work-order task can't,
+  // enforced server-side too (deleteTaskFromMobile_ in Code.gs), not
+  // just by this button being hidden.
+  const deleteBtn = t.source === 'mobile'
+    ? '<button class="icon-btn delete-task-btn" onclick="deleteTaskHandler(\'' + t.taskId + '\')" title="Delete this task">&#128465;&#65039;</button>'
+    : '';
 
   return '<div class="task-row" data-rowid="' + t.taskId + '">' +
     '<div class="task-row-main">' +
@@ -1188,7 +1214,7 @@ function taskRowHtml(t){
     '</div>' +
     '<div class="task-row-secondary">' +
       '<span class="notes-photo-group">' + notesBtn + partsBtn + (showFlagIcon ? flagBtn : '') + '</span>' +
-      '<span></span>' +
+      '<span>' + deleteBtn + '</span>' +
     '</div>' +
   '</div>';
 }
