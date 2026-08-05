@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Nelson Marine Databasin — View Work / Parts</title>
+<style>
+  :root{
+    --ink:#0f2438; --deep:#0a1a2b; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
+    --go:#1c6e4a; --go-bg:#e3f2ea; --stop:#8a2f1f; --pause-blue:#1565a8;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:var(--paper); color:var(--ink); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .frame{ width:100%; max-width:460px; min-height:100vh; background:var(--white); position:relative; }
+  .page-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px 10px; }
+  .page-head .yard{ font-size:13px; font-weight:800; letter-spacing:.06em; color:var(--slate); text-transform:uppercase; }
+  .hamburger-btn{ background:none; border:none; padding:8px; cursor:pointer; }
+  .hamburger-btn span{ display:block;width:26px;height:3px;border-radius:2px;background:var(--ink); margin:5px 0; }
+
+  .menu-overlay{ display:none; position:fixed; inset:0; background:var(--white); z-index:30; flex-direction:column; padding:20px; }
+  .menu-overlay.show{ display:flex; }
+  .menu-close{ align-self:flex-end; background:none; border:none; font-size:30px; cursor:pointer; color:var(--slate); padding:6px; }
+  .menu-item{ display:block; padding:16px 6px; font-size:17px; font-weight:700; color:var(--ink); text-decoration:none; border-bottom:1px solid var(--line); }
+  .menu-item:active{ background:var(--paper); }
+
+  .filter-row{ padding:4px 20px 14px; }
+  .filter-row label{ display:block; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--slate); margin-bottom:6px; }
+  .filter-row select{
+    width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:9px; font-size:15px;
+    font-family:inherit; background:var(--white); color:var(--ink);
+  }
+
+  .columns{ display:flex; gap:10px; padding:0 12px 30px; align-items:flex-start; }
+  .col{ flex:1; min-width:0; }
+  .col-header{
+    font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--white);
+    padding:9px 10px; border-radius:8px 8px 0 0; text-align:center;
+  }
+  .col-header.tasks{ background:var(--pause-blue); }
+  .col-header.parts{ background:#3a5a7a; }
+  .col-body{ border:1px solid var(--line); border-top:none; border-radius:0 0 8px 8px; max-height:74vh; overflow-y:auto; }
+  .col-empty{ font-size:12.5px; color:var(--slate); padding:16px 10px; text-align:center; }
+  .item-row{ padding:9px 10px; border-bottom:1px solid var(--line); font-size:12px; }
+  .item-row:last-child{ border-bottom:none; }
+  .item-name{ font-weight:700; font-size:12.5px; line-height:1.3; }
+  .item-sub{ color:var(--slate); margin-top:3px; line-height:1.35; }
+  .item-time{ margin-top:4px; font-weight:700; }
+  .item-time.timed{ color:var(--go); }
+  .item-time.flat{ color:var(--slate); font-weight:600; }
+
+  .loading{ text-align:center; padding:40px 20px; color:var(--slate); font-size:14px; }
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="page-head">
+    <span class="yard">Nelson Marine Databasin · View Work / Parts</span>
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu"><span></span><span></span><span></span></button>
+  </header>
+
+  <div class="filter-row">
+    <label for="employeeFilter">Filter by employee</label>
+    <select id="employeeFilter">
+      <option value="">All Employees</option>
+    </select>
+  </div>
+
+  <div class="columns">
+    <div class="col">
+      <div class="col-header tasks">Tasks Completed</div>
+      <div class="col-body" id="tasksCol"><div class="loading">Loading…</div></div>
+    </div>
+    <div class="col">
+      <div class="col-header parts">Parts</div>
+      <div class="col-body" id="partsCol"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="menu-overlay" id="menuOverlay">
+  <button class="menu-close" id="menuCloseBtn" aria-label="Close menu">&times;</button>
+  <a class="menu-item" href="board.html" onclick="return confirmShopMode()">Shop Mode</a>
+  <a class="menu-item" href="index.html">Mobile Mode</a>
+</div>
+
+<script>
+// ======================= CONFIG =======================
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+
+// This page is read-only by design -- a report to look through, not a
+// place to change anything. That means none of the offline-queue/cache
+// machinery the other pages need (nothing here is ever edited), just a
+// straight fetch on load and a client-side filter.
+let DATA = null;
+
+function confirmShopMode(){
+  return confirm('Switch to Shop Mode?\n\nTo get back, use your browser\'s Back button — there\'s no menu button once you\'re there.');
+}
+
+const hamburgerBtn = document.getElementById('hamburgerBtn');
+const menuOverlay = document.getElementById('menuOverlay');
+hamburgerBtn.addEventListener('click', ()=> menuOverlay.classList.add('show'));
+document.getElementById('menuCloseBtn').addEventListener('click', ()=> menuOverlay.classList.remove('show'));
+
+function boatLabel(boatId){
+  const boat = (DATA.boats || []).find(b => b.boatId === boatId);
+  if (!boat) return '—';
+  const cust = boat.customerId ? (DATA.customers || []).find(c => c.customerId === boat.customerId) : null;
+  return (cust ? cust.name : (boat.model || '—'));
+}
+
+function populateEmployeeFilter(){
+  const sel = document.getElementById('employeeFilter');
+  const current = sel.value;
+  const names = (DATA.employees || []).slice().sort();
+  sel.innerHTML = '<option value="">All Employees</option>' + names.map(n => '<option value="'+n+'">'+n+'</option>').join('');
+  sel.value = current && names.includes(current) ? current : '';
+}
+
+function renderColumns(){
+  const employee = document.getElementById('employeeFilter').value;
+
+  // Tasks: newest completion first. Time only shown for genuinely timed
+  // tasks -- a Completion-billed (flat fee) task never accumulates real
+  // minutes, so showing "0.00 hrs" for those would just be noise.
+  let tasks = (DATA.completedTasks || []).slice().sort((a,b) => (b.completedAt||'').localeCompare(a.completedAt||''));
+  if (employee) tasks = tasks.filter(t => t.employee === employee);
+  const tasksWrap = document.getElementById('tasksCol');
+  if (tasks.length === 0){
+    tasksWrap.innerHTML = '<div class="col-empty">' + (employee ? 'No completed tasks for ' + employee + '.' : 'No completed tasks yet.') + '</div>';
+  } else {
+    tasksWrap.innerHTML = tasks.map(t => {
+      const isTimed = String(t.billMode || '').trim().toLowerCase() !== 'complete';
+      const hrs = isTimed ? (Number(t.accumulatedMs || 0) / 3600000) : 0;
+      const when = t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '';
+      return '<div class="item-row">' +
+        '<div class="item-name">' + t.name + '</div>' +
+        '<div class="item-sub">' + boatLabel(t.boatId) + (when ? ' · ' + when : '') + (t.employee ? ' · ' + t.employee : '') + '</div>' +
+        (isTimed
+          ? '<div class="item-time timed">' + hrs.toFixed(2) + ' hrs</div>'
+          : '<div class="item-time flat">Flat fee</div>') +
+      '</div>';
+    }).join('');
+  }
+
+  // Parts: newest logged first, filtered by whoever LOGGED the part.
+  let parts = (DATA.parts || []).slice().sort((a,b) => (b.loggedAt||'').localeCompare(a.loggedAt||''));
+  if (employee) parts = parts.filter(p => p.employee === employee);
+  const partsWrap = document.getElementById('partsCol');
+  if (parts.length === 0){
+    partsWrap.innerHTML = '<div class="col-empty">' + (employee ? 'No parts logged by ' + employee + '.' : 'No parts logged yet.') + '</div>';
+  } else {
+    partsWrap.innerHTML = parts.map(p => {
+      const when = p.loggedAt ? new Date(p.loggedAt).toLocaleDateString() : '';
+      const priceText = p.listPrice ? '$' + Number(p.listPrice).toFixed(2) : '';
+      return '<div class="item-row">' +
+        '<div class="item-name">' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</div>' +
+        '<div class="item-sub">' + boatLabel(p.boatId) + (when ? ' · ' + when : '') + (p.employee ? ' · ' + p.employee : '') + '</div>' +
+        (priceText ? '<div class="item-time flat">' + priceText + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+}
+document.getElementById('employeeFilter').addEventListener('change', renderColumns);
+
+async function boot(){
+  try{
+    const res = await fetch(WEBAPP_URL + '?action=getAll');
+    DATA = await res.json();
+    if (DATA.error) throw new Error(DATA.error);
+  } catch(err){
+    document.getElementById('tasksCol').innerHTML = '<div class="col-empty">Could not load: ' + (err && err.message ? err.message : err) + '</div>';
+    document.getElementById('partsCol').innerHTML = '';
+    return;
+  }
+  populateEmployeeFilter();
+  renderColumns();
+}
+boot();
+</script>
+</body>
+</html>
