@@ -830,8 +830,9 @@ function pauseTask(task){
 }
 function completeSimpleTask(task){
   task.status = 'done';
+  const employee = currentEmployee || '';
   pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: Number(task.accumulatedMs) || 0 };
-  enqueue('updateTask', { taskId: task.taskId, status: 'done' });
+  enqueue('updateTask', { taskId: task.taskId, status: 'done', employee });
   playDoneSound();
   render();
 }
