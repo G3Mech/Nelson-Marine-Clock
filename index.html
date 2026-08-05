@@ -179,12 +179,12 @@
   .parts-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
   .parts-empty{ font-size:13px; color:var(--slate); padding:4px 0 2px; }
 
-  .photos-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #4a4a4a; box-shadow:0 2px 6px rgba(10,26,43,.12); }
-  .photos-header{ background:#4a4a4a; color:var(--white); padding:10px 14px; }
-  .photos-header-label{ display:block; font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; }
-  .photos-body-split{ background:#f2f2f2; padding:16px 14px; display:flex; align-items:center; gap:12px; }
-  .photos-camera-big{ background:var(--white); border:1px solid #d8d8d8; border-radius:12px; width:60px; height:60px; font-size:28px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .photos-view-btn{ flex:1; padding:16px 12px; border-radius:10px; border:1px solid #4a4a4a; background:var(--white); color:#4a4a4a; font-weight:700; font-size:14px; cursor:pointer; }
+  .photos-pad{ margin:14px 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #4a4a4a; box-shadow:0 2px 6px rgba(10,26,43,.12); }
+  .photos-header{ background:#4a4a4a; color:var(--white); padding:7px 14px; }
+  .photos-header-label{ display:block; font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; text-align:center; }
+  .photos-body-split{ background:#f2f2f2; padding:10px 12px; display:flex; align-items:center; gap:10px; }
+  .photos-camera-big{ background:var(--white); border:1px solid #d8d8d8; border-radius:10px; width:46px; height:46px; font-size:21px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .photos-view-btn{ flex:1; padding:11px 12px; border-radius:9px; border:1px solid #4a4a4a; background:var(--white); color:#4a4a4a; font-weight:700; font-size:13.5px; cursor:pointer; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px;max-height:82vh;overflow-y:auto;position:relative; }
@@ -950,7 +950,12 @@ function openPhotoGallery(boatId){
 }
 function renderPhotoGalleryList(){
   const wrap = document.getElementById('notesPhotoList');
-  const photos = (DATA.photos || []).filter(p => p.boatId === photoGalleryBoatRef && !p.taskId);
+  const boat = boatById(photoGalleryBoatRef);
+  const thumbId = boat ? boat.thumbnailPhotoId : null;
+  // Excludes whatever is currently the thumbnail -- it's shown on the
+  // profile card itself, not duplicated in here too, so the two stay
+  // genuinely distinct rather than the same photo appearing twice.
+  const photos = (DATA.photos || []).filter(p => p.boatId === photoGalleryBoatRef && !p.taskId && p.photoId !== thumbId);
   wrap.innerHTML = photos.length === 0 ? '<div class="empty-note">No photos yet.</div>' :
     '<div class="notes-photo-grid">' + photos.map(p =>
       '<div class="notes-photo-thumb"><img src="'+p.url+'" alt="Boat photo" onclick="openPhotoView(\''+p.photoId+'\')">' +
@@ -975,8 +980,19 @@ document.getElementById('photoViewDeleteBtn').addEventListener('click', async ()
   if (!currentViewedPhoto) return;
   if (!confirm('Delete this photo? This cannot be undone.')) return;
   const photoId = currentViewedPhoto.photoId;
+  const boatId = currentViewedPhoto.boatId;
   await postToSheet('deletePhoto', { photoId });
   DATA.photos = (DATA.photos || []).filter(p => p.photoId !== photoId);
+  // If the deleted photo was this boat's thumbnail, clear that reference
+  // too rather than leaving it pointing at a photo that no longer
+  // exists -- the profile card already falls back to the empty "add
+  // photo" state gracefully either way, but this keeps the sheet itself
+  // clean rather than leaving a dangling id sitting there.
+  const boat = boatById(boatId);
+  if (boat && boat.thumbnailPhotoId === photoId){
+    boat.thumbnailPhotoId = '';
+    postToSheet('updateBoat', { id: boatId, thumbnailPhotoId: '' }).catch(()=>{});
+  }
   document.getElementById('photoViewOverlay').style.display = 'none';
   currentViewedPhoto = null;
   refreshPhotoViews();
@@ -984,17 +1000,41 @@ document.getElementById('photoViewDeleteBtn').addEventListener('click', async ()
 document.getElementById('photoViewUploadBtn').addEventListener('click', () => {
   if (!currentViewedPhoto) return;
   const boatId = currentViewedPhoto.boatId;
+  const boat = boatById(boatId);
+  const isThumbnail = boat && boat.thumbnailPhotoId === currentViewedPhoto.photoId;
   document.getElementById('photoViewOverlay').style.display = 'none';
-  openPhotoChoice({ boatId, taskId: null, onDone: refreshPhotoViews });
+  if (isThumbnail){
+    openBoatThumbnailSlot(boatId);
+  } else {
+    openPhotoChoice({ boatId, taskId: null, onDone: refreshPhotoViews });
+  }
 });
 // The big camera icon on the Photos box -- taskId left blank so this is
-// always a general boat photo, never attached to any specific task.
-// Deliberately calls straight into openPhotoChoice with nothing else in
-// the way first, so adding a photo stays fast regardless of how many
-// old photos already exist or how long the gallery would take to load.
+// always a general boat photo, never attached to any specific task, and
+// never touches the boat's thumbnail reference. Deliberately calls
+// straight into openPhotoChoice with nothing else in the way first, so
+// adding a photo stays fast regardless of how many old photos already
+// exist or how long the gallery would take to load.
 function openBoatPhotoSlot(boatId){
   openPhotoChoice({
     boatId, taskId: null,
+    onDone: () => { if (currentProfileBoatId === boatId) renderBoatProfile(); }
+  });
+}
+// Tapping the profile card's own hero photo slot -- distinct from the
+// Photos box's gallery entirely. Whatever gets uploaded here becomes (or
+// replaces) this boat's thumbnailPhotoId specifically, so it's never
+// confused with -- or silently overwritten by -- a new photo added to
+// the general gallery.
+function openBoatThumbnailSlot(boatId){
+  openPhotoChoice({
+    boatId, taskId: null,
+    onEach: async (result) => {
+      const boat = boatById(boatId);
+      if (boat) boat.thumbnailPhotoId = result.photoId;
+      try{ await postToSheet('updateBoat', { id: boatId, thumbnailPhotoId: result.photoId }); }
+      catch(err){ console.warn('Could not save the new thumbnail:', err); }
+    },
     onDone: () => { if (currentProfileBoatId === boatId) renderBoatProfile(); }
   });
 }
@@ -1180,8 +1220,7 @@ function taskRowHtml(t){
       mainRight +
     '</div>' +
     '<div class="task-row-secondary">' +
-      '<span class="notes-photo-group">'+(showFlagIcon?flagBtn:'')+'</span>' +
-      '<span>'+deleteBtn+'</span>' +
+      '<span class="notes-photo-group">'+(showFlagIcon?flagBtn:'')+deleteBtn+'</span>' +
     '</div>' +
   '</div>';
 }
@@ -1204,15 +1243,18 @@ function renderBoatProfile(){
     .sort((a,b)=> (b.loggedAt||'').localeCompare(a.loggedAt||''));
   const custLabel = (cust ? cust.name : '—') + ' — ' + (boat.model || '');
 
-  // A dedicated general boat photo (no taskId) -- same kind the phone's
-  // boat photo slot creates. Tapping the empty slot here now lets you
-  // add one directly, rather than only ever being viewable if it happened
-  // to be created through the classic phone page.
-  const generalPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
-  const boatPhoto = generalPhotos.length ? generalPhotos[generalPhotos.length-1] : null;
-  const photoHtml = boatPhoto
-    ? '<div class="boat-card-photo has-photo" onclick="openPhotoView(\''+boatPhoto.photoId+'\')"><img src="'+boatPhoto.url+'" alt="Boat photo"></div>'
-    : '<div class="boat-card-photo" onclick="openBoatPhotoSlot(\''+boat.boatId+'\')"><div class="boat-card-photo-placeholder"><span class="plus">+</span><span>Add photo of boat</span></div></div>';
+  // Distinct from the general photo gallery below (Photos box) -- the
+  // hero/thumbnail photo is whatever boat.thumbnailPhotoId specifically
+  // points at, never just "whatever was uploaded most recently."
+  // Uploading a new photo through the Photos box's camera icon adds to
+  // the gallery only; it never touches this reference. Only tapping the
+  // thumbnail slot itself (openBoatThumbnailSlot) changes it.
+  const allGeneralPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
+  const thumbnailPhoto = boat.thumbnailPhotoId ? allGeneralPhotos.find(p => p.photoId === boat.thumbnailPhotoId) : null;
+  const galleryPhotos = allGeneralPhotos.filter(p => p.photoId !== boat.thumbnailPhotoId);
+  const photoHtml = thumbnailPhoto
+    ? '<div class="boat-card-photo has-photo" onclick="openPhotoView(\''+thumbnailPhoto.photoId+'\')"><img src="'+thumbnailPhoto.url+'" alt="Boat photo"></div>'
+    : '<div class="boat-card-photo" onclick="openBoatThumbnailSlot(\''+boat.boatId+'\')"><div class="boat-card-photo-placeholder"><span class="plus">+</span><span>Add photo of boat</span></div></div>';
 
   // The boat's given name is the more prominent, distinctive part of its
   // identity when it has one ("Salt Life" is more recognizable at a
@@ -1254,7 +1296,7 @@ function renderBoatProfile(){
       '</div>' +
       '<div class="photos-body-split">' +
         '<button class="photos-camera-big" onclick="openBoatPhotoSlot(\''+boat.boatId+'\')" title="Add photo">&#128247;</button>' +
-        '<button class="photos-view-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')">View Photos ('+generalPhotos.length+')</button>' +
+        '<button class="photos-view-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')">View Photos ('+galleryPhotos.length+')</button>' +
       '</div>' +
     '</div>' +
     '<div class="notepad-pad">' +
@@ -1279,13 +1321,6 @@ function renderBoatProfile(){
             }).join('') + '</div>') +
       '</div>' +
     '</div>' +
-    '<div class="section-title">Completed <span class="count">'+completed.length+'</span></div>' +
-    (completed.length === 0
-      ? '<div class="empty-note">No completed tasks yet.</div>'
-      : '<div class="history-list">' + completed.map(t =>
-          '<div class="history-row"><span>'+t.name+'</span>' +
-          '<span class="history-meta">'+(t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '')+'</span></div>'
-        ).join('') + '</div>') +
     (function(){
       return '<div class="parts-pad">' +
         '<div class="parts-header">Parts</div>' +
@@ -1301,6 +1336,13 @@ function renderBoatProfile(){
         '</div>' +
       '</div>';
     })() +
+    '<div class="section-title">Completed <span class="count">'+completed.length+'</span></div>' +
+    (completed.length === 0
+      ? '<div class="empty-note">No completed tasks yet.</div>'
+      : '<div class="history-list">' + completed.map(t =>
+          '<div class="history-row"><span>'+t.name+'</span>' +
+          '<span class="history-meta">'+(t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '')+'</span></div>'
+        ).join('') + '</div>') +
     '<button class="contact-toggle-btn" id="contactToggleBtn" onclick="toggleContactInfo()">' +
       '<span>Customer Contact Information</span><span id="contactToggleArrow">&#9660;</span>' +
     '</button>' +
