@@ -167,6 +167,29 @@
   .notepad-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#6b6320; margin-top:2px; }
   .notepad-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
 
+  .parts-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #3a5a7a; box-shadow:0 2px 6px rgba(10,26,43,.12); }
+  .parts-header{ background:#3a5a7a; color:var(--white); font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; padding:10px 0; }
+  .parts-body{ background:#eef2f6; padding:14px 16px; }
+  .parts-add-row input{ width:100%; margin-bottom:8px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; background:var(--white); box-sizing:border-box; }
+  .parts-add-btn{ width:100%; padding:10px 0; border-radius:8px; border:none; background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer; }
+  .parts-list{ margin-top:10px; border-top:1px solid #c7d2db; padding-top:6px; }
+  .parts-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed #c7d2db; }
+  .parts-row:last-child{ border-bottom:none; }
+  .parts-row-main{ display:flex; flex-direction:column; font-size:13.5px; }
+  .parts-row-main span{ color:var(--slate); font-size:12px; margin-top:2px; }
+  .parts-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
+  .parts-empty{ font-size:13px; color:var(--slate); padding:4px 0 2px; }
+
+  .photos-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #4a4a4a; box-shadow:0 2px 6px rgba(10,26,43,.12); }
+  .photos-header{ background:#4a4a4a; color:var(--white); display:flex; align-items:center; padding:10px 14px; }
+  .photos-header-label{ flex:1; font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; }
+  .photos-camera-btn{ background:none; border:none; color:var(--white); font-size:21px; cursor:pointer; padding:0; line-height:1; flex-shrink:0; }
+  .photos-body{ background:#f2f2f2; padding:14px; }
+  .photos-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .photos-thumb{ aspect-ratio:1; border-radius:8px; overflow:hidden; cursor:pointer; border:1px solid #d8d8d8; background:var(--white); }
+  .photos-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .photos-empty{ font-size:13px; color:var(--slate); padding:4px 0 2px; text-align:center; }
+
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px;max-height:82vh;overflow-y:auto;position:relative; }
   .sheet-close-btn{ position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;border:none;background:var(--paper);color:var(--ink);font-size:24px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1; }
@@ -282,14 +305,10 @@
 
 <div class="overlay" id="notesOverlay" style="display:none;">
   <div class="sheet">
-    <h3 id="notesTaskTitle">Notes</h3>
-    <textarea id="notesTextarea" rows="5" placeholder="Anything worth flagging about this task..."></textarea>
+    <button class="sheet-close-btn" id="notesCancelBtn" title="Close">&times;</button>
+    <h3 id="notesTaskTitle">Task Photo</h3>
     <div id="notesPhotoList"></div>
-    <button class="btn-secondary" id="notesAddPhotoBtn" style="width:100%;margin-bottom:14px;">+ Add Photo</button>
-    <div class="btn-row">
-      <button class="btn-secondary" id="notesCancelBtn">Cancel</button>
-      <button class="btn-primary" id="notesSaveBtn">Save Notes</button>
-    </div>
+    <button class="btn-secondary" id="notesAddPhotoBtn" style="width:100%;">+ Add Photo</button>
   </div>
 </div>
 
@@ -313,24 +332,6 @@
     <div class="photo-view-actions">
       <button id="photoViewUploadBtn" title="Add another photo">&#128247;</button>
       <button id="photoViewDeleteBtn" class="danger" title="Delete this photo">&#128465;</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="partsOverlay" style="display:none;">
-  <div class="sheet">
-    <h3 id="partsTaskTitle">⚙️ Parts List</h3>
-    <div id="partsList"></div>
-    <input type="text" id="partNameInput" placeholder="Part name" list="partNameSuggestions">
-    <input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">
-    <input type="text" id="partSupplierInput" placeholder="Supplier" list="partSupplierSuggestions">
-    <input type="text" id="partQtyInput" placeholder="Quantity" inputmode="numeric">
-    <datalist id="partNameSuggestions"></datalist>
-    <datalist id="partNumberSuggestions"></datalist>
-    <datalist id="partSupplierSuggestions"></datalist>
-    <button class="btn-secondary" id="partAddBtn" style="width:100%;margin-bottom:14px;">+ Add Part</button>
-    <div class="btn-row">
-      <button class="btn-secondary" id="partsCloseBtn">Close</button>
     </div>
   </div>
 </div>
@@ -920,13 +921,11 @@ document.getElementById('newTaskAddBtn').addEventListener('click', ()=>{
 
 // ======================= notes =======================
 let notesTaskRef = null;
-function openNotes(task){
+function openTaskPhotos(task){
   notesTaskRef = task.taskId;
-  document.getElementById('notesTaskTitle').textContent = 'Notes — ' + task.name;
-  document.getElementById('notesTextarea').value = task.note || '';
+  document.getElementById('notesTaskTitle').textContent = 'Task Photo — ' + task.name;
   renderNotesPhotoList();
   document.getElementById('notesOverlay').style.display = 'flex';
-  setTimeout(()=>document.getElementById('notesTextarea').focus(), 50);
 }
 function renderNotesPhotoList(){
   const wrap = document.getElementById('notesPhotoList');
@@ -996,16 +995,6 @@ document.getElementById('notesAddPhotoBtn').addEventListener('click', ()=>{
   });
 });
 document.getElementById('notesCancelBtn').addEventListener('click', ()=> document.getElementById('notesOverlay').style.display='none');
-document.getElementById('notesSaveBtn').addEventListener('click', ()=>{
-  if (!notesTaskRef) return;
-  const task = findTaskById(notesTaskRef);
-  if (task){
-    task.note = document.getElementById('notesTextarea').value.trim();
-    enqueue('updateTask', { taskId: notesTaskRef, note: task.note });
-  }
-  document.getElementById('notesOverlay').style.display='none';
-  renderBoatProfile();
-});
 
 // ======================= photo upload =======================
 function compressImage(file, maxDim, quality){
@@ -1066,55 +1055,30 @@ document.getElementById('sharedPhotoCameraInput').addEventListener('change', (e)
 document.getElementById('sharedPhotoLibraryInput').addEventListener('change', (e)=>{ handleChosenFiles(e.target.files); e.target.value=''; });
 
 // ======================= parts =======================
-let partsTaskRef = null;
-function openParts(task){
-  partsTaskRef = task.taskId;
-  document.getElementById('partsTaskTitle').textContent = '⚙️ Parts List — ' + task.name;
-  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
-  renderPartsList();
-  populatePartSuggestions();
-  document.getElementById('partsOverlay').style.display = 'flex';
-}
-function renderPartsList(){
-  const wrap = document.getElementById('partsList');
-  const parts = (DATA.parts || []).filter(p => p.taskId === partsTaskRef);
-  wrap.innerHTML = parts.length === 0 ? '' : parts.map(p =>
-    '<div class="parts-list-item"><div class="part-info"><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
-      '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div>' +
-      '<button class="part-del" onclick="deletePart(\''+p.partId+'\')" title="Delete">&times;</button></div>'
-  ).join('');
-}
-function populatePartSuggestions(){
-  const names = [...new Set((DATA.parts||[]).map(p=>p.partName).filter(Boolean))].sort();
-  const numbers = [...new Set((DATA.parts||[]).map(p=>p.partNumber).filter(Boolean))].sort();
-  const suppliers = [...new Set((DATA.parts||[]).map(p=>p.supplier).filter(Boolean))].sort();
-  document.getElementById('partNameSuggestions').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
-  document.getElementById('partNumberSuggestions').innerHTML = numbers.map(n=>'<option value="'+n+'">').join('');
-  document.getElementById('partSupplierSuggestions').innerHTML = suppliers.map(n=>'<option value="'+n+'">').join('');
-}
-document.getElementById('partAddBtn').addEventListener('click', ()=>{
+// Optimistic add, same pattern used for boat notes -- shows up in the
+// list immediately under a temp_ id, confirmed by the next refresh.
+// Deliberately no taskId here anymore -- a part is logged against the
+// BOAT, not any one task (see Code.gs's addPart_, which now falls back
+// to the boat's current work order when no task is given).
+function addBoatPartHandler(boatId){
   const partName = document.getElementById('partNameInput').value.trim();
   if (!partName) return;
   const partNumber = document.getElementById('partNumberInput').value.trim();
   const supplier = document.getElementById('partSupplierInput').value.trim();
   const quantity = document.getElementById('partQtyInput').value.trim();
-  const task = findTaskById(partsTaskRef);
-  const boatId = task ? task.boatId : null;
   const tempId = 'temp_' + Date.now();
   DATA.parts = DATA.parts || [];
-  DATA.parts.push({ partId: tempId, taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentUser || '' });
-  enqueue('addPart', { taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentUser || '' });
-  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
-  renderPartsList(); populatePartSuggestions();
-});
-async function deletePart(partId){
+  DATA.parts.push({ partId: tempId, taskId: '', boatId, partName, partNumber, supplier, quantity, employee: currentUser || '' });
+  enqueue('addPart', { boatId, partName, partNumber, supplier, quantity, employee: currentUser || '' });
+  renderBoatProfile();
+}
+async function deletePartHandler(partId){
   if (!confirm('Delete this part entry?')) return;
   DATA.parts = (DATA.parts || []).filter(p => p.partId !== partId);
-  renderPartsList();
+  renderBoatProfile();
   if (String(partId).indexOf('temp_') === 0) return;
   await postToSheet('deletePart', { partId });
 }
-document.getElementById('partsCloseBtn').addEventListener('click', ()=> document.getElementById('partsOverlay').style.display = 'none');
 
 // ======================= confirm popups =======================
 document.getElementById('confirmCancelBtn').addEventListener('click', ()=>{ pendingCompleteTaskId=null; document.getElementById('confirmOverlay').style.display='none'; });
@@ -1135,11 +1099,15 @@ document.getElementById('flagConfirmYesBtn').addEventListener('click', ()=>{
 // ======================= rendering =======================
 function taskRowHtml(t){
   const hasNotePhoto = (DATA.photos || []).some(p => p.taskId === t.taskId);
-  const noteLabel = '&#128221;' + (hasNotePhoto ? ' &#128247;' : '');
-  const noteCls = (t.note || hasNotePhoto) ? 'has-note' : '';
+  // The per-task icon is now just for attaching a photo specific to THIS
+  // task (e.g. a photo of the exact fitting being replaced) -- separate
+  // from the general boat photo. The free-text note that used to live
+  // here moved to the boat-level Notes pad, and parts logging moved to
+  // the boat-level Parts box below it, so neither needs its own per-task
+  // icon anymore -- see openTaskPhotos below (formerly openNotes).
+  const photoCls = hasNotePhoto ? 'has-note' : '';
+  const taskPhotoBtn = '<button class="icon-btn '+photoCls+'" onclick="openTaskPhotos(findTaskById(\''+t.taskId+'\'))" title="Task photo">&#128247;</button>';
   const isTimed = String(t.billMode || '').trim().toLowerCase() !== 'complete';
-  const notesBtn = '<button class="icon-btn '+noteCls+'" onclick="openNotes(findTaskById(\''+t.taskId+'\'))" title="Notes">'+noteLabel+'</button>';
-  const partsBtn = '<button class="icon-btn" onclick="openParts(findTaskById(\''+t.taskId+'\'))" title="Parts">&#9881;&#65039;</button>';
   const flagBtn = '<button class="icon-btn" onclick="openFlagConfirm(findTaskById(\''+t.taskId+'\'))" title="Flag as incompletable">&#9888;&#65039;</button>';
 
   let mainRight;
@@ -1174,7 +1142,7 @@ function taskRowHtml(t){
       mainRight +
     '</div>' +
     '<div class="task-row-secondary">' +
-      '<span class="notes-photo-group">'+notesBtn+partsBtn+(showFlagIcon?flagBtn:'')+'</span>' +
+      '<span class="notes-photo-group">'+taskPhotoBtn+(showFlagIcon?flagBtn:'')+'</span>' +
       '<span>'+deleteBtn+'</span>' +
     '</div>' +
   '</div>';
@@ -1242,6 +1210,19 @@ function renderBoatProfile(){
       ? '<div class="empty-note">Nothing open right now.</div>'
       : '<div class="checklist">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
     '<button class="add-task-btn" onclick="openAddTask(\''+boat.boatId+'\', \''+custLabel.replace(/'/g,"\\'")+'\')">+ New Task</button>' +
+    '<div class="photos-pad">' +
+      '<div class="photos-header">' +
+        '<span class="photos-header-label">Photos</span>' +
+        '<button class="photos-camera-btn" onclick="openBoatPhotoSlot(\''+boat.boatId+'\')" title="Add photo">&#128247;</button>' +
+      '</div>' +
+      '<div class="photos-body">' +
+        (generalPhotos.length === 0
+          ? '<div class="photos-empty">No photos yet.</div>'
+          : '<div class="photos-grid">' + generalPhotos.map(p =>
+              '<div class="photos-thumb"><img src="'+p.url+'" alt="Boat photo" onclick="openPhotoView(\''+p.photoId+'\')"></div>'
+            ).join('') + '</div>') +
+      '</div>' +
+    '</div>' +
     '<div class="notepad-pad">' +
       '<div class="notepad-header">' +
         '<span class="notepad-header-label">Notes</span>' +
@@ -1271,13 +1252,33 @@ function renderBoatProfile(){
           '<div class="history-row"><span>'+t.name+'</span>' +
           '<span class="history-meta">'+(t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '')+'</span></div>'
         ).join('') + '</div>') +
-    '<div class="section-title">Parts Used <span class="count">'+parts.length+'</span></div>' +
-    (parts.length === 0
-      ? '<div class="empty-note">None logged yet.</div>'
-      : '<div class="history-list">' + parts.map(p =>
-          '<div class="history-row"><span>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</span>' +
-          '<span class="history-meta">'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div>'
-        ).join('') + '</div>') +
+    (function(){
+      const partSuggestionNames = [...new Set((DATA.parts||[]).map(p=>p.partName).filter(Boolean))].sort();
+      const partSuggestionNumbers = [...new Set((DATA.parts||[]).map(p=>p.partNumber).filter(Boolean))].sort();
+      const partSuggestionSuppliers = [...new Set((DATA.parts||[]).map(p=>p.supplier).filter(Boolean))].sort();
+      return '<div class="parts-pad">' +
+        '<div class="parts-header">Parts</div>' +
+        '<div class="parts-body">' +
+          '<div class="parts-add-row">' +
+            '<input type="text" id="partNameInput" placeholder="Part name" list="partNameSuggestions">' +
+            '<input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">' +
+            '<input type="text" id="partSupplierInput" placeholder="Supplier" list="partSupplierSuggestions">' +
+            '<input type="text" id="partQtyInput" placeholder="Quantity" inputmode="numeric">' +
+            '<datalist id="partNameSuggestions">' + partSuggestionNames.map(n=>'<option value="'+n+'">').join('') + '</datalist>' +
+            '<datalist id="partNumberSuggestions">' + partSuggestionNumbers.map(n=>'<option value="'+n+'">').join('') + '</datalist>' +
+            '<datalist id="partSupplierSuggestions">' + partSuggestionSuppliers.map(n=>'<option value="'+n+'">').join('') + '</datalist>' +
+            '<button class="parts-add-btn" onclick="addBoatPartHandler(\''+boat.boatId+'\')">Add Part</button>' +
+          '</div>' +
+          (parts.length === 0
+            ? '<div class="parts-empty">No parts logged yet.</div>'
+            : '<div class="parts-list">' + parts.map(p =>
+                '<div class="parts-row"><div class="parts-row-main"><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
+                '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div>' +
+                '<button class="parts-del" onclick="deletePartHandler(\''+p.partId+'\')" title="Delete">&times;</button></div>'
+              ).join('') + '</div>') +
+        '</div>' +
+      '</div>';
+    })() +
     '<button class="contact-toggle-btn" id="contactToggleBtn" onclick="toggleContactInfo()">' +
       '<span>Customer Contact Information</span><span id="contactToggleArrow">&#9660;</span>' +
     '</button>' +
@@ -1580,6 +1581,22 @@ async function deleteTaskHandler(taskId){
   const task = findTaskById(taskId);
   if (!task) return;
   if (!confirm('Delete "'+task.name+'"? This can\'t be undone.')) return;
+
+  // A temp_ id means the addTask that created this task is still sitting
+  // in the local queue, not yet sent (or its response not yet back) --
+  // the server has never heard of this task under this id, so sending it
+  // a delete request would just get correctly rejected as "not found".
+  // The right move is to cancel the still-queued add instead: nothing
+  // ever reaches the server either way, which is exactly right, since
+  // net effect of "add then immediately delete before it synced" should
+  // be nothing happened at all.
+  if (String(taskId).indexOf('temp_') === 0){
+    saveQueue(loadQueue().filter(item => !(item.action === 'addTask' && item.tempId === taskId)));
+    DATA.tasks = DATA.tasks.filter(t => t.taskId !== taskId);
+    renderBoatProfile();
+    return;
+  }
+
   pendingDeletedTaskIds.add(taskId);
   DATA.tasks = DATA.tasks.filter(t => t.taskId !== taskId);
   renderBoatProfile();
