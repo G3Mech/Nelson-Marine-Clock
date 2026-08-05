@@ -251,7 +251,7 @@
   </div>
   <nav class="menu-nav">
     <a class="menu-item" href="board.html" onclick="return confirmShopMode()">Shop Mode</a>
-    <a class="menu-item" href="find-work.html">Find Work</a>
+    <a class="menu-item" href="find-work.html">View Work / Parts</a>
   </nav>
 </div>
 
@@ -858,8 +858,9 @@ function pauseTask(task){
 }
 function completeSimpleTask(task){
   task.status = 'done';
+  const employee = currentUser || '';
   pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: Number(task.accumulatedMs) || 0 };
-  enqueue('updateTask', { taskId: task.taskId, status: 'done' });
+  enqueue('updateTask', { taskId: task.taskId, status: 'done', employee });
   playDoneSound();
   renderBoatProfile();
 }
