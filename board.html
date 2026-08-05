@@ -327,6 +327,7 @@
     <input type="text" id="partsTabNumber" placeholder="Part number" list="partsTabNumberSuggestions">
     <input type="text" id="partsTabSupplier" placeholder="Supplier" list="partsTabSupplierSuggestions">
     <input type="text" id="partsTabQty" placeholder="Quantity" inputmode="numeric">
+    <input type="text" id="partsTabPrice" placeholder="List Price ($)" inputmode="decimal">
     <datalist id="partsTabNameSuggestions"></datalist>
     <datalist id="partsTabNumberSuggestions"></datalist>
     <datalist id="partsTabSupplierSuggestions"></datalist>
@@ -471,6 +472,7 @@
     <input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">
     <input type="text" id="partSupplierInput" placeholder="Supplier" list="partSupplierSuggestions">
     <input type="text" id="partQtyInput" placeholder="Quantity" inputmode="numeric">
+    <input type="text" id="partPriceInput" placeholder="List Price ($)" inputmode="decimal">
     <datalist id="partNameSuggestions"></datalist>
     <datalist id="partNumberSuggestions"></datalist>
     <datalist id="partSupplierSuggestions"></datalist>
@@ -1082,7 +1084,7 @@ let partsTaskRef = null;
 function openParts(task){
   partsTaskRef = task.taskId;
   document.getElementById('partsTaskTitle').textContent = '⚙️ Parts List — ' + task.name;
-  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput','partPriceInput'].forEach(id => document.getElementById(id).value = '');
   renderPartsOverlayList();
   populatePartSuggestions();
   document.getElementById('partsOverlay').style.display = 'flex';
@@ -1092,7 +1094,7 @@ function renderPartsOverlayList(){
   const parts = (DATA.parts || []).filter(p => p.taskId === partsTaskRef);
   wrap.innerHTML = parts.length === 0 ? '' : parts.map(p =>
     '<div class="parts-list-item"><div class="part-info"><b>' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</b>' +
-      '<span>' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + '</span></div>' +
+      '<span>' + [p.partNumber, p.supplier, (p.listPrice ? '$'+Number(p.listPrice).toFixed(2) : '')].filter(Boolean).join(' · ') + '</span></div>' +
       '<button class="part-del" onclick="deletePart(\'' + p.partId + '\')" title="Delete">&times;</button></div>'
   ).join('');
 }
@@ -1110,13 +1112,14 @@ document.getElementById('partAddBtn').addEventListener('click', () => {
   const partNumber = document.getElementById('partNumberInput').value.trim();
   const supplier = document.getElementById('partSupplierInput').value.trim();
   const quantity = document.getElementById('partQtyInput').value.trim();
+  const listPrice = document.getElementById('partPriceInput').value.trim();
   const task = findTaskById(partsTaskRef);
   const boatId = task ? task.boatId : null;
   const tempId = 'temp_' + Date.now();
   DATA.parts = DATA.parts || [];
-  DATA.parts.push({ partId: tempId, taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
-  enqueue('addPart', { taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
-  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput'].forEach(id => document.getElementById(id).value = '');
+  DATA.parts.push({ partId: tempId, taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, listPrice, employee: currentEmployee || '' });
+  enqueue('addPart', { taskId: partsTaskRef, boatId, partName, partNumber, supplier, quantity, listPrice, employee: currentEmployee || '' });
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput','partPriceInput'].forEach(id => document.getElementById(id).value = '');
   renderPartsOverlayList(); populatePartSuggestions();
 });
 async function deletePart(partId){
@@ -1134,6 +1137,22 @@ async function deleteTaskHandler(taskId){
   const task = findTaskById(taskId);
   if (!task) return;
   if (!confirm('Delete "'+task.name+'"? This can\'t be undone.')) return;
+
+  // A temp_ id means the addTask that created this task is still sitting
+  // in the local queue, not yet sent (or its response not yet back) --
+  // the server has never heard of this task under this id, so sending it
+  // a delete request would just get correctly rejected as "not found".
+  // The right move is to cancel the still-queued add instead: nothing
+  // ever reaches the server either way, which is exactly right, since
+  // the net effect of "add then immediately delete before it synced"
+  // should be nothing happened at all.
+  if (String(taskId).indexOf('temp_') === 0){
+    saveQueue(loadQueue().filter(item => !(item.action === 'addTask' && item.tempId === taskId)));
+    DATA.tasks = DATA.tasks.filter(t => t.taskId !== taskId);
+    render();
+    return;
+  }
+
   pendingDeletedTaskIds.add(taskId);
   DATA.tasks = DATA.tasks.filter(t => t.taskId !== taskId);
   render();
@@ -1794,7 +1813,7 @@ function renderPartsLog(){
     const when = p.loggedAt ? new Date(p.loggedAt).toLocaleDateString() : '';
     return '<div class="parts-tab-row"><div class="p-main"><b>' + p.partName + (p.quantity ? ' &times; ' + p.quantity : '') + '</b>' +
       '<span>' + who + (p.workOrder ? ' · WO ' + p.workOrder : '') + '</span></div>' +
-      '<div class="p-meta">' + [p.partNumber, p.supplier].filter(Boolean).join(' · ') + (when ? '<br>' + when : '') + '</div>' +
+      '<div class="p-meta">' + [p.partNumber, p.supplier, (p.listPrice ? '$'+Number(p.listPrice).toFixed(2) : '')].filter(Boolean).join(' · ') + (when ? '<br>' + when : '') + '</div>' +
       '<button class="icon-btn" onclick="openPartsTabEdit(\'' + p.partId + '\')" title="Edit this entry">&#9998;</button>' +
     '</div>';
   }).join('') + '</div>';
@@ -1817,7 +1836,7 @@ function renderPartsCatalog(){
     const sorted = g.entries.slice().sort((a, b) => (b.loggedAt || '').localeCompare(a.loggedAt || ''));
     const latest = sorted[0];
     const totalQty = g.entries.reduce((sum, p) => sum + (parseFloat(p.quantity) || 0), 0);
-    return { name: g.name, number: latest.partNumber, supplier: latest.supplier, count: g.entries.length, totalQty, lastUsed: latest.loggedAt };
+    return { name: g.name, number: latest.partNumber, supplier: latest.supplier, count: g.entries.length, totalQty, lastUsed: latest.loggedAt, lastPrice: latest.listPrice };
   });
   if (term){
     rows = rows.filter(r => [r.name, r.number, r.supplier].filter(Boolean).join(' ').toLowerCase().indexOf(term) !== -1);
@@ -1831,7 +1850,7 @@ function renderPartsCatalog(){
     const when = r.lastUsed ? new Date(r.lastUsed).toLocaleDateString() : '';
     return '<div class="parts-tab-row"><div class="p-main"><b>' + r.name + '</b>' +
       '<span>' + [r.number, r.supplier].filter(Boolean).join(' · ') + '</span></div>' +
-      '<div class="p-meta">Used ' + r.count + '&times; · total qty ' + r.totalQty + (when ? '<br>Last: ' + when : '') + '</div></div>';
+      '<div class="p-meta">Used ' + r.count + '&times; · total qty ' + r.totalQty + (r.lastPrice ? ' · last price $'+Number(r.lastPrice).toFixed(2) : '') + (when ? '<br>Last: ' + when : '') + '</div></div>';
   }).join('') + '</div>';
 }
 
@@ -1845,7 +1864,7 @@ function openAddPartTab(){
   document.getElementById('partsTabBoatSearch').value = '';
   document.getElementById('partsTabBoatSearch').disabled = false;
   document.getElementById('partsTabTaskSelect').innerHTML = '<option value="">General / not tied to a specific task</option>';
-  ['partsTabName', 'partsTabNumber', 'partsTabSupplier', 'partsTabQty'].forEach(id => document.getElementById(id).value = '');
+  ['partsTabName', 'partsTabNumber', 'partsTabSupplier', 'partsTabQty', 'partsTabPrice'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('partsTabDeleteBtn').style.display = 'none';
   populatePartsTabSuggestions();
   document.getElementById('partsTabEditOverlay').style.display = 'flex';
@@ -1911,6 +1930,7 @@ function openPartsTabEdit(partId){
   document.getElementById('partsTabNumber').value = p.partNumber || '';
   document.getElementById('partsTabSupplier').value = p.supplier || '';
   document.getElementById('partsTabQty').value = p.quantity || '';
+  document.getElementById('partsTabPrice').value = p.listPrice || '';
   document.getElementById('partsTabDeleteBtn').style.display = 'block';
   populatePartsTabSuggestions();
   document.getElementById('partsTabEditOverlay').style.display = 'flex';
@@ -1927,11 +1947,12 @@ document.getElementById('partsTabSaveBtn').addEventListener('click', async () =>
   const partNumber = document.getElementById('partsTabNumber').value.trim();
   const supplier = document.getElementById('partsTabSupplier').value.trim();
   const quantity = document.getElementById('partsTabQty').value.trim();
+  const listPrice = document.getElementById('partsTabPrice').value.trim();
   const taskId = document.getElementById('partsTabTaskSelect').value;
   try{
     const res = editingPartId
-      ? await postToSheet('updatePart', { partId: editingPartId, partName, partNumber, supplier, quantity, taskId })
-      : await postToSheet('addPart', { boatId: partsTabBoatId, taskId, partName, partNumber, supplier, quantity, employee: currentEmployee || '' });
+      ? await postToSheet('updatePart', { partId: editingPartId, partName, partNumber, supplier, quantity, listPrice, taskId })
+      : await postToSheet('addPart', { boatId: partsTabBoatId, taskId, partName, partNumber, supplier, quantity, listPrice, employee: currentEmployee || '' });
     if (res && res.error){ alert(res.error); return; }
     document.getElementById('partsTabEditOverlay').style.display = 'none';
     document.getElementById('partsTabBoatSearch').disabled = false;
