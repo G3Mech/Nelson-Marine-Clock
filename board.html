@@ -799,12 +799,14 @@ function startTask(task){
     task.status = 'active';
     task.activeSince = now;
     // Optimistic local guess so the timer starts ticking immediately --
-    // the server stamps its own activeSince when the request actually
-    // lands, which the next confirmed fetch will pick up automatically
-    // (see mergeFetchedTasks); this is just so the tap feels instant.
+    // activeSince is sent along with the request too (not just status),
+    // so if this sits queued for a while before actually reaching the
+    // server (phone/tablet loses signal, etc.), the server knows it was
+    // THIS moment Start was tapped, not whenever the delayed request
+    // finally arrives. See Code.gs's updateTask_ for the other half.
     pendingStatusOverride[task.taskId] = { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0 };
     touchActivity();
-    enqueue('updateTask', { taskId: task.taskId, status: 'active' });
+    enqueue('updateTask', { taskId: task.taskId, status: 'active', activeSince: now });
     playStartSound();
     render();
   });
@@ -813,18 +815,26 @@ function startTask(task){
 // it into accumulatedMs -- the same math updateTask_ does server-side,
 // kept in sync here purely so THIS device's own display updates
 // instantly, without waiting on a round trip. Returns the new total.
-function closeOpenSegment_(task){
+// asOfMs defaults to right now, but callers that also need to tell the
+// SERVER the exact same moment (pause/complete/flag, all of which can
+// end up queued and delayed the same way Start can) should capture one
+// Date.now() and pass it to both this function and the enqueued
+// request, so this device's own display and what the server ends up
+// recording never disagree about which instant this segment ended.
+function closeOpenSegment_(task, asOfMs){
+  const asOf = asOfMs || Date.now();
   const openSince = (task.status === 'active' && task.activeSince) ? new Date(task.activeSince).getTime() : null;
   const prior = Number(task.accumulatedMs) || 0;
-  return openSince ? prior + Math.max(0, Date.now() - openSince) : prior;
+  return openSince ? prior + Math.max(0, asOf - openSince) : prior;
 }
 function pauseTask(task){
-  const newAccumulated = closeOpenSegment_(task);
+  const pausedAtMs = Date.now();
+  const newAccumulated = closeOpenSegment_(task, pausedAtMs);
   task.status = 'paused';
   task.activeSince = '';
   task.accumulatedMs = newAccumulated;
   pendingStatusOverride[task.taskId] = { status: 'paused', activeSince: '', accumulatedMs: newAccumulated };
-  enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
+  enqueue('updateTask', { taskId: task.taskId, status: 'paused', segmentEndedAt: new Date(pausedAtMs).toISOString() });
   playPauseSound();
   render();
 }
@@ -843,7 +853,8 @@ function openCompleteConfirm(task){
   document.getElementById('confirmOverlay').style.display = 'flex';
 }
 function completeTimedTask(task){
-  const finalAccumulated = closeOpenSegment_(task);
+  const completedAtMs = Date.now();
+  const finalAccumulated = closeOpenSegment_(task, completedAtMs);
   // Completing (and pausing) never require signing in -- only Start does.
   // Since the billed duration below is the server's own running total
   // (not reconstructed from any one device's local history), there's no
@@ -862,8 +873,9 @@ function completeTimedTask(task){
   // in Code.gs). There used to be a separate 'logEntry' call here
   // carrying a duration this device computed from its own local segment
   // history -- that's exactly what let two devices touching the same
-  // task disagree about how long it actually ran.
-  enqueue('updateTask', { taskId: task.taskId, status: 'done', employee });
+  // task disagree about how long it actually ran. segmentEndedAt is the
+  // actual tap-time, same reasoning as pauseTask.
+  enqueue('updateTask', { taskId: task.taskId, status: 'done', employee, segmentEndedAt: new Date(completedAtMs).toISOString() });
   playDoneSound();
   render();
 }
@@ -876,12 +888,13 @@ function openFlagConfirm(task){
   document.getElementById('flagConfirmOverlay').style.display = 'flex';
 }
 function setFlag(task, flagged){
+  const flaggedAtMs = Date.now();
   if (flagged){
     task._preFlagStatus = task.status;
     // Flagging is only ever offered on a pending/paused task in this UI
     // (never while actively running), but close out any open segment
     // defensively anyway rather than assume that never changes.
-    task.accumulatedMs = closeOpenSegment_(task);
+    task.accumulatedMs = closeOpenSegment_(task, flaggedAtMs);
     task.activeSince = '';
     task.status = 'flagged';
   } else {
@@ -889,7 +902,7 @@ function setFlag(task, flagged){
     delete task._preFlagStatus;
   }
   pendingStatusOverride[task.taskId] = { status: task.status, activeSince: task.activeSince || '', accumulatedMs: Number(task.accumulatedMs) || 0 };
-  enqueue('updateTask', { taskId: task.taskId, status: task.status });
+  enqueue('updateTask', { taskId: task.taskId, status: task.status, segmentEndedAt: new Date(flaggedAtMs).toISOString() });
   render();
 }
 
