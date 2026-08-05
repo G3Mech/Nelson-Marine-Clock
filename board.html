@@ -187,6 +187,7 @@
   .task-row-main{ display:flex; align-items:center; gap:10px; }
   .task-main-content{ flex:1; min-width:0; }
   .task-name{ font-size:14.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .active-by-label{ font-size:11.5px; font-weight:700; color:var(--go); margin-top:2px; }
   .task-sub{ font-size:12px; color:var(--slate); margin-top:2px; }
   .priority-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:8px; flex-shrink:0; vertical-align:middle; }
   .priority-dot.p1{ background:var(--stop); }
@@ -798,15 +799,18 @@ function startTask(task){
     const now = new Date().toISOString();
     task.status = 'active';
     task.activeSince = now;
+    task.activeEmployee = currentEmployee || '';
     // Optimistic local guess so the timer starts ticking immediately --
     // activeSince is sent along with the request too (not just status),
     // so if this sits queued for a while before actually reaching the
     // server (phone/tablet loses signal, etc.), the server knows it was
     // THIS moment Start was tapped, not whenever the delayed request
     // finally arrives. See Code.gs's updateTask_ for the other half.
-    pendingStatusOverride[task.taskId] = { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0 };
+    // activeEmployee is who's running it -- shown as "Active — Name" on
+    // every device looking at this task, not just this one.
+    pendingStatusOverride[task.taskId] = { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0, activeEmployee: task.activeEmployee };
     touchActivity();
-    enqueue('updateTask', { taskId: task.taskId, status: 'active', activeSince: now });
+    enqueue('updateTask', { taskId: task.taskId, status: 'active', activeSince: now, activeEmployee: task.activeEmployee });
     playStartSound();
     render();
   });
@@ -832,8 +836,9 @@ function pauseTask(task){
   const newAccumulated = closeOpenSegment_(task, pausedAtMs);
   task.status = 'paused';
   task.activeSince = '';
+  task.activeEmployee = '';
   task.accumulatedMs = newAccumulated;
-  pendingStatusOverride[task.taskId] = { status: 'paused', activeSince: '', accumulatedMs: newAccumulated };
+  pendingStatusOverride[task.taskId] = { status: 'paused', activeSince: '', accumulatedMs: newAccumulated, activeEmployee: '' };
   enqueue('updateTask', { taskId: task.taskId, status: 'paused', segmentEndedAt: new Date(pausedAtMs).toISOString() });
   playPauseSound();
   render();
@@ -865,8 +870,9 @@ function completeTimedTask(task){
   const employee = currentEmployee || 'Unknown';
   task.status = 'done';
   task.activeSince = '';
+  task.activeEmployee = '';
   task.accumulatedMs = finalAccumulated;
-  pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: finalAccumulated };
+  pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: finalAccumulated, activeEmployee: '' };
   // ONE action now, not two: the server computes and writes the final
   // Recorded Times entry itself, from its own accumulatedMs, as part of
   // handling this same status change (see updateTask_/logFinalDuration_
@@ -896,12 +902,13 @@ function setFlag(task, flagged){
     // defensively anyway rather than assume that never changes.
     task.accumulatedMs = closeOpenSegment_(task, flaggedAtMs);
     task.activeSince = '';
+    task.activeEmployee = '';
     task.status = 'flagged';
   } else {
     task.status = task._preFlagStatus || 'pending';
     delete task._preFlagStatus;
   }
-  pendingStatusOverride[task.taskId] = { status: task.status, activeSince: task.activeSince || '', accumulatedMs: Number(task.accumulatedMs) || 0 };
+  pendingStatusOverride[task.taskId] = { status: task.status, activeSince: task.activeSince || '', accumulatedMs: Number(task.accumulatedMs) || 0, activeEmployee: '' };
   enqueue('updateTask', { taskId: task.taskId, status: task.status, segmentEndedAt: new Date(flaggedAtMs).toISOString() });
   render();
 }
@@ -1268,7 +1275,9 @@ function taskRowHtml(t){
 
   return '<div class="task-row" data-rowid="' + t.taskId + '">' +
     '<div class="task-row-main">' +
-      '<div class="task-main-content"><div class="task-name"><span class="priority-dot ' + priorityDotClass(t) + '" title="Priority ' + (t.priority || 2) + '"></span>' + t.name + '</div></div>' +
+      '<div class="task-main-content"><div class="task-name"><span class="priority-dot ' + priorityDotClass(t) + '" title="Priority ' + (t.priority || 2) + '"></span>' + t.name + '</div>' +
+      (t.status === 'active' && t.activeEmployee ? '<div class="active-by-label">Active — ' + t.activeEmployee + '</div>' : '') +
+      '</div>' +
       mainRight +
     '</div>' +
     '<div class="task-row-secondary">' +
@@ -1347,6 +1356,7 @@ function renderRunning(){
       '<div class="run-timer">' + fmtElapsed(liveMs(t)) + '</div>' +
       '<div class="run-name">' + t.name + '</div>' +
       '<div class="run-meta">' + who + '</div>' +
+      (t.activeEmployee ? '<div class="active-by-label">Active — ' + t.activeEmployee + '</div>' : '') +
       '<div class="run-actions">' +
         '<button class="pill-btn pause" onclick="pauseTask(findTaskById(\'' + t.taskId + '\'))">Pause</button>' +
         '<button class="pill-btn complete" onclick="openCompleteConfirm(findTaskById(\'' + t.taskId + '\'))">Complete</button>' +
@@ -2114,7 +2124,7 @@ function mergeFetchedTasks(freshTasks){
     // trust the whole fetched task at that point rather than continuing
     // to hold our own guess forever.
     if (t.status === override.status){ delete pendingStatusOverride[t.taskId]; return t; }
-    return Object.assign({}, t, { status: override.status, activeSince: override.activeSince, accumulatedMs: override.accumulatedMs });
+    return Object.assign({}, t, { status: override.status, activeSince: override.activeSince, accumulatedMs: override.accumulatedMs, activeEmployee: override.activeEmployee });
   });
 }
 async function refreshData(){
