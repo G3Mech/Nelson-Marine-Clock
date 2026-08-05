@@ -833,7 +833,13 @@ function startTask(task){
     task.status = 'active';
     task.activeSince = now;
     pendingStatusOverride[task.taskId] = { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0 };
-    enqueue('updateTask', { taskId: task.taskId, status: 'active' });
+    // activeSince is sent along, not just status -- if this request sits
+    // queued for a while (phone closed right after this tap, no signal,
+    // etc.) before actually reaching the server, the server needs to know
+    // it was THIS moment that Start was tapped, not whenever the delayed
+    // request happens to finally arrive. See Code.gs's updateTask_ for
+    // the other half of this fix.
+    enqueue('updateTask', { taskId: task.taskId, status: 'active', activeSince: now });
     playStartSound();
     renderBoatProfile();
   });
@@ -841,18 +847,26 @@ function startTask(task){
 // Closes out whatever segment was open on this task (if any) and folds
 // it into accumulatedMs -- mirrors updateTask_'s own math server-side,
 // kept here purely so this device's own display updates instantly.
-function closeOpenSegment_(task){
+// asOfMs defaults to right now, but callers that also need to tell the
+// SERVER the exact same moment (pause/complete/flag, all of which can
+// end up queued and delayed the same way Start can) should capture one
+// Date.now() and pass it to both this function and the enqueued request,
+// so the client's own display and what the server ends up recording
+// never disagree about which instant this segment actually ended.
+function closeOpenSegment_(task, asOfMs){
+  const asOf = asOfMs || Date.now();
   const openSince = (task.status === 'active' && task.activeSince) ? new Date(task.activeSince).getTime() : null;
   const prior = Number(task.accumulatedMs) || 0;
-  return openSince ? prior + Math.max(0, Date.now() - openSince) : prior;
+  return openSince ? prior + Math.max(0, asOf - openSince) : prior;
 }
 function pauseTask(task){
-  const newAccumulated = closeOpenSegment_(task);
+  const pausedAtMs = Date.now();
+  const newAccumulated = closeOpenSegment_(task, pausedAtMs);
   task.status = 'paused';
   task.activeSince = '';
   task.accumulatedMs = newAccumulated;
   pendingStatusOverride[task.taskId] = { status: 'paused', activeSince: '', accumulatedMs: newAccumulated };
-  enqueue('updateTask', { taskId: task.taskId, status: 'paused' });
+  enqueue('updateTask', { taskId: task.taskId, status: 'paused', segmentEndedAt: new Date(pausedAtMs).toISOString() });
   playPauseSound();
   renderBoatProfile();
 }
@@ -871,7 +885,8 @@ function openCompleteConfirm(task){
   document.getElementById('confirmOverlay').style.display = 'flex';
 }
 function completeTimedTask(task){
-  const finalAccumulated = closeOpenSegment_(task);
+  const completedAtMs = Date.now();
+  const finalAccumulated = closeOpenSegment_(task, completedAtMs);
   // Whoever's signed in on THIS device when Complete is pressed gets
   // credited -- there's no "whoever started it" to track anymore since
   // the billed duration below is the server's own running total, not
@@ -887,7 +902,8 @@ function completeTimedTask(task){
   // be a separate 'logEntry' call here carrying a duration reconstructed
   // from this device's own local segment history -- exactly what let two
   // devices touching the same task disagree about how long it ran.
-  enqueue('updateTask', { taskId: task.taskId, status: 'done', employee });
+  // segmentEndedAt is the actual tap-time, same reasoning as pauseTask.
+  enqueue('updateTask', { taskId: task.taskId, status: 'done', employee, segmentEndedAt: new Date(completedAtMs).toISOString() });
   playDoneSound();
   renderBoatProfile();
 }
@@ -898,9 +914,10 @@ function openFlagConfirm(task){
   document.getElementById('flagConfirmOverlay').style.display = 'flex';
 }
 function setFlag(task, flagged){
+  const flaggedAtMs = Date.now();
   if (flagged){
     task._preFlagStatus = task.status;
-    task.accumulatedMs = closeOpenSegment_(task);
+    task.accumulatedMs = closeOpenSegment_(task, flaggedAtMs);
     task.activeSince = '';
     task.status = 'flagged';
   } else {
@@ -908,7 +925,7 @@ function setFlag(task, flagged){
     delete task._preFlagStatus;
   }
   pendingStatusOverride[task.taskId] = { status: task.status, activeSince: task.activeSince || '', accumulatedMs: Number(task.accumulatedMs) || 0 };
-  enqueue('updateTask', { taskId: task.taskId, status: task.status });
+  enqueue('updateTask', { taskId: task.taskId, status: task.status, segmentEndedAt: new Date(flaggedAtMs).toISOString() });
   renderBoatProfile();
 }
 
