@@ -170,8 +170,7 @@
   .parts-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #3a5a7a; box-shadow:0 2px 6px rgba(10,26,43,.12); }
   .parts-header{ background:#3a5a7a; color:var(--white); font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; padding:10px 0; }
   .parts-body{ background:#eef2f6; padding:14px 16px; }
-  .parts-add-row input{ width:100%; margin-bottom:8px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit; background:var(--white); box-sizing:border-box; }
-  .parts-add-btn{ width:100%; padding:10px 0; border-radius:8px; border:none; background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer; }
+  .parts-add-btn{ width:100%; margin-bottom:10px; padding:10px 0; border-radius:8px; border:none; background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer; }
   .parts-list{ margin-top:10px; border-top:1px solid #c7d2db; padding-top:6px; }
   .parts-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed #c7d2db; }
   .parts-row:last-child{ border-bottom:none; }
@@ -181,14 +180,11 @@
   .parts-empty{ font-size:13px; color:var(--slate); padding:4px 0 2px; }
 
   .photos-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #4a4a4a; box-shadow:0 2px 6px rgba(10,26,43,.12); }
-  .photos-header{ background:#4a4a4a; color:var(--white); display:flex; align-items:center; padding:10px 14px; }
-  .photos-header-label{ flex:1; font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; }
-  .photos-camera-btn{ background:none; border:none; color:var(--white); font-size:21px; cursor:pointer; padding:0; line-height:1; flex-shrink:0; }
-  .photos-body{ background:#f2f2f2; padding:14px; }
-  .photos-grid{ display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
-  .photos-thumb{ aspect-ratio:1; border-radius:8px; overflow:hidden; cursor:pointer; border:1px solid #d8d8d8; background:var(--white); }
-  .photos-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .photos-empty{ font-size:13px; color:var(--slate); padding:4px 0 2px; text-align:center; }
+  .photos-header{ background:#4a4a4a; color:var(--white); padding:10px 14px; }
+  .photos-header-label{ display:block; font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; }
+  .photos-body-split{ background:#f2f2f2; padding:16px 14px; display:flex; align-items:center; gap:12px; }
+  .photos-camera-big{ background:var(--white); border:1px solid #d8d8d8; border-radius:12px; width:60px; height:60px; font-size:28px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .photos-view-btn{ flex:1; padding:16px 12px; border-radius:10px; border:1px solid #4a4a4a; background:var(--white); color:#4a4a4a; font-weight:700; font-size:14px; cursor:pointer; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px;max-height:82vh;overflow-y:auto;position:relative; }
@@ -333,6 +329,26 @@
       <button id="photoViewUploadBtn" title="Add another photo">&#128247;</button>
       <button id="photoViewDeleteBtn" class="danger" title="Delete this photo">&#128465;</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="addPartOverlay" style="display:none;">
+  <div class="sheet">
+    <button class="sheet-close-btn" id="addPartCancelBtn" title="Close">&times;</button>
+    <h3>Add Part</h3>
+    <input type="text" id="partNameInput" placeholder="Part name" list="partNameSuggestions">
+    <input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">
+    <input type="text" id="partSupplierInput" placeholder="Supplier" list="partSupplierSuggestions">
+    <input type="text" id="partQtyInput" placeholder="Quantity" inputmode="numeric">
+    <!-- No autocomplete on price, deliberately -- unlike name/number/
+         supplier, the list price genuinely changes day to day, so
+         suggesting an old value here could lead to billing off a stale
+         price instead of today's actual one. -->
+    <input type="text" id="partPriceInput" placeholder="List Price ($)" inputmode="decimal">
+    <datalist id="partNameSuggestions"></datalist>
+    <datalist id="partNumberSuggestions"></datalist>
+    <datalist id="partSupplierSuggestions"></datalist>
+    <button class="btn-secondary" id="partAddSubmitBtn" style="width:100%;">Add Part</button>
   </div>
 </div>
 
@@ -919,21 +935,26 @@ document.getElementById('newTaskAddBtn').addEventListener('click', ()=>{
   renderBoatProfile();
 });
 
-// ======================= notes =======================
-let notesTaskRef = null;
-function openTaskPhotos(task){
-  notesTaskRef = task.taskId;
-  document.getElementById('notesTaskTitle').textContent = 'Task Photo — ' + task.name;
-  renderNotesPhotoList();
+// ======================= photo gallery (boat-level) =======================
+// Repurposed from the old per-task photo popup -- now shows every
+// general photo already uploaded for this BOAT (not tied to any task),
+// opened via the "View Photos" button on the Photos box rather than a
+// per-task icon, which has been removed entirely.
+let photoGalleryBoatRef = null;
+function openPhotoGallery(boatId){
+  photoGalleryBoatRef = boatId;
+  const boat = boatById(boatId);
+  document.getElementById('notesTaskTitle').textContent = 'Photos' + (boat ? ' — ' + (boat.boatName || boat.model || '') : '');
+  renderPhotoGalleryList();
   document.getElementById('notesOverlay').style.display = 'flex';
 }
-function renderNotesPhotoList(){
+function renderPhotoGalleryList(){
   const wrap = document.getElementById('notesPhotoList');
-  const photos = (DATA.photos || []).filter(p => p.taskId === notesTaskRef);
-  wrap.innerHTML = photos.length === 0 ? '' :
+  const photos = (DATA.photos || []).filter(p => p.boatId === photoGalleryBoatRef && !p.taskId);
+  wrap.innerHTML = photos.length === 0 ? '<div class="empty-note">No photos yet.</div>' :
     '<div class="notes-photo-grid">' + photos.map(p =>
-      '<div class="notes-photo-thumb"><img src="'+p.url+'" alt="Task photo" onclick="openPhotoView(\''+p.photoId+'\')">' +
-        '<button class="thumb-del" onclick="deleteNotePhoto(\''+p.photoId+'\')" title="Delete">&times;</button></div>'
+      '<div class="notes-photo-thumb"><img src="'+p.url+'" alt="Boat photo" onclick="openPhotoView(\''+p.photoId+'\')">' +
+        '<button class="thumb-del" onclick="deleteGalleryPhoto(\''+p.photoId+'\')" title="Delete">&times;</button></div>'
     ).join('') + '</div>';
 }
 let currentViewedPhoto = null;
@@ -944,10 +965,10 @@ function openPhotoView(photoId){
   document.getElementById('photoViewOverlay').style.display = 'flex';
 }
 // Both buttons act on whichever photo is currently expanded -- works the
-// same whether it's a general boat photo or a task-attached one, since
-// both carry their own boatId/taskId already.
+// same whether the gallery or the profile's own hero photo is what's
+// currently showing, since both carry their own boatId already.
 function refreshPhotoViews(){
-  if (document.getElementById('notesOverlay').style.display === 'flex') renderNotesPhotoList();
+  if (document.getElementById('notesOverlay').style.display === 'flex') renderPhotoGalleryList();
   if (currentProfileBoatId) renderBoatProfile();
 }
 document.getElementById('photoViewDeleteBtn').addEventListener('click', async () => {
@@ -963,13 +984,14 @@ document.getElementById('photoViewDeleteBtn').addEventListener('click', async ()
 document.getElementById('photoViewUploadBtn').addEventListener('click', () => {
   if (!currentViewedPhoto) return;
   const boatId = currentViewedPhoto.boatId;
-  const taskId = currentViewedPhoto.taskId || null;
   document.getElementById('photoViewOverlay').style.display = 'none';
-  openPhotoChoice({ boatId, taskId, onDone: refreshPhotoViews });
+  openPhotoChoice({ boatId, taskId: null, onDone: refreshPhotoViews });
 });
-// Tapping the empty photo slot on a boat profile -- taskId left blank so
-// this becomes a general boat photo, same kind the phone's own boat
-// photo slot creates, not attached to any specific task.
+// The big camera icon on the Photos box -- taskId left blank so this is
+// always a general boat photo, never attached to any specific task.
+// Deliberately calls straight into openPhotoChoice with nothing else in
+// the way first, so adding a photo stays fast regardless of how many
+// old photos already exist or how long the gallery would take to load.
 function openBoatPhotoSlot(boatId){
   openPhotoChoice({
     boatId, taskId: null,
@@ -977,21 +999,21 @@ function openBoatPhotoSlot(boatId){
   });
 }
 document.getElementById('photoViewCloseBtn').addEventListener('click', ()=> document.getElementById('photoViewOverlay').style.display = 'none');
-async function deleteNotePhoto(photoId){
+async function deleteGalleryPhoto(photoId){
   if (!confirm('Delete this photo?')) return;
   await postToSheet('deletePhoto', { photoId });
   DATA.photos = (DATA.photos || []).filter(p => p.photoId !== photoId);
-  renderNotesPhotoList();
+  renderPhotoGalleryList();
+  if (currentProfileBoatId) renderBoatProfile();
 }
 document.getElementById('notesAddPhotoBtn').addEventListener('click', ()=>{
-  const task = findTaskById(notesTaskRef);
   const btn = document.getElementById('notesAddPhotoBtn');
   const originalText = btn.textContent;
   openPhotoChoice({
-    boatId: task ? task.boatId : null, taskId: notesTaskRef,
+    boatId: photoGalleryBoatRef, taskId: null,
     onProgress: (n, total) => { btn.textContent = total > 1 ? ('Uploading ' + n + ' of ' + total + '…') : 'Uploading…'; btn.disabled = true; },
-    onEach: () => renderNotesPhotoList(),
-    onDone: () => { btn.textContent = originalText; btn.disabled = false; }
+    onEach: () => renderPhotoGalleryList(),
+    onDone: () => { btn.textContent = originalText; btn.disabled = false; if (currentProfileBoatId) renderBoatProfile(); }
   });
 });
 document.getElementById('notesCancelBtn').addEventListener('click', ()=> document.getElementById('notesOverlay').style.display='none');
@@ -1055,6 +1077,27 @@ document.getElementById('sharedPhotoCameraInput').addEventListener('change', (e)
 document.getElementById('sharedPhotoLibraryInput').addEventListener('change', (e)=>{ handleChosenFiles(e.target.files); e.target.value=''; });
 
 // ======================= parts =======================
+// Opens the Add Part popup for a given boat -- clears any leftover
+// values from a previous entry and refreshes the autocomplete
+// suggestions fresh each time, since new parts logged elsewhere since
+// the popup was last opened should show up as suggestions too.
+let addPartBoatRef = null;
+function openAddPartPopup(boatId){
+  addPartBoatRef = boatId;
+  ['partNameInput','partNumberInput','partSupplierInput','partQtyInput','partPriceInput'].forEach(id => document.getElementById(id).value = '');
+  const names = [...new Set((DATA.parts||[]).map(p=>p.partName).filter(Boolean))].sort();
+  const numbers = [...new Set((DATA.parts||[]).map(p=>p.partNumber).filter(Boolean))].sort();
+  const suppliers = [...new Set((DATA.parts||[]).map(p=>p.supplier).filter(Boolean))].sort();
+  document.getElementById('partNameSuggestions').innerHTML = names.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('partNumberSuggestions').innerHTML = numbers.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('partSupplierSuggestions').innerHTML = suppliers.map(n=>'<option value="'+n+'">').join('');
+  document.getElementById('addPartOverlay').style.display = 'flex';
+}
+document.getElementById('addPartCancelBtn').addEventListener('click', ()=> document.getElementById('addPartOverlay').style.display = 'none');
+document.getElementById('partAddSubmitBtn').addEventListener('click', ()=>{
+  addBoatPartHandler(addPartBoatRef);
+  document.getElementById('addPartOverlay').style.display = 'none';
+});
 // Optimistic add, same pattern used for boat notes -- shows up in the
 // list immediately under a temp_ id, confirmed by the next refresh.
 // Deliberately no taskId here anymore -- a part is logged against the
@@ -1066,10 +1109,11 @@ function addBoatPartHandler(boatId){
   const partNumber = document.getElementById('partNumberInput').value.trim();
   const supplier = document.getElementById('partSupplierInput').value.trim();
   const quantity = document.getElementById('partQtyInput').value.trim();
+  const listPrice = document.getElementById('partPriceInput').value.trim();
   const tempId = 'temp_' + Date.now();
   DATA.parts = DATA.parts || [];
-  DATA.parts.push({ partId: tempId, taskId: '', boatId, partName, partNumber, supplier, quantity, employee: currentUser || '' });
-  enqueue('addPart', { boatId, partName, partNumber, supplier, quantity, employee: currentUser || '' });
+  DATA.parts.push({ partId: tempId, taskId: '', boatId, partName, partNumber, supplier, quantity, listPrice, employee: currentUser || '' });
+  enqueue('addPart', { boatId, partName, partNumber, supplier, quantity, listPrice, employee: currentUser || '' });
   renderBoatProfile();
 }
 async function deletePartHandler(partId){
@@ -1098,15 +1142,9 @@ document.getElementById('flagConfirmYesBtn').addEventListener('click', ()=>{
 
 // ======================= rendering =======================
 function taskRowHtml(t){
-  const hasNotePhoto = (DATA.photos || []).some(p => p.taskId === t.taskId);
-  // The per-task icon is now just for attaching a photo specific to THIS
-  // task (e.g. a photo of the exact fitting being replaced) -- separate
-  // from the general boat photo. The free-text note that used to live
-  // here moved to the boat-level Notes pad, and parts logging moved to
-  // the boat-level Parts box below it, so neither needs its own per-task
-  // icon anymore -- see openTaskPhotos below (formerly openNotes).
-  const photoCls = hasNotePhoto ? 'has-note' : '';
-  const taskPhotoBtn = '<button class="icon-btn '+photoCls+'" onclick="openTaskPhotos(findTaskById(\''+t.taskId+'\'))" title="Task photo">&#128247;</button>';
+  // Notes, photos, and parts are all boat-level now (see the Photos,
+  // Notes, and Parts boxes on the profile) -- nothing per-task needed
+  // anymore, so the only icon left here is the flag.
   const isTimed = String(t.billMode || '').trim().toLowerCase() !== 'complete';
   const flagBtn = '<button class="icon-btn" onclick="openFlagConfirm(findTaskById(\''+t.taskId+'\'))" title="Flag as incompletable">&#9888;&#65039;</button>';
 
@@ -1142,7 +1180,7 @@ function taskRowHtml(t){
       mainRight +
     '</div>' +
     '<div class="task-row-secondary">' +
-      '<span class="notes-photo-group">'+taskPhotoBtn+(showFlagIcon?flagBtn:'')+'</span>' +
+      '<span class="notes-photo-group">'+(showFlagIcon?flagBtn:'')+'</span>' +
       '<span>'+deleteBtn+'</span>' +
     '</div>' +
   '</div>';
@@ -1213,14 +1251,10 @@ function renderBoatProfile(){
     '<div class="photos-pad">' +
       '<div class="photos-header">' +
         '<span class="photos-header-label">Photos</span>' +
-        '<button class="photos-camera-btn" onclick="openBoatPhotoSlot(\''+boat.boatId+'\')" title="Add photo">&#128247;</button>' +
       '</div>' +
-      '<div class="photos-body">' +
-        (generalPhotos.length === 0
-          ? '<div class="photos-empty">No photos yet.</div>'
-          : '<div class="photos-grid">' + generalPhotos.map(p =>
-              '<div class="photos-thumb"><img src="'+p.url+'" alt="Boat photo" onclick="openPhotoView(\''+p.photoId+'\')"></div>'
-            ).join('') + '</div>') +
+      '<div class="photos-body-split">' +
+        '<button class="photos-camera-big" onclick="openBoatPhotoSlot(\''+boat.boatId+'\')" title="Add photo">&#128247;</button>' +
+        '<button class="photos-view-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')">View Photos ('+generalPhotos.length+')</button>' +
       '</div>' +
     '</div>' +
     '<div class="notepad-pad">' +
@@ -1253,27 +1287,15 @@ function renderBoatProfile(){
           '<span class="history-meta">'+(t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '')+'</span></div>'
         ).join('') + '</div>') +
     (function(){
-      const partSuggestionNames = [...new Set((DATA.parts||[]).map(p=>p.partName).filter(Boolean))].sort();
-      const partSuggestionNumbers = [...new Set((DATA.parts||[]).map(p=>p.partNumber).filter(Boolean))].sort();
-      const partSuggestionSuppliers = [...new Set((DATA.parts||[]).map(p=>p.supplier).filter(Boolean))].sort();
       return '<div class="parts-pad">' +
         '<div class="parts-header">Parts</div>' +
         '<div class="parts-body">' +
-          '<div class="parts-add-row">' +
-            '<input type="text" id="partNameInput" placeholder="Part name" list="partNameSuggestions">' +
-            '<input type="text" id="partNumberInput" placeholder="Part number" list="partNumberSuggestions">' +
-            '<input type="text" id="partSupplierInput" placeholder="Supplier" list="partSupplierSuggestions">' +
-            '<input type="text" id="partQtyInput" placeholder="Quantity" inputmode="numeric">' +
-            '<datalist id="partNameSuggestions">' + partSuggestionNames.map(n=>'<option value="'+n+'">').join('') + '</datalist>' +
-            '<datalist id="partNumberSuggestions">' + partSuggestionNumbers.map(n=>'<option value="'+n+'">').join('') + '</datalist>' +
-            '<datalist id="partSupplierSuggestions">' + partSuggestionSuppliers.map(n=>'<option value="'+n+'">').join('') + '</datalist>' +
-            '<button class="parts-add-btn" onclick="addBoatPartHandler(\''+boat.boatId+'\')">Add Part</button>' +
-          '</div>' +
+          '<button class="parts-add-btn" onclick="openAddPartPopup(\''+boat.boatId+'\')">+ Add Part</button>' +
           (parts.length === 0
             ? '<div class="parts-empty">No parts logged yet.</div>'
             : '<div class="parts-list">' + parts.map(p =>
                 '<div class="parts-row"><div class="parts-row-main"><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
-                '<span>'+[p.partNumber, p.supplier].filter(Boolean).join(' · ')+'</span></div>' +
+                '<span>'+[p.partNumber, p.supplier, (p.listPrice ? '$'+Number(p.listPrice).toFixed(2) : '')].filter(Boolean).join(' · ')+'</span></div>' +
                 '<button class="parts-del" onclick="deletePartHandler(\''+p.partId+'\')" title="Delete">&times;</button></div>'
               ).join('') + '</div>') +
         '</div>' +
