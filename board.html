@@ -1035,8 +1035,14 @@ document.getElementById('photoViewDeleteBtn').addEventListener('click', async ()
   if (!currentViewedPhoto) return;
   if (!confirm('Delete this photo? This cannot be undone.')) return;
   const photoId = currentViewedPhoto.photoId;
+  const boatId = currentViewedPhoto.boatId;
   await postToSheet('deletePhoto', { photoId });
   DATA.photos = (DATA.photos || []).filter(p => p.photoId !== photoId);
+  const boat = boatById(boatId);
+  if (boat && boat.thumbnailPhotoId === photoId){
+    boat.thumbnailPhotoId = '';
+    postToSheet('updateBoat', { id: boatId, thumbnailPhotoId: '' }).catch(()=>{});
+  }
   document.getElementById('photoViewOverlay').style.display = 'none';
   currentViewedPhoto = null;
   refreshPhotoViews();
@@ -1046,14 +1052,29 @@ document.getElementById('photoViewUploadBtn').addEventListener('click', () => {
   const boatId = currentViewedPhoto.boatId;
   const taskId = currentViewedPhoto.taskId || null;
   document.getElementById('photoViewOverlay').style.display = 'none';
-  openPhotoChoice({ boatId, taskId, onDone: refreshPhotoViews });
+  if (taskId){
+    openPhotoChoice({ boatId, taskId, onDone: refreshPhotoViews });
+  } else {
+    // No taskId means this is the boat's general/thumbnail photo --
+    // replacing it should update thumbnailPhotoId too, same as tapping
+    // the empty slot does for a boat that doesn't have one yet.
+    openBoatPhotoSlot(boatId);
+  }
 });
 // Tapping the empty photo slot on a boat profile -- taskId is left blank
-// so this becomes a general boat photo (same kind the phone's own boat
-// photo slot creates), not attached to any specific task.
+// so this becomes a general boat photo (not attached to any specific
+// task), and it's set as the boat's thumbnailPhotoId directly, since
+// this slot IS the boat's thumbnail in Shop Mode's simpler single-photo
+// view (unlike Mobile Mode, which also has a separate browsable gallery).
 function openBoatPhotoSlot(boatId){
   openPhotoChoice({
     boatId, taskId: null,
+    onEach: async (result) => {
+      const boat = boatById(boatId);
+      if (boat) boat.thumbnailPhotoId = result.photoId;
+      try{ await postToSheet('updateBoat', { id: boatId, thumbnailPhotoId: result.photoId }); }
+      catch(err){ console.warn('Could not save the new thumbnail:', err); }
+    },
     onDone: () => { if (currentProfileBoatId === boatId) renderBoatProfile(); }
   });
 }
@@ -1401,14 +1422,13 @@ function renderBoatProfile(){
     .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
   const parts = (DATA.parts || []).filter(p => p.boatId === boat.boatId);
   const custLabel = (cust ? cust.name : '—') + ' — ' + (boat.model || '');
-  // The general boat photo (no taskId attached) -- same one shown on the
-  // phone page's boat card. Most recently uploaded wins if there's more
-  // than one.
-  // A dedicated general boat photo (no taskId) -- same kind the phone's
-  // boat photo slot creates. This slot is now clickable here too, so a
-  // boat only ever touched through Shop Mode can still get one.
+  // Distinct from any per-task photos -- the hero/thumbnail photo is
+  // whatever boat.thumbnailPhotoId specifically points at, never just
+  // "whatever general photo was uploaded most recently" (that was the
+  // original bug: uploading any new general photo would silently take
+  // over as the thumbnail). Only tapping this slot itself changes it.
   const generalPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
-  const boatPhoto = generalPhotos.length ? generalPhotos[generalPhotos.length - 1] : null;
+  const boatPhoto = boat.thumbnailPhotoId ? generalPhotos.find(p => p.photoId === boat.thumbnailPhotoId) : null;
   const photoHtml = boatPhoto
     ? '<img class="profile-photo" src="' + boatPhoto.url + '" alt="Boat photo" onclick="openPhotoView(\'' + boatPhoto.photoId + '\')">'
     : '<div class="profile-photo profile-photo-empty" onclick="openBoatPhotoSlot(\'' + boat.boatId + '\')" title="Add a photo of this boat">+<br>Photo</div>';
