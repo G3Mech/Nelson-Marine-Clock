@@ -168,9 +168,6 @@
   .notepad-meta{ display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#6b6320; margin-top:2px; }
   .notepad-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
 
-  .parts-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #3a5a7a; box-shadow:0 2px 6px rgba(10,26,43,.12); }
-  .parts-header{ background:#3a5a7a; color:var(--white); font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; padding:10px 0; }
-  .parts-body{ background:#eef2f6; padding:14px 16px; }
   .parts-add-btn{ width:100%; margin-bottom:10px; padding:10px 0; border-radius:8px; border:none; background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer; }
   .parts-list{ margin-top:10px; border-top:1px solid #c7d2db; padding-top:6px; }
   .parts-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed #c7d2db; }
@@ -180,12 +177,15 @@
   .parts-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
   .parts-empty{ font-size:13px; color:var(--slate); padding:4px 0 2px; }
 
-  .photos-pad{ margin:14px 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #4a4a4a; box-shadow:0 2px 6px rgba(10,26,43,.12); }
-  .photos-header{ background:#4a4a4a; color:var(--white); padding:7px 14px; }
-  .photos-header-label{ display:block; font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; text-align:center; }
-  .photos-body-split{ background:#f2f2f2; padding:10px 12px; display:flex; align-items:center; gap:10px; }
-  .photos-camera-big{ background:var(--white); border:1px solid #d8d8d8; border-radius:10px; width:46px; height:46px; font-size:21px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .photos-view-btn{ flex:1; padding:11px 12px; border-radius:9px; border:1px solid #4a4a4a; background:var(--white); color:#4a4a4a; font-weight:700; font-size:13.5px; cursor:pointer; }
+  .quick-access-row{ display:flex; justify-content:center; gap:34px; margin:16px 20px 4px; }
+  .quick-access-item{ display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .quick-access-label{ font-size:12px; font-weight:700; color:var(--slate); }
+  .quick-circle-btn{
+    width:64px; height:64px; border-radius:50%; border:none; background:var(--white);
+    box-shadow:0 2px 8px rgba(10,26,43,.18); font-size:28px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .quick-circle-btn:active{ background:var(--paper); }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px;max-height:82vh;overflow-y:auto;position:relative; }
@@ -330,6 +330,15 @@
       <button id="photoViewUploadBtn" title="Add another photo">&#128247;</button>
       <button id="photoViewDeleteBtn" class="danger" title="Delete this photo">&#128465;</button>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="partsMenuOverlay" style="display:none;">
+  <div class="sheet">
+    <button class="sheet-close-btn" id="partsMenuCloseBtn" title="Close">&times;</button>
+    <h3>Parts</h3>
+    <button class="parts-add-btn" id="partsMenuAddBtn">+ Add Part</button>
+    <div id="partsMenuList"></div>
   </div>
 </div>
 
@@ -1141,6 +1150,33 @@ document.getElementById('sharedPhotoCameraInput').addEventListener('change', (e)
 document.getElementById('sharedPhotoLibraryInput').addEventListener('change', (e)=>{ handleChosenFiles(e.target.files); e.target.value=''; });
 
 // ======================= parts =======================
+// Opened by the gear quick-access button -- shows the running list for
+// this boat plus a button into the existing Add Part popup, rather than
+// keeping the whole thing inline on the page.
+let partsMenuBoatRef = null;
+function openPartsMenu(boatId){
+  partsMenuBoatRef = boatId;
+  renderPartsMenuList();
+  document.getElementById('partsMenuOverlay').style.display = 'flex';
+}
+function renderPartsMenuList(){
+  const wrap = document.getElementById('partsMenuList');
+  if (!wrap || !partsMenuBoatRef) return;
+  const parts = (DATA.parts || []).filter(p => p.boatId === partsMenuBoatRef);
+  wrap.innerHTML = parts.length === 0
+    ? '<div class="parts-empty">No parts logged yet.</div>'
+    : '<div class="parts-list">' + parts.map(p =>
+        '<div class="parts-row"><div class="parts-row-main"><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
+        '<span>'+[p.partNumber, p.supplier, (p.listPrice ? '$'+Number(p.listPrice).toFixed(2) : '')].filter(Boolean).join(' · ')+'</span></div>' +
+        '<button class="parts-del" onclick="deletePartHandler(\''+p.partId+'\')" title="Delete">&times;</button></div>'
+      ).join('') + '</div>';
+}
+document.getElementById('partsMenuCloseBtn').addEventListener('click', ()=> document.getElementById('partsMenuOverlay').style.display = 'none');
+document.getElementById('partsMenuAddBtn').addEventListener('click', ()=>{
+  document.getElementById('partsMenuOverlay').style.display = 'none';
+  openAddPartPopup(partsMenuBoatRef);
+});
+
 // Opens the Add Part popup for a given boat -- clears any leftover
 // values from a previous entry and refreshes the autocomplete
 // suggestions fresh each time, since new parts logged elsewhere since
@@ -1157,10 +1193,18 @@ function openAddPartPopup(boatId){
   document.getElementById('partSupplierSuggestions').innerHTML = suppliers.map(n=>'<option value="'+n+'">').join('');
   document.getElementById('addPartOverlay').style.display = 'flex';
 }
-document.getElementById('addPartCancelBtn').addEventListener('click', ()=> document.getElementById('addPartOverlay').style.display = 'none');
-document.getElementById('partAddSubmitBtn').addEventListener('click', ()=>{
-  addBoatPartHandler(addPartBoatRef);
+// Cancelling or submitting both return to the Parts Menu popup (refreshed)
+// rather than closing out to the bare profile page, since that's always
+// where this popup gets reached from now.
+document.getElementById('addPartCancelBtn').addEventListener('click', ()=>{
   document.getElementById('addPartOverlay').style.display = 'none';
+  if (addPartBoatRef) openPartsMenu(addPartBoatRef);
+});
+document.getElementById('partAddSubmitBtn').addEventListener('click', ()=>{
+  const boatId = addPartBoatRef;
+  addBoatPartHandler(boatId);
+  document.getElementById('addPartOverlay').style.display = 'none';
+  if (boatId) openPartsMenu(boatId);
 });
 // Optimistic add, same pattern used for boat notes -- shows up in the
 // list immediately under a temp_ id, confirmed by the next refresh.
@@ -1178,12 +1222,14 @@ function addBoatPartHandler(boatId){
   DATA.parts = DATA.parts || [];
   DATA.parts.push({ partId: tempId, taskId: '', boatId, partName, partNumber, supplier, quantity, listPrice, employee: currentUser || '' });
   enqueue('addPart', { boatId, partName, partNumber, supplier, quantity, listPrice, employee: currentUser || '' });
-  renderBoatProfile();
+  renderPartsMenuList();
+  if (currentProfileBoatId === boatId) renderBoatProfile();
 }
 async function deletePartHandler(partId){
   if (!confirm('Delete this part entry?')) return;
   DATA.parts = (DATA.parts || []).filter(p => p.partId !== partId);
-  renderBoatProfile();
+  renderPartsMenuList();
+  if (currentProfileBoatId) renderBoatProfile();
   if (String(partId).indexOf('temp_') === 0) return;
   await postToSheet('deletePart', { partId });
 }
@@ -1264,20 +1310,19 @@ function renderBoatProfile(){
     .sort((a,b)=>(a.priority||2)-(b.priority||2) || (a.order||0)-(b.order||0));
   const completed = (DATA.completedTasks || []).filter(t => t.boatId === boat.boatId)
     .sort((a,b)=> (b.completedAt||'').localeCompare(a.completedAt||''));
-  const parts = (DATA.parts || []).filter(p => p.boatId === boat.boatId);
   const boatNotes = (DATA.boatNotes || []).filter(n => n.boatId === boat.boatId)
     .sort((a,b)=> (b.loggedAt||'').localeCompare(a.loggedAt||''));
   const custLabel = (cust ? cust.name : '—') + ' — ' + (boat.model || '');
 
-  // Distinct from the general photo gallery below (Photos box) -- the
-  // hero/thumbnail photo is whatever boat.thumbnailPhotoId specifically
-  // points at, never just "whatever was uploaded most recently."
-  // Uploading a new photo through the Photos box's camera icon adds to
-  // the gallery only; it never touches this reference. Only tapping the
-  // thumbnail slot itself (openBoatThumbnailSlot) changes it.
+  // Distinct from the general photo gallery (opened via the camera
+  // quick-access button) -- the hero/thumbnail photo is whatever
+  // boat.thumbnailPhotoId specifically points at, never just "whatever
+  // was uploaded most recently." Uploading a new photo through the
+  // gallery's own camera icon adds to it only; it never touches this
+  // reference. Only tapping the thumbnail slot itself
+  // (openBoatThumbnailSlot) changes it.
   const allGeneralPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
   const thumbnailPhoto = boat.thumbnailPhotoId ? allGeneralPhotos.find(p => p.photoId === boat.thumbnailPhotoId) : null;
-  const galleryPhotos = allGeneralPhotos.filter(p => p.photoId !== boat.thumbnailPhotoId);
   const photoHtml = thumbnailPhoto
     ? '<div class="boat-card-photo has-photo" onclick="openPhotoView(\''+thumbnailPhoto.photoId+'\')"><img src="'+thumbnailPhoto.url+'" alt="Boat photo"></div>'
     : '<div class="boat-card-photo" onclick="openBoatThumbnailSlot(\''+boat.boatId+'\')"><div class="boat-card-photo-placeholder"><span class="plus">+</span><span>Add photo of boat</span></div></div>';
@@ -1311,20 +1356,15 @@ function renderBoatProfile(){
         (activeTasks.length > 0 && boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
       '</div>' +
     '</div>' +
+    '<div class="quick-access-row">' +
+      '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')" title="Photos">&#128247;</button><span class="quick-access-label">Photos</span></div>' +
+      '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPartsMenu(\''+boat.boatId+'\')" title="Parts">&#9881;&#65039;</button><span class="quick-access-label">Parts</span></div>' +
+    '</div>' +
     '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
     (activeTasks.length === 0
       ? '<div class="empty-note">Nothing open right now.</div>'
       : '<div class="checklist">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
     '<button class="add-task-btn" onclick="openAddTask(\''+boat.boatId+'\', \''+custLabel.replace(/'/g,"\\'")+'\')">+ New Task</button>' +
-    '<div class="photos-pad">' +
-      '<div class="photos-header">' +
-        '<span class="photos-header-label">Photos</span>' +
-      '</div>' +
-      '<div class="photos-body-split">' +
-        '<button class="photos-camera-big" onclick="openBoatPhotoSlot(\''+boat.boatId+'\')" title="Add photo">&#128247;</button>' +
-        '<button class="photos-view-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')">View Photos ('+galleryPhotos.length+')</button>' +
-      '</div>' +
-    '</div>' +
     '<div class="notepad-pad">' +
       '<div class="notepad-header">' +
         '<span class="notepad-header-label">Notes</span>' +
@@ -1347,21 +1387,6 @@ function renderBoatProfile(){
             }).join('') + '</div>') +
       '</div>' +
     '</div>' +
-    (function(){
-      return '<div class="parts-pad">' +
-        '<div class="parts-header">Parts</div>' +
-        '<div class="parts-body">' +
-          '<button class="parts-add-btn" onclick="openAddPartPopup(\''+boat.boatId+'\')">+ Add Part</button>' +
-          (parts.length === 0
-            ? '<div class="parts-empty">No parts logged yet.</div>'
-            : '<div class="parts-list">' + parts.map(p =>
-                '<div class="parts-row"><div class="parts-row-main"><b>'+p.partName+(p.quantity ? ' &times; '+p.quantity : '')+'</b>' +
-                '<span>'+[p.partNumber, p.supplier, (p.listPrice ? '$'+Number(p.listPrice).toFixed(2) : '')].filter(Boolean).join(' · ')+'</span></div>' +
-                '<button class="parts-del" onclick="deletePartHandler(\''+p.partId+'\')" title="Delete">&times;</button></div>'
-              ).join('') + '</div>') +
-        '</div>' +
-      '</div>';
-    })() +
     '<div class="section-title">Completed <span class="count">'+completed.length+'</span></div>' +
     (completed.length === 0
       ? '<div class="empty-note">No completed tasks yet.</div>'
