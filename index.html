@@ -109,7 +109,7 @@
   .section-title .count{ background:var(--line); color:var(--ink); font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:20px; }
   .empty-note{ color:var(--slate); font-size:13.5px; margin:0 20px 10px; }
 
-  .checklist{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .checklist{ margin:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
   .task-row{ border-bottom:1px solid var(--line);padding:11px 18px;background:var(--white); }
   .task-row:last-child{border-bottom:none;}
   .task-row-main{ display:flex;align-items:center;gap:10px; }
@@ -136,6 +136,12 @@
     border:1.5px dashed var(--line);background:none;color:var(--slate);font-weight:700;font-size:14px;cursor:pointer;
   }
   .add-task-btn.copied{ border-color:var(--go); border-style:solid; color:var(--go); }
+  .active-tasks-box{ margin:0 20px; padding:14px; border-radius:12px; background:#eef1f3; }
+  .active-tasks-box .empty-note{ padding:6px 0 14px; }
+  .new-task-btn{
+    width:100%; margin-top:12px; padding:13px 0; border-radius:10px; border:none;
+    background:var(--go); color:var(--white); font-weight:700; font-size:14px; cursor:pointer;
+  }
   .history-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 18px; border-bottom:1px solid var(--line); font-size:13.5px; background:var(--white); }
   .history-row:last-child{ border-bottom:none; }
   .history-list{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
@@ -1383,10 +1389,12 @@ function renderBoatProfile(){
       '</div>' +
     '</div>' +
     '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
-    (activeTasks.length === 0
-      ? '<div class="empty-note">Nothing open right now.</div>'
-      : '<div class="checklist">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
-    '<button class="add-task-btn" onclick="openAddTask(\''+boat.boatId+'\', \''+custLabel.replace(/'/g,"\\'")+'\')">+ New Task</button>' +
+    '<div class="active-tasks-box">' +
+      (activeTasks.length === 0
+        ? '<div class="empty-note">Nothing open right now.</div>'
+        : '<div class="checklist">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
+      '<button class="new-task-btn" onclick="openAddTask(\''+boat.boatId+'\', \''+custLabel.replace(/'/g,"\\'")+'\')">+ New Task</button>' +
+    '</div>' +
     '<div class="section-title">Completed <span class="count">'+completed.length+'</span></div>' +
     (completed.length === 0
       ? '<div class="empty-note">No completed tasks yet.</div>'
