@@ -149,7 +149,8 @@
   .notepad-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #1d4e89; box-shadow:0 2px 6px rgba(10,26,43,.12); }
   .notepad-header{ background:#1d4e89; color:var(--white); display:flex; align-items:center; min-height:20px; padding:12px 14px; }
   .notepad-header-label{ flex:1; font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; }
-  .notepad-save-btn{ background:var(--go); color:var(--white); border:none; border-radius:14px; padding:6px 14px; font-size:12.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
+  .notepad-header-spacer{ width:56px; flex-shrink:0; }
+  .notepad-save-btn{ width:56px; box-sizing:border-box; background:var(--go); color:var(--white); border:none; border-radius:14px; padding:6px 8px; font-size:12.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
   .notepad-yellow-area{
     background-color:#fdf6a3;
     background-image:
@@ -183,7 +184,8 @@
   .parts-del{ background:none; border:none; color:var(--stop); font-size:16px; font-weight:800; cursor:pointer; padding:0 4px; line-height:1; }
   .parts-empty{ font-size:13px; color:var(--slate); padding:4px 0 2px; }
 
-  .quick-access-row{ display:flex; justify-content:center; gap:34px; margin:16px 20px 4px; }
+  .side-cluster-row{ display:flex; align-items:stretch; gap:14px; margin:16px 20px 20px; }
+  .quick-access-col{ display:flex; flex-direction:column; justify-content:center; gap:14px; flex-shrink:0; }
   .quick-access-item{ display:flex; flex-direction:column; align-items:center; gap:6px; }
   .quick-access-label{ font-size:12px; font-weight:700; color:var(--slate); }
   .quick-circle-btn{
@@ -192,6 +194,9 @@
     display:flex; align-items:center; justify-content:center;
   }
   .quick-circle-btn:active{ background:var(--paper); }
+  /* A little wider than the button column next to it, not a full-width
+     box anymore -- the two sit side by side in the same vertical space. */
+  .notepad-pad-compact{ width:160px; flex-shrink:0; margin:0 !important; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px;max-height:82vh;overflow-y:auto;position:relative; }
@@ -1362,31 +1367,34 @@ function renderBoatProfile(){
         (activeTasks.length > 0 && boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
       '</div>' +
     '</div>' +
-    '<div class="quick-access-row">' +
-      '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')" title="Photos">&#128247;</button><span class="quick-access-label">Photos</span></div>' +
-      '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPartsMenu(\''+boat.boatId+'\')" title="Parts">&#9881;&#65039;</button><span class="quick-access-label">Parts</span></div>' +
-    '</div>' +
-    '<div class="notepad-pad">' +
-      '<div class="notepad-header">' +
-        '<span class="notepad-header-label">Notes</span>' +
-        '<button class="notepad-save-btn" id="boatNoteSaveBtn" style="display:none;" onmousedown="event.preventDefault();" onclick="addBoatNoteHandler(\''+boat.boatId+'\')">Save</button>' +
+    '<div class="side-cluster-row">' +
+      '<div class="quick-access-col">' +
+        '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')" title="Photos">&#128247;</button><span class="quick-access-label">Photos</span></div>' +
+        '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPartsMenu(\''+boat.boatId+'\')" title="Parts">&#9881;&#65039;</button><span class="quick-access-label">Parts</span></div>' +
       '</div>' +
-      '<div class="notepad-yellow-area">' +
-        '<textarea id="boatNoteInput" class="notepad-textarea" rows="1" oninput="handleNoteInput(this)" onblur="addBoatNoteHandler(\''+boat.boatId+'\')"></textarea>' +
-        '<div class="notepad-expand-row" id="boatNoteExpandRow" style="display:none;">' +
-          '<button class="notepad-expand-btn" onmousedown="event.preventDefault();" onclick="toggleNoteExpand()">&#9660;</button>' +
+      '<div class="notepad-pad notepad-pad-compact">' +
+        '<div class="notepad-header">' +
+          '<span class="notepad-header-spacer" id="boatNoteHeaderSpacer" style="display:none;"></span>' +
+          '<span class="notepad-header-label">Notes</span>' +
+          '<button class="notepad-save-btn" id="boatNoteSaveBtn" style="display:none;" onmousedown="event.preventDefault();" onclick="addBoatNoteHandler(\''+boat.boatId+'\')">Save</button>' +
         '</div>' +
-        (boatNotes.length === 0
-          ? ''
-          : '<div class="notepad-list">' + boatNotes.map(n => {
-              const isLong = n.text.length > 180;
-              return '<div class="notepad-row">' +
-                '<div class="notepad-text'+(isLong ? ' notepad-text-collapsed' : '')+'" id="note-text-'+n.noteId+'">'+n.text+'</div>' +
-                (isLong ? '<button class="notepad-toggle-link" onmousedown="event.preventDefault();" onclick="toggleNoteText(\''+n.noteId+'\')">Show more &#9660;</button>' : '') +
-                '<div class="notepad-meta"><span>'+[n.employee, (n.loggedAt ? new Date(n.loggedAt).toLocaleString() : '')].filter(Boolean).join(' · ')+'</span>' +
-                '<button class="notepad-del" onclick="deleteBoatNoteHandler(\''+n.noteId+'\')" title="Delete">&times;</button></div></div>';
+        '<div class="notepad-yellow-area">' +
+          '<textarea id="boatNoteInput" class="notepad-textarea" rows="1" oninput="handleNoteInput(this)" onblur="addBoatNoteHandler(\''+boat.boatId+'\')"></textarea>' +
+          '<div class="notepad-expand-row" id="boatNoteExpandRow" style="display:none;">' +
+            '<button class="notepad-expand-btn" onmousedown="event.preventDefault();" onclick="toggleNoteExpand()">&#9660;</button>' +
+          '</div>' +
+          (boatNotes.length === 0
+            ? ''
+            : '<div class="notepad-list">' + boatNotes.map(n => {
+                const isLong = n.text.length > 180;
+                return '<div class="notepad-row">' +
+                  '<div class="notepad-text'+(isLong ? ' notepad-text-collapsed' : '')+'" id="note-text-'+n.noteId+'">'+n.text+'</div>' +
+                  (isLong ? '<button class="notepad-toggle-link" onmousedown="event.preventDefault();" onclick="toggleNoteText(\''+n.noteId+'\')">Show more &#9660;</button>' : '') +
+                  '<div class="notepad-meta"><span>'+[n.employee, (n.loggedAt ? new Date(n.loggedAt).toLocaleString() : '')].filter(Boolean).join(' · ')+'</span>' +
+                  '<button class="notepad-del" onclick="deleteBoatNoteHandler(\''+n.noteId+'\')" title="Delete">&times;</button></div></div>';
             }).join('') + '</div>') +
       '</div>' +
+    '</div>' +
     '</div>' +
     '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
     '<div class="active-tasks-box">' +
@@ -1623,9 +1631,16 @@ function handleNoteInput(el){
   // save -- a backstop alongside auto-save-on-blur below, since blur
   // doesn't always fire reliably on mobile (locking the screen or
   // switching apps mid-note doesn't guarantee it). Only shown once
-  // there's actually something typed.
+  // there's actually something typed. The spacer on the opposite side is
+  // toggled in lockstep with it -- with Save hidden, "Notes" should use
+  // the header's full width to stay centered; with Save showing, the
+  // spacer balances it out on the other side so "Notes" doesn't drift
+  // off-center either way.
   const saveBtn = document.getElementById('boatNoteSaveBtn');
-  if (saveBtn) saveBtn.style.display = el.value.trim() ? 'inline-block' : 'none';
+  const headerSpacer = document.getElementById('boatNoteHeaderSpacer');
+  const hasText = !!el.value.trim();
+  if (saveBtn) saveBtn.style.display = hasText ? 'inline-block' : 'none';
+  if (headerSpacer) headerSpacer.style.display = hasText ? 'inline-block' : 'none';
 }
 function toggleNoteExpand(){
   boatNoteExpanded = !boatNoteExpanded;
