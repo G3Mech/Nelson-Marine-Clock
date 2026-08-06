@@ -147,17 +147,17 @@
   .history-list{ margin:0 20px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
   .history-meta{ color:var(--slate); font-size:12px; flex-shrink:0; }
   .notepad-pad{ margin:0 20px 20px; border-radius:10px; overflow:hidden; border:1px solid #1d4e89; box-shadow:0 2px 6px rgba(10,26,43,.12); }
-  .notepad-header{ background:#1d4e89; color:var(--white); display:flex; align-items:center; min-height:20px; padding:12px 14px; }
+  .notepad-header{ background:#1d4e89; color:var(--white); display:flex; align-items:center; height:40px; padding:0 14px; box-sizing:border-box; }
   .notepad-header-label{ flex:1; font-size:13px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; text-align:center; }
   .notepad-header-spacer{ width:56px; flex-shrink:0; }
-  .notepad-save-btn{ width:56px; box-sizing:border-box; background:var(--go); color:var(--white); border:none; border-radius:14px; padding:6px 8px; font-size:12.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
+  .notepad-save-btn{ width:56px; box-sizing:border-box; background:var(--go); color:var(--white); border:none; border-radius:12px; padding:4px 8px; font-size:12px; font-weight:800; cursor:pointer; flex-shrink:0; }
   .notepad-yellow-area{
     background-color:#fdf6a3;
     background-image:
       linear-gradient(90deg, transparent 30px, #e07a7a 30px, #e07a7a 32px, transparent 32px),
       linear-gradient(transparent 24px, #8fcdb0 24px, #8fcdb0 25px, transparent 25px);
     background-size:100% 100%, 100% 26px;
-    padding:24px 16px 16px 46px;
+    padding:30px 16px 22px 46px;
   }
   .notepad-textarea{
     width:100%; height:26px; min-height:26px; border:none; background:transparent; font-size:14px; font-family:inherit;
@@ -192,11 +192,11 @@
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:2px;
   }
   .quick-circle-btn:active{ background:#163f6f; }
-  .quick-circle-emoji{ font-size:28px; line-height:1; }
-  .quick-circle-label{ font-size:11px; font-weight:700; line-height:1; color:var(--white); }
+  .quick-circle-emoji{ font-size:22px; line-height:1; }
+  .quick-circle-label{ font-size:9.5px; font-weight:700; line-height:1; color:var(--white); }
   /* Percentage-based, per feedback that a fixed 160px read as too narrow
      -- 75% keeps it in the 70-80% range regardless of frame width. */
-  .notepad-pad-compact{ flex:0 0 75%; max-width:75%; margin:0 !important; display:flex; flex-direction:column; }
+  .notepad-pad-compact{ flex:0 0 80%; max-width:80%; margin:0 !important; display:flex; flex-direction:column; }
   .notepad-pad-compact .notepad-yellow-area{ flex:1; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
