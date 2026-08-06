@@ -189,14 +189,15 @@
   .quick-access-item{ display:flex; flex-direction:column; align-items:center; gap:6px; }
   .quick-access-label{ font-size:12px; font-weight:700; color:var(--slate); }
   .quick-circle-btn{
-    width:64px; height:64px; border-radius:50%; border:none; background:var(--white);
+    width:64px; height:64px; border-radius:10px; border:1px solid #1d4e89; background:#1d4e89;
     box-shadow:0 2px 8px rgba(10,26,43,.18); font-size:28px; cursor:pointer;
     display:flex; align-items:center; justify-content:center;
   }
-  .quick-circle-btn:active{ background:var(--paper); }
+  .quick-circle-btn:active{ background:#163f6f; }
   /* A little wider than the button column next to it, not a full-width
      box anymore -- the two sit side by side in the same vertical space. */
-  .notepad-pad-compact{ width:160px; flex-shrink:0; margin:0 !important; }
+  .notepad-pad-compact{ width:160px; flex-shrink:0; margin:0 !important; display:flex; flex-direction:column; }
+  .notepad-pad-compact .notepad-yellow-area{ flex:1; }
 
   .overlay{ position:fixed;inset:0;background:rgba(10,26,43,0.55);display:flex;align-items:flex-end;justify-content:center;z-index:20; }
   .sheet{ background:var(--white);width:100%;max-width:460px;border-radius:20px 20px 0 0;padding:26px 22px 34px;max-height:82vh;overflow-y:auto;position:relative; }
@@ -1368,10 +1369,6 @@ function renderBoatProfile(){
       '</div>' +
     '</div>' +
     '<div class="side-cluster-row">' +
-      '<div class="quick-access-col">' +
-        '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')" title="Photos">&#128247;</button><span class="quick-access-label">Photos</span></div>' +
-        '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPartsMenu(\''+boat.boatId+'\')" title="Parts">&#9881;&#65039;</button><span class="quick-access-label">Parts</span></div>' +
-      '</div>' +
       '<div class="notepad-pad notepad-pad-compact">' +
         '<div class="notepad-header">' +
           '<span class="notepad-header-spacer" id="boatNoteHeaderSpacer" style="display:none;"></span>' +
@@ -1394,7 +1391,11 @@ function renderBoatProfile(){
                   '<button class="notepad-del" onclick="deleteBoatNoteHandler(\''+n.noteId+'\')" title="Delete">&times;</button></div></div>';
             }).join('') + '</div>') +
       '</div>' +
-    '</div>' +
+      '</div>' +
+      '<div class="quick-access-col">' +
+        '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')" title="Photos">&#128247;</button><span class="quick-access-label">Photos</span></div>' +
+        '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPartsMenu(\''+boat.boatId+'\')" title="Parts">&#9881;&#65039;</button><span class="quick-access-label">Parts</span></div>' +
+      '</div>' +
     '</div>' +
     '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
     '<div class="active-tasks-box">' +
