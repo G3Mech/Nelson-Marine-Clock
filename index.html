@@ -1360,11 +1360,6 @@ function renderBoatProfile(){
       '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPhotoGallery(\''+boat.boatId+'\')" title="Photos">&#128247;</button><span class="quick-access-label">Photos</span></div>' +
       '<div class="quick-access-item"><button class="quick-circle-btn" onclick="openPartsMenu(\''+boat.boatId+'\')" title="Parts">&#9881;&#65039;</button><span class="quick-access-label">Parts</span></div>' +
     '</div>' +
-    '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
-    (activeTasks.length === 0
-      ? '<div class="empty-note">Nothing open right now.</div>'
-      : '<div class="checklist">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
-    '<button class="add-task-btn" onclick="openAddTask(\''+boat.boatId+'\', \''+custLabel.replace(/'/g,"\\'")+'\')">+ New Task</button>' +
     '<div class="notepad-pad">' +
       '<div class="notepad-header">' +
         '<span class="notepad-header-label">Notes</span>' +
@@ -1387,6 +1382,11 @@ function renderBoatProfile(){
             }).join('') + '</div>') +
       '</div>' +
     '</div>' +
+    '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
+    (activeTasks.length === 0
+      ? '<div class="empty-note">Nothing open right now.</div>'
+      : '<div class="checklist">' + activeTasks.map(taskRowHtml).join('') + '</div>') +
+    '<button class="add-task-btn" onclick="openAddTask(\''+boat.boatId+'\', \''+custLabel.replace(/'/g,"\\'")+'\')">+ New Task</button>' +
     '<div class="section-title">Completed <span class="count">'+completed.length+'</span></div>' +
     (completed.length === 0
       ? '<div class="empty-note">No completed tasks yet.</div>'
