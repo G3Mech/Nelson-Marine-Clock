@@ -121,7 +121,7 @@
   .pill-btn.pause{background:var(--white);color:var(--pause-blue);border:1px solid var(--pause-blue);}
   .pill-btn.complete{background:var(--go);color:var(--white);}
   .pill-btn.unflag{background:var(--white);color:var(--caution-text);border:1px solid var(--caution-border);}
-  .row-timer{ font-size:15px;font-weight:800;color:var(--go);font-variant-numeric:tabular-nums;flex-shrink:0; }
+  .row-timer{ font-size:15px;font-weight:800;color:var(--go);font-variant-numeric:tabular-nums;flex-shrink:0; } .task-row-right{ display:flex; flex-direction:column-reverse; align-items:flex-end; gap:6px; flex-shrink:0; }
   .status-pill{ font-size:10px; font-weight:800; padding:2px 8px; border-radius:20px; white-space:nowrap; text-transform:uppercase; letter-spacing:.03em; }
   .status-pill.paused{ background:var(--amber-bg); color:var(--amber); }
   .status-pill.flagged{ background:var(--caution-bg); color:var(--caution-text); border:1px solid var(--caution-border); }
@@ -1302,7 +1302,7 @@ function taskRowHtml(t){
       '<div class="task-main-content"><div class="task-name">'+t.name+'</div>' +
       (t.status === 'active' && t.activeEmployee ? '<div class="active-by-label">Active — '+t.activeEmployee+'</div>' : '') +
       '</div>' +
-      mainRight +
+      '<div class="task-row-right">'+mainRight+'</div>' +
     '</div>' +
     '<div class="task-row-secondary">' +
       '<span class="notes-photo-group">'+(showFlagIcon?flagBtn:'')+deleteBtn+'</span>' +
