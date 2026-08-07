@@ -121,7 +121,7 @@
   .pill-btn.pause{background:var(--white);color:var(--pause-blue);border:1px solid var(--pause-blue);}
   .pill-btn.complete{background:var(--go);color:var(--white);}
   .pill-btn.unflag{background:var(--white);color:var(--caution-text);border:1px solid var(--caution-border);}
-  .row-timer{ font-size:15px;font-weight:800;color:var(--go);font-variant-numeric:tabular-nums;flex-shrink:0; } .task-row-right{ display:flex; flex-direction:column-reverse; align-items:flex-end; gap:6px; flex-shrink:0; }
+    .row-timer{ font-size:15px;font-weight:800;color:var(--go);font-variant-numeric:tabular-nums;flex-shrink:0; }
   .status-pill{ font-size:10px; font-weight:800; padding:2px 8px; border-radius:20px; white-space:nowrap; text-transform:uppercase; letter-spacing:.03em; }
   .status-pill.paused{ background:var(--amber-bg); color:var(--amber); }
   .status-pill.flagged{ background:var(--caution-bg); color:var(--caution-text); border:1px solid var(--caution-border); }
@@ -1271,20 +1271,20 @@ function taskRowHtml(t){
   const isTimed = String(t.billMode || '').trim().toLowerCase() !== 'complete';
   const flagBtn = '<button class="icon-btn" onclick="openFlagConfirm(findTaskById(\''+t.taskId+'\'))" title="Flag as incompletable">&#9888;&#65039;</button>';
 
-  let mainRight;
+  let mainRight; let badge = '';
   if (t.status === 'flagged'){
-    mainRight = '<span class="status-pill flagged">Flagged</span>' +
-      '<button class="pill-btn unflag" onclick="setFlag(findTaskById(\''+t.taskId+'\'), false)">Unflag</button>';
+        badge = '<span class="status-pill flagged">Flagged</span>';
+        mainRight = '<button class="pill-btn unflag" onclick="setFlag(findTaskById(\''+t.taskId+'\'), false)">Unflag</button>';
   } else if (!isTimed){
     mainRight = '<button class="pill-btn start" onclick="completeSimpleTask(findTaskById(\''+t.taskId+'\'))">Mark Done</button>';
   } else if (t.status === 'active'){
-    mainRight = '<span class="row-timer" data-task="'+t.taskId+'">'+fmtElapsed(liveMs(t))+'</span>' +
-      '<button class="pill-btn pause" onclick="pauseTask(findTaskById(\''+t.taskId+'\'))">Pause</button>' +
-      '<button class="pill-btn complete" onclick="openCompleteConfirm(findTaskById(\''+t.taskId+'\'))">Done</button>';
+        badge = '<span class="row-timer" data-task="'+t.taskId+'">'+fmtElapsed(liveMs(t))+'</span>';
+        mainRight = '<button class="pill-btn pause" onclick="pauseTask(findTaskById(\''+t.taskId+'\'))">Pause</button>' +
+                '<button class="pill-btn complete" onclick="openCompleteConfirm(findTaskById(\''+t.taskId+'\'))">Done</button>';
   } else if (t.status === 'paused'){
     const mins = Math.round(liveMs(t) / 60000);
-    mainRight = '<span class="status-pill paused">'+mins+' min</span>' +
-      '<button class="pill-btn resume" onclick="startTask(findTaskById(\''+t.taskId+'\'))">Resume</button>';
+        badge = '<span class="status-pill paused">'+mins+' min</span>';
+        mainRight = '<button class="pill-btn resume" onclick="startTask(findTaskById(\''+t.taskId+'\'))">Resume</button>';
   } else {
     mainRight = '<button class="pill-btn start" onclick="startTask(findTaskById(\''+t.taskId+'\'))">Start</button>';
   }
@@ -1302,10 +1302,11 @@ function taskRowHtml(t){
       '<div class="task-main-content"><div class="task-name">'+t.name+'</div>' +
       (t.status === 'active' && t.activeEmployee ? '<div class="active-by-label">Active — '+t.activeEmployee+'</div>' : '') +
       '</div>' +
-      '<div class="task-row-right">'+mainRight+'</div>' +
+            mainRight +
     '</div>' +
     '<div class="task-row-secondary">' +
-      '<span class="notes-photo-group">'+(showFlagIcon?flagBtn:'')+deleteBtn+'</span>' +
+            badge +
+    '<span class="notes-photo-group">'+(showFlagIcon?flagBtn:'')+deleteBtn+'</span>' +
     '</div>' +
   '</div>';
 }
