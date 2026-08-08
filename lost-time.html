@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Nelson Marine Databasin — I Lost My Time!</title>
+<style>
+  :root{
+    --ink:#0f2438; --deep:#0a1a2b; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
+    --go:#1c6e4a; --go-bg:#e3f2ea; --stop:#8a2f1f; --stop-bg:#fbeceb; --pause-blue:#1565a8;
+    --amber:#a5690a; --amber-bg:#fbf1de;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background:var(--paper); color:var(--ink); min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  .frame{ width:100%; max-width:460px; min-height:100vh; background:var(--white); position:relative; }
+  .page-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px 10px; }
+  .page-head .yard{ font-size:13px; font-weight:800; letter-spacing:.06em; color:var(--slate); text-transform:uppercase; }
+  .hamburger-btn{ background:none; border:none; padding:8px; cursor:pointer; }
+  .hamburger-btn span{ display:block;width:26px;height:3px;border-radius:2px;background:var(--ink); margin:5px 0; }
+
+  .menu-overlay{ display:none; position:fixed; inset:0; background:var(--white); z-index:30; flex-direction:column; padding:20px; }
+  .menu-overlay.show{ display:flex; }
+  .menu-close{ align-self:flex-end; background:none; border:none; font-size:30px; cursor:pointer; color:var(--slate); padding:6px; }
+  .menu-item{ display:block; padding:16px 6px; font-size:17px; font-weight:700; color:var(--ink); text-decoration:none; border-bottom:1px solid var(--line); }
+  .menu-item:active{ background:var(--paper); }
+
+  .intro{ padding:0 20px 6px; font-size:12.5px; color:var(--slate); line-height:1.5; }
+
+  .filter-row{ padding:10px 20px 14px; }
+  .filter-row label{ display:block; font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--slate); margin-bottom:6px; }
+  .filter-row select{
+    width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:9px; font-size:15px;
+    font-family:inherit; background:var(--white); color:var(--ink);
+  }
+
+  .summary-strip{ margin:0 20px 16px; padding:12px 14px; border-radius:10px; background:var(--stop-bg); border:1px solid #e3b6ae; font-size:13px; color:var(--stop); font-weight:700; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .summary-strip.clear{ background:var(--go-bg); border-color:#a9d2bb; color:var(--go); }
+  .summary-strip .count{ font-size:22px; font-weight:800; }
+
+  .flag-list{ padding:0 12px 30px; display:flex; flex-direction:column; gap:10px; }
+  .flag-card{ border:1px solid var(--line); border-left:5px solid var(--stop); border-radius:10px; padding:12px 14px; background:var(--white); cursor:pointer; }
+  .flag-card:active{ background:var(--paper); }
+  .flag-card.kind-open{ border-left-color:var(--amber); }
+  .flag-card.kind-gap{ border-left-color:var(--stop); }
+  .flag-card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .flag-task{ font-weight:800; font-size:14.5px; line-height:1.3; }
+  .flag-boat{ font-size:12px; color:var(--slate); margin-top:2px; }
+  .flag-badge{ font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:3px 9px; border-radius:20px; white-space:nowrap; flex-shrink:0; }
+  .flag-badge.kind-open{ background:var(--amber-bg); color:var(--amber); }
+  .flag-badge.kind-gap{ background:var(--stop-bg); color:var(--stop); }
+  .flag-meta{ margin-top:8px; font-size:12.5px; color:var(--ink); line-height:1.5; }
+  .flag-meta b{ color:var(--stop); }
+  .flag-when{ margin-top:6px; font-size:11.5px; color:var(--slate); }
+
+  .col-empty{ font-size:13px; color:var(--slate); padding:30px 20px; text-align:center; line-height:1.5; }
+
+  .overlay{ display:none; position:fixed; inset:0; background:rgba(10,26,43,0.55); align-items:flex-end; justify-content:center; z-index:40; }
+  .overlay.show{ display:flex; }
+  .sheet{ background:var(--white); width:100%; max-width:460px; border-radius:16px 16px 0 0; padding:22px 20px 30px; max-height:82vh; overflow-y:auto; position:relative; }
+  .sheet-close{ position:absolute; top:14px; right:14px; width:38px; height:38px; border-radius:50%; border:none; background:var(--paper); color:var(--ink); font-size:20px; cursor:pointer; }
+  .detail-title{ font-size:18px; font-weight:800; margin:0 40px 4px 0; }
+  .detail-sub{ font-size:12.5px; color:var(--slate); margin:0 40px 16px 0; }
+  .timeline{ border-left:2px solid var(--line); margin-left:6px; padding-left:16px; display:flex; flex-direction:column; gap:16px; }
+  .timeline-row{ position:relative; }
+  .timeline-row::before{ content:''; position:absolute; left:-21px; top:3px; width:9px; height:9px; border-radius:50%; background:var(--slate); }
+  .timeline-row.hilite::before{ background:var(--stop); }
+  .timeline-action{ font-weight:800; font-size:13.5px; text-transform:capitalize; }
+  .timeline-action.hilite{ color:var(--stop); }
+  .timeline-time{ font-size:11.5px; color:var(--slate); margin-top:1px; }
+  .timeline-detail{ font-size:12.5px; color:var(--ink); margin-top:4px; line-height:1.45; }
+  .timeline-gap{ font-size:11.5px; color:var(--stop); font-weight:700; margin-top:6px; padding-left:16px; margin-left:-16px; border-left:2px dashed var(--stop); }
+
+  .loading{ text-align:center; padding:40px 20px; color:var(--slate); font-size:14px; }
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <header class="page-head">
+    <span class="yard">Nelson Marine Databasin · I Lost My Time!</span>
+    <button class="hamburger-btn" id="hamburgerBtn" aria-label="Menu"><span></span><span></span><span></span></button>
+  </header>
+
+  <p class="intro">Reconstructed from the Event Log — every start, pause, resume, and complete on record. This flags jobs where the time on the clock doesn't add up to the time that actually passed, so you can back up a claim instead of guessing from photo timestamps.</p>
+
+  <div class="filter-row">
+    <label for="employeeFilter">Filter by employee</label>
+    <select id="employeeFilter">
+      <option value="">All Employees</option>
+    </select>
+  </div>
+
+  <div id="summaryWrap"></div>
+  <div id="flagsWrap"><div class="loading">Loading…</div></div>
+
+</div>
+
+<div class="menu-overlay" id="menuOverlay">
+  <button class="menu-close" id="menuCloseBtn" aria-label="Close menu">&times;</button>
+  <a class="menu-item" href="board.html" onclick="return confirmShopMode()">Shop Mode</a>
+  <a class="menu-item" href="index.html">Mobile Mode</a>
+  <a class="menu-item" href="view.html">View Work / Parts</a>
+</div>
+
+<div class="overlay" id="detailOverlay">
+  <div class="sheet">
+    <button class="sheet-close" id="detailCloseBtn" title="Close">&times;</button>
+    <div class="detail-title" id="detailTitle"></div>
+    <div class="detail-sub" id="detailSub"></div>
+    <div class="timeline" id="detailTimeline"></div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+ * NELSON MARINE DATABASIN — I LOST MY TIME!  (this file: lost-time.html)
+ * ==========================================================================
+ * WHAT THIS FILE IS
+ *   A read-only report, same family as view.html: no offline queue, no
+ *   local cache, nothing here is ever edited. It fetches the Event Log
+ *   (adminGetEventLog, exposed via a new doGet ?action=getEventLog route
+ *   -- see the note on that below) and Active Tasks, then reconstructs
+ *   each task's own start/pause/resume/complete/flag history into
+ *   sessions, flagging ones where the clock doesn't add up: either a
+ *   session that was opened (start/resume) and never closed out at all,
+ *   or one that closed out crediting far less time than actually passed
+ *   between the two events.
+ *
+ * WHY RECONSTRUCT SESSIONS RATHER THAN JUST READING accumulatedMs
+ *   accumulatedMs on a task is the single running total -- exactly
+ *   right for billing, but it can't show WHERE within that history a
+ *   gap happened, or that a gap happened at all if the task was later
+ *   fixed by hand. The Event Log has a row for every individual
+ *   start/pause/resume/flag/complete, each stamped with the real
+ *   wall-clock moment and the accumulated total immediately before and
+ *   after -- walking through those in order, per task, is what lets
+ *   this page show "you started this at 9:14, it wasn't touched again
+ *   until 1:40, but only 4 minutes got credited" instead of just a
+ *   final number with no story behind it.
+ *
+ * DETECTION RULES (see buildFlags() below for the actual thresholds)
+ *   1. OPEN SESSION -- a start/resume with no later event at all for
+ *      that task. Either it's still genuinely running (check Active
+ *      Tasks before assuming a bug), or it was left running and time
+ *      is quietly still accruing/was lost somewhere else.
+ *   2. GAP -- a start/resume followed by a pause/complete/flag where
+ *      the wall-clock time between the two events is meaningfully
+ *      larger than the time actually credited (accumulatedMsAfter -
+ *      accumulatedMsBefore). A small amount of slack is allowed (a
+ *      minute or two -- normal delay between tapping and the request
+ *      landing) before something is flagged; the threshold is
+ *      GAP_THRESHOLD_MS below.
+ *
+ * This page does NOT try to fix anything -- it's purely a lookup tool
+ * to back up a claim ("I started at 9, I know it, here's the log") with
+ * real data instead of a guess. Any correction still happens by hand
+ * through the Admin Dashboard (editing the Recorded Times entry) same
+ * as before.
+ * ========================================================================== */
+
+// ======================= CONFIG =======================
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+
+// Below this, a gap between "wall clock time passed" and "time actually
+// credited" is treated as normal slack (network delay between a tap and
+// the request landing, a device clock a little off, etc.) rather than a
+// real lost-time incident. 3 minutes gives real bugs plenty of room to
+// stand out while not flagging every ordinary pause.
+const GAP_THRESHOLD_MS = 3 * 60 * 1000;
+
+let DATA = null;      // { boats, customers, tasks (Active Tasks), employees }
+let EVENTS = [];      // full Event Log, oldest first
+let FLAGS = [];        // built once per DATA/EVENTS load, re-filtered per employee change
+
+function confirmShopMode(){
+  return confirm('Switch to Shop Mode?\n\nTo get back, use your browser\'s Back button — there\'s no menu button once you\'re there.');
+}
+const hamburgerBtn = document.getElementById('hamburgerBtn');
+const menuOverlay = document.getElementById('menuOverlay');
+hamburgerBtn.addEventListener('click', ()=> menuOverlay.classList.add('show'));
+document.getElementById('menuCloseBtn').addEventListener('click', ()=> menuOverlay.classList.remove('show'));
+
+function boatLabel(boatId){
+  const boat = (DATA.boats || []).find(b => b.boatId === boatId);
+  if (!boat) return '—';
+  const cust = boat.customerId ? (DATA.customers || []).find(c => c.customerId === boat.customerId) : null;
+  return (cust ? cust.name : (boat.model || '—')) + (boat.model && cust ? ' — ' + boat.model : '');
+}
+function fmtDT(iso){
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+function fmtDur(ms){
+  if (ms == null || isNaN(ms)) return '—';
+  const totalMin = Math.round(Math.abs(ms) / 60000);
+  const h = Math.floor(totalMin / 60), m = totalMin % 60;
+  return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm');
+}
+function populateEmployeeFilter(){
+  const sel = document.getElementById('employeeFilter');
+  const current = sel.value;
+  const names = (DATA.employees || []).slice().sort();
+  sel.innerHTML = '<option value="">All Employees</option>' + names.map(n => '<option value="'+n+'">'+n+'</option>').join('');
+  sel.value = current && names.includes(current) ? current : '';
+}
+
+// ======================= session reconstruction =======================
+// Groups the log by taskId, walks each task's own events in chronological
+// order, and finds every start/resume -> next-event pair. 'employee' on
+// a flag is whoever opened the session (the start/resume row) -- that's
+// the person whose time is in question, regardless of who eventually
+// closed it out (e.g. someone else pressing Complete after finding a
+// job left running).
+function buildFlags(){
+  const byTask = {};
+  EVENTS.forEach(e => {
+    if (!e.taskId) return;
+    if (!byTask[e.taskId]) byTask[e.taskId] = [];
+    byTask[e.taskId].push(e);
+  });
+
+  const openTaskIds = new Set((DATA.tasks || []).filter(t => t.status === 'active').map(t => t.taskId));
+  const flags = [];
+
+  Object.keys(byTask).forEach(taskId => {
+    const events = byTask[taskId].slice().sort((a,b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+    for (let i = 0; i < events.length; i++){
+      const ev = events[i];
+      if (ev.action !== 'start' && ev.action !== 'resume') continue;
+      const openedAt = new Date(ev.timestamp).getTime();
+      const next = events[i + 1];
+
+      if (!next){
+        // Nothing closes this session out in the log at all. If Active
+        // Tasks still shows it running, that might just mean it's
+        // genuinely in progress right now -- still worth surfacing (the
+        // person filtering by their own name wants to see it either
+        // way), but the wording below makes clear it might just be
+        // ongoing rather than lost.
+        flags.push({
+          kind: 'open',
+          taskId: taskId,
+          boatId: ev.boatId,
+          workOrder: ev.workOrder,
+          taskName: ev.taskName,
+          employee: ev.employee,
+          openedAt: ev.timestamp,
+          stillActive: openTaskIds.has(taskId)
+        });
+        continue;
+      }
+
+      if (next.action === 'pause' || next.action === 'complete' || next.action === 'flag'){
+        const closedAt = new Date(next.timestamp).getTime();
+        const wallMs = closedAt - openedAt;
+        const creditedMs = (Number(next.accumulatedMsAfter) || 0) - (Number(next.accumulatedMsBefore) || 0);
+        const gapMs = wallMs - creditedMs;
+        if (gapMs > GAP_THRESHOLD_MS){
+          flags.push({
+            kind: 'gap',
+            taskId: taskId,
+            boatId: ev.boatId,
+            workOrder: ev.workOrder,
+            taskName: ev.taskName,
+            employee: ev.employee,
+            openedAt: ev.timestamp,
+            closedAt: next.timestamp,
+            closedAction: next.action,
+            wallMs: wallMs,
+            creditedMs: creditedMs,
+            gapMs: gapMs
+          });
+        }
+      }
+      // start/resume immediately followed by another start/resume (no
+      // close in between) shouldn't happen given the server's own status
+      // rules, but if it ever does, the loop just moves on to treat that
+      // next row as its own session start -- nothing here assumes it
+      // can't happen, it just doesn't manufacture a flag out of it.
+    }
+  });
+
+  flags.sort((a,b) => String(b.openedAt).localeCompare(String(a.openedAt)));
+  return flags;
+}
+
+// ======================= rendering =======================
+function renderSummary(filtered){
+  const wrap = document.getElementById('summaryWrap');
+  if (filtered.length === 0){
+    wrap.innerHTML = '<div class="summary-strip clear">Nothing flagged — every session on record closes out cleanly.</div>';
+    return;
+  }
+  const openCount = filtered.filter(f => f.kind === 'open').length;
+  const gapCount = filtered.filter(f => f.kind === 'gap').length;
+  const parts = [];
+  if (gapCount) parts.push(gapCount + ' with a time gap');
+  if (openCount) parts.push(openCount + ' left running with no close-out');
+  wrap.innerHTML = '<div class="summary-strip"><span>' + parts.join(' · ') + '</span><span class="count">' + filtered.length + '</span></div>';
+}
+function renderFlags(){
+  const employee = document.getElementById('employeeFilter').value;
+  const filtered = employee ? FLAGS.filter(f => f.employee === employee) : FLAGS.slice();
+  renderSummary(filtered);
+
+  const wrap = document.getElementById('flagsWrap');
+  if (filtered.length === 0){
+    wrap.innerHTML = '<div class="col-empty">' + (employee ? 'No flagged sessions for ' + employee + ' — nothing here backs up a lost-time claim, but that also means the log doesn\'t show one.' : 'No flagged sessions on record.') + '</div>';
+    return;
+  }
+
+  wrap.innerHTML = '<div class="flag-list">' + filtered.map((f, idx) => {
+    const kindLabel = f.kind === 'open' ? (f.stillActive ? 'Still running' : 'Never closed out') : 'Time gap';
+    let metaHtml;
+    if (f.kind === 'open'){
+      metaHtml = 'Started ' + fmtDT(f.openedAt) + (f.employee ? ' by <b>' + f.employee + '</b>' : '') +
+        (f.stillActive ? ' — still shows active right now.' : ' — no pause, complete, or flag ever followed it in the log.');
+    } else {
+      metaHtml = '<b>' + fmtDur(f.gapMs) + '</b> unaccounted for — ' + fmtDur(f.wallMs) + ' passed, only ' + fmtDur(f.creditedMs) + ' credited.';
+    }
+    return '<div class="flag-card kind-' + f.kind + '" data-idx="' + idx + '">' +
+      '<div class="flag-card-top">' +
+        '<div><div class="flag-task">' + (f.taskName || '(unnamed task)') + '</div>' +
+        '<div class="flag-boat">' + boatLabel(f.boatId) + (f.workOrder ? ' · WO ' + f.workOrder : '') + '</div></div>' +
+        '<span class="flag-badge kind-' + f.kind + '">' + kindLabel + '</span>' +
+      '</div>' +
+      '<div class="flag-meta">' + metaHtml + '</div>' +
+      '<div class="flag-when">' + (f.employee ? f.employee + ' · ' : '') + fmtDT(f.openedAt) + '</div>' +
+    '</div>';
+  }).join('') + '</div>';
+
+  wrap.querySelectorAll('.flag-card').forEach(el => {
+    el.addEventListener('click', () => openFlagDetail(filtered[parseInt(el.dataset.idx, 10)]));
+  });
+}
+document.getElementById('employeeFilter').addEventListener('change', renderFlags);
+
+// ======================= detail popup: full task timeline =======================
+document.getElementById('detailCloseBtn').addEventListener('click', ()=> document.getElementById('detailOverlay').classList.remove('show'));
+function openFlagDetail(flag){
+  const taskEvents = EVENTS.filter(e => e.taskId === flag.taskId).sort((a,b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+  document.getElementById('detailTitle').textContent = flag.taskName || '(unnamed task)';
+  document.getElementById('detailSub').textContent = boatLabel(flag.boatId) + (flag.workOrder ? ' · WO ' + flag.workOrder : '') + ' · full history for this task';
+
+  const rows = taskEvents.map((e, i) => {
+    const isFlaggedPair = (e.timestamp === flag.openedAt) || (flag.closedAt && e.timestamp === flag.closedAt);
+    const creditedMs = (Number(e.accumulatedMsAfter) || 0) - (Number(e.accumulatedMsBefore) || 0);
+    let detailLine = '';
+    if (e.action === 'pause' || e.action === 'complete' || e.action === 'flag'){
+      detailLine = 'Credited ' + fmtDur(creditedMs) + ' this segment · total now ' + fmtDur(Number(e.accumulatedMsAfter) || 0);
+    } else if (e.action === 'start' || e.action === 'resume'){
+      detailLine = 'Total before this: ' + fmtDur(Number(e.accumulatedMsBefore) || 0);
+    } else if (e.action === 'add'){
+      detailLine = 'Task added' + (e.note ? ' — ' + e.note : '');
+    } else if (e.action === 'delete'){
+      detailLine = 'Task deleted' + (e.note ? ' — ' + e.note : '');
+    } else if (e.note){
+      detailLine = e.note;
+    }
+    let gapHtml = '';
+    const next = taskEvents[i + 1];
+    if (next && (e.action === 'start' || e.action === 'resume') && (next.action === 'pause' || next.action === 'complete' || next.action === 'flag')){
+      const wallMs = new Date(next.timestamp).getTime() - new Date(e.timestamp).getTime();
+      const nextCredited = (Number(next.accumulatedMsAfter) || 0) - (Number(next.accumulatedMsBefore) || 0);
+      const gapMs = wallMs - nextCredited;
+      if (gapMs > GAP_THRESHOLD_MS){
+        gapHtml = '<div class="timeline-gap">' + fmtDur(gapMs) + ' unaccounted for before the next entry</div>';
+      }
+    }
+    return '<div class="timeline-row' + (isFlaggedPair ? ' hilite' : '') + '">' +
+      '<div class="timeline-action' + (isFlaggedPair ? ' hilite' : '') + '">' + e.action + (e.employee ? ' — ' + e.employee : '') + '</div>' +
+      '<div class="timeline-time">' + fmtDT(e.timestamp) + '</div>' +
+      (detailLine ? '<div class="timeline-detail">' + detailLine + '</div>' : '') +
+    '</div>' + gapHtml;
+  }).join('');
+
+  document.getElementById('detailTimeline').innerHTML = rows || '<div class="col-empty">No log entries found for this task.</div>';
+  document.getElementById('detailOverlay').classList.add('show');
+}
+
+// ======================= boot =======================
+async function boot(){
+  try{
+    const [allRes, logRes] = await Promise.all([
+      fetch(WEBAPP_URL + '?action=getAll'),
+      fetch(WEBAPP_URL + '?action=getEventLog')
+    ]);
+    DATA = await allRes.json();
+    if (DATA.error) throw new Error(DATA.error);
+    const logJson = await logRes.json();
+    if (logJson.error) throw new Error(logJson.error);
+    EVENTS = logJson.events || [];
+  } catch(err){
+    document.getElementById('flagsWrap').innerHTML = '<div class="col-empty">Could not load: ' + (err && err.message ? err.message : err) + '</div>';
+    return;
+  }
+  populateEmployeeFilter();
+  FLAGS = buildFlags();
+  renderFlags();
+}
+boot();
+</script>
+</body>
+</html>
