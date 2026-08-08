@@ -27,6 +27,15 @@
   .demo-strip{ background:var(--deep);color:#cfe0ea;font-size:12px;padding:8px 14px;display:flex;align-items:center;justify-content:space-between;letter-spacing:.02em; }
   .demo-strip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;position:relative;top:-1px;}
   .dot.on{background:#4fd18b;} .dot.off{background:#e0705a;} .dot.connecting{background:#a9b7c0;}
+  /* Shown only when a start/pause/complete/flag tap has gone unconfirmed
+     by the server for too long -- see staleOverrideWatchdog and the BUG
+     comment on flushQueue. Deliberately louder than the connection strip
+     above it (solid --stop background, not just a colored dot) since
+     this means something more specific and more actionable: a timer on
+     screen may not match what the database actually has. */
+  .stale-strip{ background:var(--stop); color:#ffe9e5; font-size:12.5px; padding:9px 14px; display:none; align-items:center; justify-content:space-between; gap:10px; letter-spacing:.01em; }
+  .stale-strip.show{ display:flex; }
+  .stale-strip button{ background:#ffe9e5; color:var(--stop); border:none; border-radius:14px; padding:5px 12px; font-size:11.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
 
   .hamburger-btn{
     width:48px;height:48px;flex-shrink:0;border:none;background:none;cursor:pointer;
@@ -240,6 +249,10 @@
 
   <div class="demo-strip">
     <span><span class="dot connecting" id="dot"></span><span id="netlabel">Connecting…</span></span>
+  </div>
+  <div class="stale-strip" id="staleStrip">
+    <span id="staleStripText">A change hasn't been confirmed by the server yet.</span>
+    <button id="staleStripRetryBtn">Retry Now</button>
   </div>
 
   <header class="page-head">
@@ -488,12 +501,32 @@ function loadSearchProfileBoatId(){
 
 let DATA = null;
 let currentUser = null;
-// Per-task { status, activeSince, accumulatedMs } guard, same purpose and
-// shape as board.html's -- see this file's mergeFetchedTasks (added below,
-// there wasn't one here before) and Code.gs's updateTask_ for why elapsed
-// time is server truth now rather than reconstructed from each device's
-// own local segment history.
+// Per-task { status, activeSince, accumulatedMs, _setAt } guard, same
+// purpose and shape as board.html's -- see this file's mergeFetchedTasks
+// (added below, there wasn't one here before) and Code.gs's updateTask_
+// for why elapsed time is server truth now rather than reconstructed
+// from each device's own local segment history. _setAt (added alongside
+// the flushQueue retry fix -- see the BUG comment there) is when this
+// override was made, purely so staleOverrideWatchdog can tell "waiting
+// on a normal server round trip" apart from "this has been unconfirmed
+// for way too long, something's actually wrong."
 let pendingStatusOverride = {};
+// Every write to pendingStatusOverride should go through this rather
+// than assigning the object literal directly, so _setAt is never
+// accidentally left off one call site while present on the others.
+function setPendingOverride_(taskId, override){
+  pendingStatusOverride[taskId] = Object.assign({}, override, { _setAt: Date.now() });
+}
+// If an override sits unconfirmed by a real server fetch for longer
+// than this, something is genuinely wrong -- almost certainly the
+// original request never actually reached the server (see the BUG
+// comment on flushQueue) -- and the person should be told directly
+// rather than have the screen keep confidently showing a timer that the
+// database has no record of. Set well above the 15s poll interval and
+// the 30s queue-retry interval, so a couple of ordinary slow round trips
+// never trip it; this is specifically for "confirmed nothing, repeatedly,
+// for minutes."
+const STALE_OVERRIDE_MS = 2 * 60 * 1000;
 let isOnline = navigator.onLine;
 
 const dot = document.getElementById('dot');
@@ -552,10 +585,45 @@ async function postToSheet(action, body){
     const e = new Error(networkErr.message || 'Network error'); e.isNetworkError = true; throw e;
   }
   const json = await res.json();
-  if (json && json.error){ const e = new Error(json.error); e.isServerError = true; throw e; }
+  if (json && json.error){
+    const e = new Error(json.error);
+    // transient:true (see withActiveTasksLock_ in Code.gs) means the
+    // request never actually ran at all -- pure lock contention, most
+    // likely several devices' actions landing within the same moment --
+    // as opposed to every other error shape here, which means the
+    // request DID run and was genuinely rejected. That distinction
+    // matters: a genuine rejection should be dropped after one try (see
+    // the BUG below for why retrying one forever is dangerous), but a
+    // transient one was never attempted and has to be retried, or the
+    // action it represents (most critically, a Start) silently never
+    // happens at all while the UI keeps showing it as if it had.
+    if (json.transient) e.isTransientError = true;
+    else e.isServerError = true;
+    throw e;
+  }
   return json;
 }
 let flushing = false;
+// BUG THIS FIXES: an employee could tap Start, have that request hit
+// lock contention (several devices clocking in within the same moment,
+// most commonly right at shift-start) and come back with a transient
+// "system is busy" error -- which used to be treated exactly like a
+// genuine rejection ("task not found") and silently dropped after one
+// try, with nothing beyond a console.warn nobody was ever going to see.
+// The phone's own screen kept showing the timer running the whole time
+// regardless, because that display is driven by the optimistic
+// pendingStatusOverride set the moment Start was tapped, not by
+// anything the server actually confirmed -- and every 15-second
+// background poll for the rest of the shift kept re-applying that same
+// override on top of the server's real (never-started) row, masking the
+// mismatch completely. Hours later, Pause would finally reach a server
+// that had no record this task was ever started, and correctly compute
+// zero elapsed time. The fix is two-sided: this function keeps a
+// transient failure in the queue and retries it (see maxAttempts below)
+// instead of discarding it, and staleOverrideWatchdog() elsewhere in
+// this file stops trusting an unconfirmed override after a couple of
+// minutes and warns the person directly rather than silently masking a
+// mismatch for an entire shift.
 async function flushQueue(){
   if (flushing) return;
   if (!isOnline) return;
@@ -588,12 +656,36 @@ async function flushQueue(){
         const remaining = loadQueue(); remaining.shift(); saveQueue(remaining);
       } catch(err){
         if (err.isNetworkError){ isOnline = false; updateConnBadge(); break; }
-        console.warn('Dropping a queued action the server rejected:', item, err.message);
+        if (err.isTransientError){
+          // Never attempted server-side -- leave it at the front of the
+          // queue so the next flush (retryTick below, or the next
+          // enqueue/online event) tries it again. Capped at 8 attempts
+          // (roughly 4 minutes of retrying at the 30s retry interval)
+          // purely as a last-resort safety valve against a genuinely
+          // stuck item spinning forever; staleOverrideWatchdog will have
+          // already surfaced a visible warning to the person well before
+          // that cap is reached (see STALE_OVERRIDE_MS below).
+          item.attempts = (item.attempts || 0) + 1;
+          if (item.attempts < 8){
+            const requeued = loadQueue(); requeued[0] = item; saveQueue(requeued);
+            break;
+          }
+          console.warn('Giving up on a queued action after repeated "system busy" errors:', item, err.message);
+        } else {
+          console.warn('Dropping a queued action the server rejected:', item, err.message);
+        }
         const remaining2 = loadQueue(); remaining2.shift(); saveQueue(remaining2);
       }
     }
   } finally { flushing = false; updateConnBadge(); }
 }
+// Retries anything left in the queue (most importantly a transient
+// failure held there by the block above) on a steady cadence, so a
+// busy-system error doesn't just sit unretried until the person happens
+// to tap something else. 30s is deliberately slower than the 15s data
+// refresh -- this is a fallback path for an uncommon case, not the
+// primary sync mechanism.
+setInterval(flushQueue, 30000);
 function reconcileTempTaskId(tempId, realId){
   if (DATA){ const t = DATA.tasks.find(t => t.taskId === tempId); if (t) t.taskId = realId; }
   if (pendingStatusOverride[tempId] !== undefined){ pendingStatusOverride[realId] = pendingStatusOverride[tempId]; delete pendingStatusOverride[tempId]; }
@@ -609,6 +701,46 @@ function updateConnBadge(){
 }
 window.addEventListener('online', ()=>{ isOnline = true; updateConnBadge(); flushQueue(); });
 window.addEventListener('offline', ()=>{ isOnline = false; updateConnBadge(); });
+
+// ======================= stale-override watchdog =======================
+// See the BUG comment on flushQueue for the full story: this is the
+// second half of that fix. An override that's still sitting in
+// pendingStatusOverride after STALE_OVERRIDE_MS means the server has
+// not agreed with what this screen is showing for that long, despite
+// repeated fetches (refreshData every 15s) and repeated retries
+// (flushQueue's own retry every 30s) -- something is genuinely stuck,
+// most likely a queued request that keeps failing, or one that's been
+// silently dropped. Rather than let the timer on screen keep looking
+// normal while the underlying data may not exist, this surfaces it
+// directly so the person can act (stay on this screen so the retry has
+// a chance to land, or flag it for the office) instead of finding out
+// only when they finally hit Pause hours later.
+function staleOverrideWatchdog(){
+  const strip = document.getElementById('staleStrip');
+  const textEl = document.getElementById('staleStripText');
+  const now = Date.now();
+  const staleIds = Object.keys(pendingStatusOverride).filter(id => {
+    const setAt = pendingStatusOverride[id]._setAt;
+    return setAt && (now - setAt) > STALE_OVERRIDE_MS;
+  });
+  if (staleIds.length === 0){
+    strip.classList.remove('show');
+    return;
+  }
+  const staleNames = staleIds.map(id => {
+    const t = DATA && DATA.tasks ? DATA.tasks.find(t => t.taskId === id) : null;
+    return t ? t.name : null;
+  }).filter(Boolean);
+  textEl.textContent = staleIds.length === 1
+    ? ('"' + (staleNames[0] || 'A task') + '" hasn\'t been confirmed by the server in a few minutes — don\'t trust this timer yet.')
+    : (staleIds.length + ' changes haven\'t been confirmed by the server in a few minutes — don\'t trust these timers yet.');
+  strip.classList.add('show');
+}
+document.getElementById('staleStripRetryBtn').addEventListener('click', () => {
+  flushQueue();
+  refreshData();
+});
+setInterval(staleOverrideWatchdog, 10000);
 
 // ======================= sounds (same as the rest of the site) =======================
 let audioCtx = null;
@@ -864,7 +996,7 @@ function startTask(task){
     // request happens to finally arrive. See Code.gs's updateTask_ for
     // the other half of this fix. activeEmployee is who's running it --
     // shown as "Active — Name" on every device looking at this task.
-    pendingStatusOverride[task.taskId] = { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0, activeEmployee: task.activeEmployee };
+    setPendingOverride_(task.taskId, { status: 'active', activeSince: now, accumulatedMs: Number(task.accumulatedMs) || 0, activeEmployee: task.activeEmployee });
     enqueue('updateTask', { taskId: task.taskId, status: 'active', activeSince: now, activeEmployee: task.activeEmployee });
     playStartSound();
     renderBoatProfile();
@@ -892,7 +1024,7 @@ function pauseTask(task){
   task.activeSince = '';
   task.activeEmployee = '';
   task.accumulatedMs = newAccumulated;
-  pendingStatusOverride[task.taskId] = { status: 'paused', activeSince: '', accumulatedMs: newAccumulated, activeEmployee: '' };
+  setPendingOverride_(task.taskId, { status: 'paused', activeSince: '', accumulatedMs: newAccumulated, activeEmployee: '' });
   enqueue('updateTask', { taskId: task.taskId, status: 'paused', segmentEndedAt: new Date(pausedAtMs).toISOString() });
   playPauseSound();
   renderBoatProfile();
@@ -900,7 +1032,7 @@ function pauseTask(task){
 function completeSimpleTask(task){
   task.status = 'done';
   const employee = currentUser || '';
-  pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: Number(task.accumulatedMs) || 0 };
+  setPendingOverride_(task.taskId, { status: 'done', activeSince: '', accumulatedMs: Number(task.accumulatedMs) || 0 });
   enqueue('updateTask', { taskId: task.taskId, status: 'done', employee });
   playDoneSound();
   renderBoatProfile();
@@ -923,7 +1055,7 @@ function completeTimedTask(task){
   task.activeSince = '';
   task.activeEmployee = '';
   task.accumulatedMs = finalAccumulated;
-  pendingStatusOverride[task.taskId] = { status: 'done', activeSince: '', accumulatedMs: finalAccumulated, activeEmployee: '' };
+  setPendingOverride_(task.taskId, { status: 'done', activeSince: '', accumulatedMs: finalAccumulated, activeEmployee: '' });
   // ONE action, not two -- Code.gs's updateTask_ computes the true total
   // itself and writes the Recorded Times entry as part of handling this
   // same status change (see logFinalDuration_ in Code.gs). There used to
@@ -953,7 +1085,7 @@ function setFlag(task, flagged){
     task.status = task._preFlagStatus || 'pending';
     delete task._preFlagStatus;
   }
-  pendingStatusOverride[task.taskId] = { status: task.status, activeSince: task.activeSince || '', accumulatedMs: Number(task.accumulatedMs) || 0, activeEmployee: '' };
+  setPendingOverride_(task.taskId, { status: task.status, activeSince: task.activeSince || '', accumulatedMs: Number(task.accumulatedMs) || 0, activeEmployee: '' });
   enqueue('updateTask', { taskId: task.taskId, status: task.status, segmentEndedAt: new Date(flaggedAtMs).toISOString() });
   renderBoatProfile();
 }
