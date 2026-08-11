@@ -3,11 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- Advisory only -- see checkForStaleBuild_ further down for the active
+     version check, since these tags aren't reliably honored by every
+     pinned-shortcut cache. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Nelson Marine Databasin — View Work / Parts</title>
 <style>
   :root{
     --ink:#0f2438; --deep:#0a1a2b; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
-    --go:#1c6e4a; --go-bg:#e3f2ea; --stop:#8a2f1f; --pause-blue:#1565a8;
+    --go:#1c6e4a; --go-bg:#e3f2ea; --stop:#8a2f1f; --pause-blue:#1565a8; --amber:#a5690a;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
@@ -65,10 +71,23 @@
   .item-time.flat{ color:var(--slate); font-weight:600; }
 
   .loading{ text-align:center; padding:40px 20px; color:var(--slate); font-size:14px; }
+
+  /* See checkForStaleBuild_ in the boot script -- this is the same
+     "this page is running old code, reload it" banner used across all
+     four frontends, so it looks and behaves identically wherever it
+     shows up. */
+  .build-stale-strip{ width:100%; box-sizing:border-box; display:none; align-items:center; justify-content:space-between; gap:10px; background:var(--amber); color:#fff8ea; font-size:12.5px; padding:9px 14px; }
+  .build-stale-strip.show{ display:flex; }
+  .build-stale-strip button{ background:#fff8ea; color:var(--amber); border:none; border-radius:14px; padding:5px 12px; font-size:11.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
 </style>
 </head>
 <body>
 <div class="frame">
+
+  <div class="build-stale-strip" id="buildStaleStrip">
+    <span>A newer version of this page is available.</span>
+    <button id="buildStaleReloadBtn">Reload Now</button>
+  </div>
 
   <header class="page-head">
     <span class="yard">Nelson Marine Databasin · View Work / Parts</span>
@@ -113,6 +132,32 @@
 <script>
 // ======================= CONFIG =======================
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+// Stamped by hand each time this file is shipped -- must match
+// version.json's "build" value at ship time. See checkForStaleBuild_
+// below.
+const BUILD_VERSION = '2026-08-11T18:48:30Z';
+
+// ======================= build-staleness check =======================
+// Same fix as index.html/board.html (see index.html's checkForStaleBuild_
+// for the full story) -- this page is a plain hosted GitHub Pages page
+// too, so it's just as exposed to a browser or pinned shortcut serving an
+// old cached copy indefinitely.
+const BUILD_CHECK_URL = 'https://raw.githubusercontent.com/g3mech/Nelson-Marine-Clock/main/version.json';
+async function checkForStaleBuild_(){
+  try{
+    const res = await fetch(BUILD_CHECK_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const json = await res.json();
+    if (json.build && json.build !== BUILD_VERSION){
+      document.getElementById('buildStaleStrip').classList.add('show');
+    }
+  } catch(e){ /* offline or GitHub unreachable -- not evidence either way */ }
+}
+document.getElementById('buildStaleReloadBtn').addEventListener('click', () => {
+  window.location.href = window.location.pathname + '?v=' + Date.now();
+});
+checkForStaleBuild_();
+setInterval(checkForStaleBuild_, 5 * 60000);
 
 // This page is read-only by design -- a report to look through, not a
 // place to change anything. That means none of the offline-queue/cache
