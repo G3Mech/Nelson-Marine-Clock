@@ -3,6 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- Advisory only -- GitHub Pages/Android's pinned-shortcut cache has been
+     known to ignore these. The real staleness protection is the
+     BUILD_VERSION check further down (see checkForStaleBuild_), which
+     actively compares against version.json and forces a visible banner
+     rather than silently trusting the browser to behave. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Nelson Marine Databasin — Mobile Mode</title>
 <style>
   :root{
@@ -36,6 +44,18 @@
   .stale-strip{ background:var(--stop); color:#ffe9e5; font-size:12.5px; padding:9px 14px; display:none; align-items:center; justify-content:space-between; gap:10px; letter-spacing:.01em; }
   .stale-strip.show{ display:flex; }
   .stale-strip button{ background:#ffe9e5; color:var(--stop); border:none; border-radius:14px; padding:5px 12px; font-size:11.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
+  /* Deliberately a different color (amber, not red) from .stale-strip
+     above -- that one means "a change you made hasn't reached the server
+     yet," this one means "this phone is running old code and should
+     reload." Different problems, different fixes, so they need to look
+     different even though the layout is identical. See
+     checkForStaleBuild_ in the boot script for why this exists: an old
+     cached copy of this page can otherwise run silently for a long time
+     with no visible sign anything's wrong, which is exactly what caused
+     the timer/UI bugs this banner exists to catch early. */
+  .build-stale-strip{ background:var(--amber); color:#fff8ea; font-size:12.5px; padding:9px 14px; display:none; align-items:center; justify-content:space-between; gap:10px; letter-spacing:.01em; }
+  .build-stale-strip.show{ display:flex; }
+  .build-stale-strip button{ background:#fff8ea; color:var(--amber); border:none; border-radius:14px; padding:5px 12px; font-size:11.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
 
   .hamburger-btn{
     width:48px;height:48px;flex-shrink:0;border:none;background:none;cursor:pointer;
@@ -254,6 +274,10 @@
     <span id="staleStripText">A change hasn't been confirmed by the server yet.</span>
     <button id="staleStripRetryBtn">Retry Now</button>
   </div>
+  <div class="build-stale-strip" id="buildStaleStrip">
+    <span>A newer version of this page is available.</span>
+    <button id="buildStaleReloadBtn">Reload Now</button>
+  </div>
 
   <header class="page-head">
     <span class="yard">Nelson Marine Databasin · Mobile Mode</span>
@@ -444,6 +468,19 @@
 
 // ======================= CONFIG =======================
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+// BUILD_VERSION is stamped by hand each time this file is shipped -- must
+// match version.json's "build" value at ship time. See checkForStaleBuild_
+// below for why this exists: a phone "pinned to home screen" on Android
+// has been observed serving an indefinitely stale cached copy of this
+// page's HTML even after GitHub Pages has a newer version, ignoring the
+// Cache-Control meta tags in <head> entirely (those are advisory, not
+// enforced). This is the active check that catches that: rather than
+// trusting the browser to notice a new version exists, this page asks
+// GitHub directly, on its own, every time it's opened and periodically
+// while left open, and puts an impossible-to-miss banner up if what's
+// running is behind -- instead of a mechanic silently working for hours
+// against logic that was already fixed.
+const BUILD_VERSION = '2026-08-11T18:48:30Z';
 
 // This page's local storage keys -- kept under their original
 // "nelsonMarineClock..." names even though this page is now Mobile Mode
@@ -741,6 +778,51 @@ document.getElementById('staleStripRetryBtn').addEventListener('click', () => {
   refreshData();
 });
 setInterval(staleOverrideWatchdog, 10000);
+
+// ======================= build-staleness check =======================
+// WHY THIS EXISTS: a phone with this page pinned to its home screen (the
+// normal way technicians use it) was found running a build from before
+// several timer/lock fixes had shipped -- Android's pinned-shortcut cache
+// had simply never re-fetched the page from GitHub Pages, and the
+// Cache-Control meta tags in <head> are advisory only, not something
+// every browser actually honors for a standalone/pinned shortcut. The
+// person using it had no way to know: the old page loaded fine, looked
+// normal, and quietly ran old logic (an old status-merge bug that let a
+// freshly-created task flip to 'paused' on its own; missing
+// activeEmployee tracking, which is what made a task only resumable by
+// whoever's device originally started it) for who knows how long before
+// anyone noticed the timers were wrong.
+//
+// This asks GitHub directly, on load and periodically while the page
+// stays open, whether a newer build exists -- deliberately NOT trusting
+// the browser's own cache for this one specific request (the cache-
+// busting query param below), since asking through the cache is exactly
+// what failed before. If what's running is behind, it says so loudly
+// rather than staying silent, and gives a one-tap way to actually get
+// the new version rather than trusting the person to know to clear their
+// cache.
+const BUILD_CHECK_URL = 'https://raw.githubusercontent.com/g3mech/Nelson-Marine-Clock/main/version.json';
+async function checkForStaleBuild_(){
+  try{
+    const res = await fetch(BUILD_CHECK_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return; // GitHub hiccup -- say nothing, try again next interval rather than false-alarming
+    const json = await res.json();
+    if (json.build && json.build !== BUILD_VERSION){
+      document.getElementById('buildStaleStrip').classList.add('show');
+    }
+  } catch(e){
+    // Offline, or GitHub unreachable -- not evidence of staleness either
+    // way, so stay quiet rather than guessing.
+  }
+}
+document.getElementById('buildStaleReloadBtn').addEventListener('click', () => {
+  // Cache-busting the navigation itself, not just this one fetch -- a
+  // plain location.reload() can still be served from the same stale
+  // cache that caused the problem in the first place.
+  window.location.href = window.location.pathname + '?v=' + Date.now();
+});
+checkForStaleBuild_();
+setInterval(checkForStaleBuild_, 5 * 60000);
 
 // ======================= sounds (same as the rest of the site) =======================
 let audioCtx = null;
