@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- Advisory only -- see checkForStaleBuild_ further down for the real
+     staleness protection (an active version check against version.json,
+     since these tags aren't reliably honored by every pinned-shortcut
+     cache). -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Nelson Marine Databasin — Shop Mode</title>
 <style>
   :root{
@@ -63,6 +70,16 @@
   .stale-strip{ flex-shrink:0; display:none; align-items:center; justify-content:space-between; gap:12px; background:var(--stop); color:#ffe9e5; font-size:13.5px; font-weight:600; padding:9px 22px; }
   .stale-strip.show{ display:flex; }
   .stale-strip button{ background:#ffe9e5; color:var(--stop); border:none; border-radius:16px; padding:6px 16px; font-size:12.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
+
+  /* Amber, not red -- deliberately distinct from .stale-strip above.
+     That one means "a change hasn't reached the server yet"; this one
+     means "this tablet is running old code, reload it." See
+     checkForStaleBuild_ in the boot script. On a wall-mounted tablet
+     nobody's actively watching, so this needs to be just as hard to
+     miss as the red one. */
+  .build-stale-strip{ flex-shrink:0; display:none; align-items:center; justify-content:space-between; gap:12px; background:var(--amber); color:#fff8ea; font-size:13.5px; font-weight:600; padding:9px 22px; }
+  .build-stale-strip.show{ display:flex; }
+  .build-stale-strip button{ background:#fff8ea; color:var(--amber); border:none; border-radius:16px; padding:6px 16px; font-size:12.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
 
   .body{ flex:1; display:flex; min-height:0; }
   .left{ flex:3 1 0; min-width:0; padding:18px 20px; overflow-y:auto; }
@@ -287,6 +304,10 @@
 <div class="stale-strip" id="staleStrip">
   <span id="staleStripText">A change hasn't been confirmed by the server yet.</span>
   <button id="staleStripRetryBtn">Retry Now</button>
+</div>
+<div class="build-stale-strip" id="buildStaleStrip">
+  <span>A newer version of this page is available.</span>
+  <button id="buildStaleReloadBtn">Reload Now</button>
 </div>
 
 <div class="tab-bar">
@@ -567,6 +588,10 @@
  *   carries forward status) in a future focused session.
  * ========================================================================== */
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+// Stamped by hand each time this file is shipped -- must match
+// version.json's "build" value at ship time. See checkForStaleBuild_
+// below for why this exists.
+const BUILD_VERSION = '2026-08-11T18:48:30Z';
 const REFRESH_MS = 15000;
 
 let DATA = null;
@@ -2211,6 +2236,29 @@ document.getElementById('staleStripRetryBtn').addEventListener('click', () => {
   refreshData();
 });
 setInterval(staleOverrideWatchdog, 10000);
+
+// ======================= build-staleness check =======================
+// Same fix, same reasoning as index.html's checkForStaleBuild_ (see the
+// comment there for the full story) -- this tablet is wall-mounted and
+// nobody's actively refreshing it, so if GitHub Pages ships a fix, this
+// is what actually gets it to show up here instead of the tablet quietly
+// running old code indefinitely.
+const BUILD_CHECK_URL = 'https://raw.githubusercontent.com/g3mech/Nelson-Marine-Clock/main/version.json';
+async function checkForStaleBuild_(){
+  try{
+    const res = await fetch(BUILD_CHECK_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const json = await res.json();
+    if (json.build && json.build !== BUILD_VERSION){
+      document.getElementById('buildStaleStrip').classList.add('show');
+    }
+  } catch(e){ /* offline or GitHub unreachable -- not evidence either way */ }
+}
+document.getElementById('buildStaleReloadBtn').addEventListener('click', () => {
+  window.location.href = window.location.pathname + '?v=' + Date.now();
+});
+checkForStaleBuild_();
+setInterval(checkForStaleBuild_, 5 * 60000);
 
 // A task this device has optimistically deleted but not yet confirmed
 // gone from an actual fetch -- same reasoning as the status-override
