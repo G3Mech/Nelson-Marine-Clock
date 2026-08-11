@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- Advisory only -- see checkForStaleBuild_ further down for the active
+     version check, since these tags aren't reliably honored by every
+     pinned-shortcut cache. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Nelson Marine Databasin — I Lost My Time!</title>
 <style>
   :root{
@@ -76,10 +82,21 @@
   .timeline-gap{ font-size:11.5px; color:var(--stop); font-weight:700; margin-top:6px; padding-left:16px; margin-left:-16px; border-left:2px dashed var(--stop); }
 
   .loading{ text-align:center; padding:40px 20px; color:var(--slate); font-size:14px; }
+
+  /* See checkForStaleBuild_ in the boot script -- same banner used
+     across all four frontends. */
+  .build-stale-strip{ width:100%; box-sizing:border-box; display:none; align-items:center; justify-content:space-between; gap:10px; background:var(--amber); color:#fff8ea; font-size:12.5px; padding:9px 14px; }
+  .build-stale-strip.show{ display:flex; }
+  .build-stale-strip button{ background:#fff8ea; color:var(--amber); border:none; border-radius:14px; padding:5px 12px; font-size:11.5px; font-weight:800; cursor:pointer; flex-shrink:0; }
 </style>
 </head>
 <body>
 <div class="frame">
+
+  <div class="build-stale-strip" id="buildStaleStrip">
+    <span>A newer version of this page is available.</span>
+    <button id="buildStaleReloadBtn">Reload Now</button>
+  </div>
 
   <header class="page-head">
     <span class="yard">Nelson Marine Databasin · I Lost My Time!</span>
@@ -165,6 +182,33 @@
 
 // ======================= CONFIG =======================
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+// Stamped by hand each time this file is shipped -- must match
+// version.json's "build" value at ship time. See checkForStaleBuild_
+// below.
+const BUILD_VERSION = '2026-08-11T18:48:30Z';
+
+// ======================= build-staleness check =======================
+// Same fix as the other three pages (see index.html's checkForStaleBuild_
+// for the full story). Worth having here especially -- this is the
+// diagnostic page someone reaches for specifically because they think
+// something's gone wrong, so it should be the last place still quietly
+// running old, already-fixed logic.
+const BUILD_CHECK_URL = 'https://raw.githubusercontent.com/g3mech/Nelson-Marine-Clock/main/version.json';
+async function checkForStaleBuild_(){
+  try{
+    const res = await fetch(BUILD_CHECK_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const json = await res.json();
+    if (json.build && json.build !== BUILD_VERSION){
+      document.getElementById('buildStaleStrip').classList.add('show');
+    }
+  } catch(e){ /* offline or GitHub unreachable -- not evidence either way */ }
+}
+document.getElementById('buildStaleReloadBtn').addEventListener('click', () => {
+  window.location.href = window.location.pathname + '?v=' + Date.now();
+});
+checkForStaleBuild_();
+setInterval(checkForStaleBuild_, 5 * 60000);
 
 // Below this, a gap between "wall clock time passed" and "time actually
 // credited" is treated as normal slack (network delay between a tap and
