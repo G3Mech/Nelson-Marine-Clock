@@ -710,6 +710,7 @@ async function flushQueue(){
           console.warn('Giving up on a queued action after repeated "system busy" errors:', item, err.message);
         } else {
           console.warn('Dropping a queued action the server rejected:', item, err.message);
+          notifyActionFailed_(item);
         }
         const remaining2 = loadQueue(); remaining2.shift(); saveQueue(remaining2);
       }
@@ -723,6 +724,35 @@ async function flushQueue(){
 // refresh -- this is a fallback path for an uncommon case, not the
 // primary sync mechanism.
 setInterval(flushQueue, 30000);
+// Surfaces a DEFINITELY-rejected action (Drive storage full, a
+// permission error, any other genuine server-side rejection -- as
+// opposed to a transient "system busy" retry, handled separately
+// above) immediately, instead of leaving the person to find out up to
+// STALE_OVERRIDE_MS later via staleOverrideWatchdog. Reverts whatever
+// this action had already optimistically applied locally, then
+// re-syncs from the server, so the screen goes back to matching the
+// last known-good state instead of continuing to show a change that
+// never actually happened -- added after an incident where Drive
+// storage filled up, every write silently failed, and buttons
+// appeared to do nothing.
+function notifyActionFailed_(item){
+  if (item.action === 'addTask' && item.tempId){
+    DATA.tasks = (DATA.tasks || []).filter(t => t.taskId !== item.tempId);
+  } else if (item.action === 'addPart' && item.tempId){
+    DATA.parts = (DATA.parts || []).filter(p => p.partId !== item.tempId);
+  } else if (item.body && item.body.taskId){
+    delete pendingStatusOverride[item.body.taskId];
+  }
+  refreshData();
+  const strip = document.getElementById('staleStrip');
+  const textEl = document.getElementById('staleStripText');
+  if (strip && textEl){
+    textEl.textContent = 'Update failed — please try again or check with the office.';
+    strip.classList.add('show');
+    clearTimeout(notifyActionFailed_._hideTimer);
+    notifyActionFailed_._hideTimer = setTimeout(() => strip.classList.remove('show'), 8000);
+  }
+}
 function reconcileTempTaskId(tempId, realId){
   if (DATA){ const t = DATA.tasks.find(t => t.taskId === tempId); if (t) t.taskId = realId; }
   if (pendingStatusOverride[tempId] !== undefined){ pendingStatusOverride[realId] = pendingStatusOverride[tempId]; delete pendingStatusOverride[tempId]; }
