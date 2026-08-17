@@ -112,7 +112,6 @@
   <a class="menu-item" href="board.html" onclick="return confirmShopMode()">Shop Mode</a>
   <a class="menu-item" href="index.html">Mobile Mode</a>
   <a class="menu-item" href="view.html">View Work / Parts</a>
-  <a class="menu-item" href="lost-time.html">I Lost My Time!</a>
 </div>
 
 <div class="overlay" id="detailOverlay">
@@ -129,27 +128,26 @@
  * NELSON MARINE DATABASIN — TASK HISTORY  (this file: task-history.html)
  * ==========================================================================
  * WHAT THIS FILE IS
- *   A read-only report, same family as view.html and lost-time.html: no
- *   offline queue, no local cache, nothing here is ever edited. It fetches
- *   the Event Log (the same ?action=getEventLog route lost-time.html uses)
- *   plus Active + Completed Tasks, and lets you search for ANY task by
- *   boat, customer, task name, or work order, then shows that task's full
- *   start/pause/resume/complete timeline.
+ *   A read-only report, same family as view.html: no offline queue, no
+ *   local cache, nothing here is ever edited. It fetches the Event Log
+ *   (?action=getEventLog) plus Active + Completed Tasks, and lets you
+ *   search for ANY task by boat, customer, task name, or work order,
+ *   then shows that task's full start/pause/resume/complete timeline.
  *
- * WHY THIS EXISTS ALONGSIDE "I LOST MY TIME!"
- *   lost-time.html is an anomaly report -- it only surfaces tasks where
- *   its own gap/open-session detection already found a problem. That's
- *   exactly right for "show me what's currently wrong," but it can't
- *   answer "let me look up this specific task's history" for a task that
- *   hasn't been flagged (e.g. checking a task before deciding whether an
- *   accidental blip needs correcting, the way b53's Fuel Gauge Install
- *   was checked by hand on 2026-08-17). This page is that lookup tool --
- *   same timeline rendering, same gap-highlighting, just reachable by
- *   search instead of gated behind a flag.
+ * HISTORY
+ *   This page replaced an earlier one, "I Lost My Time!" (lost-time.html,
+ *   retired 2026-08-17), which only surfaced tasks where its own gap/
+ *   open-session detection had already found a problem -- useful for
+ *   "show me what's currently wrong," but it couldn't answer "let me
+ *   look up this specific task's history" for a task that hadn't been
+ *   flagged (e.g. checking a task before deciding whether an accidental
+ *   blip needs correcting, the way b53's Fuel Gauge Install was checked
+ *   by hand on 2026-08-17). This page covers both cases from one search
+ *   box, so the flag-gated version was removed rather than kept alongside it.
  *
  *   Kept deliberately small: no new backend route, no editing, just a
- *   search box in front of data + rendering logic already proven out in
- *   lost-time.html.
+ *   search box in front of data + the same timeline-rendering approach
+ *   the old page used.
  * ========================================================================== */
 
 // ======================= CONFIG =======================
@@ -177,9 +175,10 @@ document.getElementById('buildStaleReloadBtn').addEventListener('click', () => {
 checkForStaleBuild_();
 setInterval(checkForStaleBuild_, 5 * 60000);
 
-// Same slack window lost-time.html uses -- a gap between wall-clock time
-// passed and time actually credited smaller than this is normal network/
-// tap delay, not a real incident worth calling out inline.
+// Same slack window the old lost-time.html anomaly report used -- a gap
+// between wall-clock time passed and time actually credited smaller than
+// this is normal network/tap delay, not a real incident worth calling out
+// inline.
 const GAP_THRESHOLD_MS = 3 * 60 * 1000;
 
 let DATA = null;      // { boats, customers, tasks (Active), completedTasks, employees, ... }
@@ -254,10 +253,11 @@ function renderResults(){
 document.getElementById('taskSearch').addEventListener('input', renderResults);
 
 // ======================= detail popup: full task timeline =======================
-// Same rendering approach as lost-time.html's openFlagDetail(), minus the
-// flag-specific pair highlighting (there's no single flagged pair here --
-// this can be any task), keeping the inline gap-highlighting since it's
-// useful context regardless of whether the task was ever formally flagged.
+// Same rendering approach the old lost-time.html's openFlagDetail() used,
+// minus the flag-specific pair highlighting (there's no single flagged
+// pair here -- this can be any task), keeping the inline gap-highlighting
+// since it's useful context regardless of whether the task was ever
+// formally flagged.
 document.getElementById('detailCloseBtn').addEventListener('click', ()=> document.getElementById('detailOverlay').classList.remove('show'));
 function openTaskDetail(task){
   const taskEvents = EVENTS.filter(e => e.taskId === task.taskId).sort((a,b) => String(a.timestamp).localeCompare(String(b.timestamp)));
@@ -302,12 +302,16 @@ function openTaskDetail(task){
 // ======================= boot =======================
 async function boot(){
   try{
-    const [allRes, logRes] = await Promise.all([
-      fetch(WEBAPP_URL + '?action=getAll'),
-      fetch(WEBAPP_URL + '?action=getEventLog')
-    ]);
+    // Fetched sequentially, not via Promise.all -- concurrent requests to
+    // this same Apps Script web app were observed to contend with each
+    // other (getAll stalling 15-20s+ behind getEventLog) under load,
+    // apparently from Apps Script serializing simultaneous invocations.
+    // One after another is slightly slower in the best case but doesn't
+    // have that stall risk.
+    const allRes = await fetch(WEBAPP_URL + '?action=getAll');
     DATA = await allRes.json();
     if (DATA.error) throw new Error(DATA.error);
+    const logRes = await fetch(WEBAPP_URL + '?action=getEventLog');
     const logJson = await logRes.json();
     if (logJson.error) throw new Error(logJson.error);
     EVENTS = logJson.events || [];
