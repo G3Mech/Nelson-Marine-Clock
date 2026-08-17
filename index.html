@@ -120,7 +120,6 @@
   .photo-view-actions{ position:absolute; right:16px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; gap:16px; }
   .photo-view-actions button{ width:50px; height:50px; border-radius:50%; border:none; background:var(--white); color:var(--ink); font-size:21px; cursor:pointer; box-shadow:0 4px 14px rgba(10,26,43,.25); }
   .photo-view-actions button.danger{ color:var(--stop); }
-  .profile-contact{ font-size:12.5px; color:var(--slate); line-height:1.5; }
   .profile-badges{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
   .profile-boat-name{ font-size:20px; font-weight:800; }
   .profile-boat-sub{ font-size:13px; color:var(--slate); margin-top:3px; }
@@ -131,9 +130,6 @@
   .profile-location-big.yard{ background:var(--yard-accent); color:var(--white); }
   .wo-num{ font-size:11px; font-weight:800; color:var(--white); background:var(--ink); padding:3px 10px; border-radius:20px; white-space:nowrap; }
   .suggestion-section-label{ padding:9px 16px 5px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--slate); }
-  .contact-toggle-btn{ width:calc(100% - 40px); margin:16px 20px 0; padding:12px 16px; border:1px solid var(--line); border-radius:10px; background:var(--white); display:flex; justify-content:space-between; align-items:center; font-size:13.5px; font-weight:700; color:var(--ink); cursor:pointer; }
-  .contact-info-panel{ margin:0 20px 20px; padding:12px 16px; border:1px solid var(--line); border-top:none; border-radius:0 0 10px 10px; background:var(--paper); }
-
   .section-title{ font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--slate);margin:20px 20px 8px;display:flex;align-items:center;gap:8px; }
   .section-title .count{ background:var(--line); color:var(--ink); font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:20px; }
   .empty-note{ color:var(--slate); font-size:13.5px; margin:0 20px 10px; }
@@ -1658,12 +1654,6 @@ function renderBoatProfile(){
           '<div class="history-row"><span>'+t.name+'</span>' +
           '<span class="history-meta">'+(t.completedAt ? new Date(t.completedAt).toLocaleDateString() : '')+'</span></div>'
         ).join('') + '</div>') +
-    '<button class="contact-toggle-btn" id="contactToggleBtn" onclick="toggleContactInfo()">' +
-      '<span>Customer Contact Information</span><span id="contactToggleArrow">&#9660;</span>' +
-    '</button>' +
-    '<div class="contact-info-panel" id="contactInfoPanel" style="display:none;">' +
-      '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : 'No contact info on file.') + '</div>' +
-    '</div>' +
     '<button class="add-task-btn" id="copyProfileUrlBtn" onclick="copyBoatProfileUrl(\''+boat.boatId+'\', this)">Copy Boat Profile URL</button>';
 }
 // Replaces the retired Tag URL Tool page: this generates the exact same
@@ -1691,20 +1681,6 @@ async function copyBoatProfileUrl(boatId, btnEl){
   btnEl.classList.add('copied');
   setTimeout(() => { btnEl.textContent = original; btnEl.classList.remove('copied'); }, 1800);
 }
-// The customer's phone/email/address is rarely what a technician
-// actually needs while working a boat -- it's collapsed by default here
-// rather than sitting at the top of the page, and stays a simple
-// show/hide rather than persisting the open/closed state anywhere,
-// since it's meant to be checked occasionally, not left open.
-function toggleContactInfo(){
-  const panel = document.getElementById('contactInfoPanel');
-  const arrow = document.getElementById('contactToggleArrow');
-  if (!panel || !arrow) return;
-  const nowOpen = panel.style.display === 'none';
-  panel.style.display = nowOpen ? 'block' : 'none';
-  arrow.innerHTML = nowOpen ? '&#9650;' : '&#9660;';
-}
-
 function tickTimers(){
   if (!DATA || !currentProfileBoatId) return;
   document.querySelectorAll('.row-timer').forEach(el => {
