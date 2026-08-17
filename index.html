@@ -1650,7 +1650,7 @@ function renderBoatProfile(){
       '<div class="focus-label">Now timing</div>' +
       '<div class="focus-task">'+runningTask.name+'</div>' +
       (runningTask.activeEmployee ? '<div class="focus-context">Active — '+runningTask.activeEmployee+'</div>' : '') +
-      '<div class="focus-timer">'+fmtElapsed(liveMs(runningTask))+'</div>' +
+      '<div class="focus-timer" data-task="'+runningTask.taskId+'">'+fmtElapsed(liveMs(runningTask))+'</div>' +
       '<button class="big-btn big-pause" onclick="pauseTask(findTaskById(\''+runningTask.taskId+'\'))">Pause</button>' +
       '<button class="big-btn big-complete" onclick="openCompleteConfirm(findTaskById(\''+runningTask.taskId+'\'))">Job Finished</button>' +
     '</div>' : '') +
@@ -1697,7 +1697,7 @@ async function copyBoatProfileUrl(boatId, btnEl){
 }
 function tickTimers(){
   if (!DATA || !currentProfileBoatId) return;
-  document.querySelectorAll('.row-timer').forEach(el => {
+  document.querySelectorAll('.row-timer, .focus-timer').forEach(el => {
     const taskId = el.dataset.task;
     const task = taskId ? findTaskById(taskId) : null;
     if (task) el.textContent = fmtElapsed(liveMs(task));
