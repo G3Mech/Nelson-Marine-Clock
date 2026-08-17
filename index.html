@@ -1059,7 +1059,7 @@ function renderSearchSuggestions(){
 
   const matches = DATA.boats.filter(b => {
     const cust = customerById(b.customerId);
-    const haystack = [cust ? cust.name : '', b.model, b.boatName, b.currentWorkOrder].filter(Boolean).join(' ').toLowerCase();
+    const haystack = [cust ? cust.name : '', b.model, b.boatName, b.currentWorkOrder, b.boatId].filter(Boolean).join(' ').toLowerCase();
     return haystack.indexOf(term) !== -1;
   }).slice(0, 12);
 
