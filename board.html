@@ -96,7 +96,6 @@
   .photo-view-actions button.danger{ color:var(--stop); }
   .profile-head-info{ flex:1; min-width:0; }
   .profile-cust{ font-size:22px; font-weight:800; }
-  .profile-contact{ font-size:13px; color:var(--slate); margin-top:4px; line-height:1.5; }
   .profile-boatline{ font-size:15px; color:var(--ink); margin-top:12px; padding-top:12px; border-top:1px solid var(--line); font-weight:600; }
   .profile-badges{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
   .profile-section{ background:var(--white); border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin-bottom:16px; }
@@ -1592,7 +1591,6 @@ function renderBoatProfile(){
         photoHtml +
         '<div class="profile-head-info">' +
           '<div class="profile-cust">' + (cust ? cust.name : '—') + '</div>' +
-          '<div class="profile-contact">' + (cust ? [cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—') + '</div>' +
           '<div class="profile-boatline">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div>' +
           '<div class="profile-badges">' +
             '<span class="wo-loc ' + locType + '">' + locLabel + '</span>' +
