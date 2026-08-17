@@ -1040,7 +1040,11 @@ function renderSearchSuggestions(){
   // particular boat name. The moment a letter is typed, this falls
   // through to ordinary name/customer/work-order matching below.
   if (!term){
-    const active = (DATA.boats || []).filter(b => boatIdsWithOpenTasks.has(b.boatId));
+    // b999 is the permanent test-boat fixture (see task-history.html
+    // header notes) -- exclude it from this default/browsing suggestion
+    // list so it doesn't clutter real work orders. It's still fully
+    // reachable below by explicitly typing its name/ID.
+    const active = (DATA.boats || []).filter(b => boatIdsWithOpenTasks.has(b.boatId) && b.boatId !== 'b999');
     if (active.length === 0){
       box.innerHTML = '<div class="suggestion-section-label">Active Work Orders</div><div class="suggestion-item"><div class="s-main">Nothing active right now.</div></div>';
       box.classList.add('show');
