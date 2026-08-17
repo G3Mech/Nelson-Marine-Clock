@@ -129,6 +129,11 @@
   .profile-location-big.slip{ background:var(--slip-accent); color:var(--white); }
   .profile-location-big.yard{ background:var(--yard-accent); color:var(--white); }
   .wo-num{ font-size:11px; font-weight:800; color:var(--white); background:var(--ink); padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .focus-panel{ margin:14px 20px 0; padding:20px 18px 22px; border:1px solid var(--line); border-radius:16px; background:var(--white); display:flex; flex-direction:column; align-items:stretch; }
+  .focus-label{ font-size:11px; text-transform:uppercase; letter-spacing:.16em; color:var(--slate); font-weight:700; text-align:center; }
+  .focus-task{ font-size:21px; font-weight:800; text-align:center; margin-top:8px; }
+  .focus-context{ font-size:13px; color:var(--go); font-weight:700; text-align:center; margin-top:3px; }
+  .focus-timer{ font-size:54px; font-weight:800; text-align:center; color:var(--ink); font-variant-numeric:tabular-nums; margin:18px 0 22px; }
   .suggestion-section-label{ padding:9px 16px 5px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--slate); }
   .section-title{ font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--slate);margin:20px 20px 8px;display:flex;align-items:center;gap:8px; }
   .section-title .count{ background:var(--line); color:var(--ink); font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:20px; }
@@ -1563,6 +1568,7 @@ function renderBoatProfile(){
   const locLabel = loc ? ('Slip ' + (loc.slipId.match(/\d+/) || ['?'])[0]) : 'Yard';
   const activeTasks = DATA.tasks.filter(t => t.boatId === boat.boatId && t.status !== 'done')
     .sort((a,b)=>(a.priority||2)-(b.priority||2) || (a.order||0)-(b.order||0));
+  const runningTask = activeTasks.find(t => t.status === 'active');
   const completed = (DATA.completedTasks || []).filter(t => t.boatId === boat.boatId)
     .sort((a,b)=> (b.completedAt||'').localeCompare(a.completedAt||''));
   const boatNotes = (DATA.boatNotes || []).filter(n => n.boatId === boat.boatId)
@@ -1640,6 +1646,14 @@ function renderBoatProfile(){
         '<button class="quick-circle-btn" onclick="openPartsMenu(\''+boat.boatId+'\')" title="Parts"><span class="quick-circle-emoji">&#9881;&#65039;</span><span class="quick-circle-label">Parts</span></button>' +
       '</div>' +
     '</div>' +
+    (runningTask ? '<div class="focus-panel">' +
+      '<div class="focus-label">Now timing</div>' +
+      '<div class="focus-task">'+runningTask.name+'</div>' +
+      (runningTask.activeEmployee ? '<div class="focus-context">Active — '+runningTask.activeEmployee+'</div>' : '') +
+      '<div class="focus-timer">'+fmtElapsed(liveMs(runningTask))+'</div>' +
+      '<button class="big-btn big-pause" onclick="pauseTask(findTaskById(\''+runningTask.taskId+'\'))">Pause</button>' +
+      '<button class="big-btn big-complete" onclick="openCompleteConfirm(findTaskById(\''+runningTask.taskId+'\'))">Job Finished</button>' +
+    '</div>' : '') +
     '<div class="section-title">Active Tasks <span class="count">'+activeTasks.length+'</span></div>' +
     '<div class="active-tasks-box">' +
       (activeTasks.length === 0
