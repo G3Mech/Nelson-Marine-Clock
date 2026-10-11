@@ -129,6 +129,7 @@
   .profile-location-big.slip{ background:var(--slip-accent); color:var(--white); }
   .profile-location-big.yard{ background:var(--yard-accent); color:var(--white); }
   .wo-num{ font-size:11px; font-weight:800; color:var(--white); background:var(--ink); padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .wo-tag{ display:inline-block; margin-left:6px; font-size:10.5px; font-weight:800; color:var(--slip-accent); background:var(--slip-bg); border:1px solid var(--line); padding:1px 7px; border-radius:10px; white-space:nowrap; vertical-align:middle; }
   .focus-panel{ margin:14px 20px 0; padding:20px 18px 22px; border:1px solid var(--line); border-radius:16px; background:var(--white); display:flex; flex-direction:column; align-items:stretch; }
   .focus-label{ font-size:11px; text-transform:uppercase; letter-spacing:.16em; color:var(--slate); font-weight:700; text-align:center; }
   .focus-task{ font-size:21px; font-weight:800; text-align:center; margin-top:8px; }
@@ -945,6 +946,38 @@ function customerById(id){ return DATA.customers.find(c => c.customerId === id);
 function slipForBoat(boatId){ return DATA.locations.find(l => l.boatId === boatId); }
 function findTaskById(taskId){ return DATA.tasks.find(t => t.taskId === taskId); }
 
+// A boat can carry more than one open work order: posting a new one adds
+// its tasks alongside any unfinished ones instead of archiving them. Each
+// task already stamps its own workOrder, so these just read that. The WO
+// tag only appears when a boat really has more than one open, so a boat
+// with a single job looks exactly the same as before.
+function woLabel_(wo){
+  const s = String(wo == null ? '' : wo).trim().replace(/^WO\s*/i, '').replace(/^#\s*/, '').trim();
+  return s ? 'WO ' + s : '';
+}
+function woEsc_(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+// Distinct open work orders on a boat, oldest first (Active Tasks row order).
+function openWorkOrders_(boatId){
+  const seen = {}, out = [];
+  DATA.tasks.forEach(t => {
+    if (t.boatId !== boatId || t.status === 'done') return;
+    const l = woLabel_(t.workOrder);
+    if (!l || seen[l]) return;
+    seen[l] = true; out.push(l);
+  });
+  return out;
+}
+function woTagHtml_(t){
+  const l = woLabel_(t.workOrder);
+  return (l && openWorkOrders_(t.boatId).length > 1) ? '<span class="wo-tag">' + woEsc_(l) + '</span>' : '';
+}
+// Keeps a boat's tasks clustered by work order (oldest WO first) when it
+// has more than one; otherwise a no-op.
+function woRank_(t){
+  const i = openWorkOrders_(t.boatId).indexOf(woLabel_(t.workOrder));
+  return i < 0 ? 999 : i;
+}
+
 // Elapsed time is server truth -- accumulatedMs (total logged before
 // whatever segment is currently open) plus (now - activeSince) if the
 // task is currently active. No local segment history to keep in sync,
@@ -1549,7 +1582,7 @@ function taskRowHtml(t){
 
   return '<div class="task-row" data-rowid="'+t.taskId+'">' +
     '<div class="task-row-main">' +
-      '<div class="task-main-content"><div class="task-name">'+t.name+'</div>' +
+      '<div class="task-main-content"><div class="task-name">'+t.name+woTagHtml_(t)+'</div>' +
       (t.status === 'active' && t.activeEmployee ? '<div class="active-by-label">Active — '+t.activeEmployee+'</div>' : '') +
       '</div>' +
             mainRight +
@@ -1618,7 +1651,9 @@ function renderBoatProfile(){
       (boatSecondary ? '<div class="profile-boat-sub">'+boatSecondary+'</div>' : '') +
       '<div class="boat-card-cust">' + (cust ? cust.name : '—') + '</div>' +
       '<div class="profile-badges">' +
-        (activeTasks.length > 0 && boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>') +
+        (openWorkOrders_(boat.boatId).length > 1
+          ? openWorkOrders_(boat.boatId).map(w => '<span class="wo-num">'+woEsc_(w)+'</span>').join('')
+          : (activeTasks.length > 0 && boat.currentWorkOrder ? '<span class="wo-num">WO '+boat.currentWorkOrder+'</span>' : '<span class="status-pill paused">No active work order</span>')) +
       '</div>' +
     '</div>' +
     '<div class="side-cluster-row">' +

@@ -144,6 +144,7 @@
   .loc-head.customer{ border-left-color:var(--pause-blue); background:var(--cust-bg); }
   .loc-title{ font-weight:700; font-size:14.5px; }
   .loc-sub{ font-size:12px; color:var(--slate); margin-top:2px; line-height:1.5; }
+  .wo-tag{ display:inline-block; margin-left:6px; font-size:10.5px; font-weight:800; color:var(--slip-accent); background:var(--slip-bg); border:1px solid var(--line); padding:1px 7px; border-radius:10px; white-space:nowrap; vertical-align:middle; }
   .loc-body{ padding:12px 16px; }
   .task-line{ display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px dashed var(--line); font-size:13px; }
   .task-line:last-child{ border-bottom:none; }
@@ -684,6 +685,38 @@ function populateTaskNameSuggestions(){
 
 // ---------- lookups ----------
 function boatById(id){ return DATA.boats.find(b=>b.boatId===id); }
+
+// A boat can carry more than one open work order: posting a new one adds
+// its tasks alongside any unfinished ones instead of archiving them. Each
+// task already stamps its own workOrder, so these just read that. The WO
+// tag only appears when a boat really has more than one open, so a boat
+// with a single job looks exactly the same as before.
+function woLabel_(wo){
+  const s = String(wo == null ? '' : wo).trim().replace(/^WO\s*/i, '').replace(/^#\s*/, '').trim();
+  return s ? 'WO ' + s : '';
+}
+function woEsc_(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+// Distinct open work orders on a boat, oldest first (Active Tasks row order).
+function openWorkOrders_(boatId){
+  const seen = {}, out = [];
+  DATA.tasks.forEach(t => {
+    if (t.boatId !== boatId || t.status === 'done') return;
+    const l = woLabel_(t.workOrder);
+    if (!l || seen[l]) return;
+    seen[l] = true; out.push(l);
+  });
+  return out;
+}
+function woTagHtml_(t){
+  const l = woLabel_(t.workOrder);
+  return (l && openWorkOrders_(t.boatId).length > 1) ? '<span class="wo-tag">' + woEsc_(l) + '</span>' : '';
+}
+// Keeps a boat's tasks clustered by work order (oldest WO first) when it
+// has more than one; otherwise a no-op.
+function woRank_(t){
+  const i = openWorkOrders_(t.boatId).indexOf(woLabel_(t.workOrder));
+  return i < 0 ? 999 : i;
+}
 function customerById(id){ return DATA.customers.find(c=>c.customerId===id); }
 function describeBoat(boat){
   if (!boat) return { customerName:'— empty —', model:'', boatName:'', loa:'' };
@@ -1054,7 +1087,7 @@ function reviewAssign(){
   if (boatSel !== '__new__'){
     const unfinished = DATA.tasks.filter(t => t.boatId === boatSel && t.status !== 'done');
     if (unfinished.length > 0){
-      warnHtml += '<div class="warn">This boat has ' + unfinished.length + ' unfinished task(s) from before. Saving moves them to Completed Tasks and replaces them with the list below.</div>';
+      warnHtml += '<div class="warn">This boat still has ' + unfinished.length + ' unfinished task(s) from ' + (openWorkOrders_(boatSel).join(', ') || 'before') + '. They stay as they are; the tasks below are added alongside them.</div>';
     }
   }
   if (toYard){
@@ -1221,7 +1254,8 @@ function renderBoats(){
     const d = describeBoat(boat);
     const loc = DATA.locations.find(l => l.boatId === boat.boatId);
     const locLabel = loc ? slipLabel(loc.slipId) : 'In Yard';
-    const tasks = DATA.tasks.filter(t => t.boatId === boat.boatId).sort((a,b)=> a.order - b.order);
+    const tasks = DATA.tasks.filter(t => t.boatId === boat.boatId).sort((a,b)=> woRank_(a) - woRank_(b) || a.order - b.order);
+    const openWOs = openWorkOrders_(boat.boatId);
     const boatPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
     const gallery = boatPhotos.length === 0 ? '' : '<div class="photo-gallery">' + boatPhotos.map(p =>
       '<div class="photo-thumb" onclick="openLightbox(\''+p.photoId+'\',\''+(p.url||'').replace(/'/g,"\\'")+'\')"><img src="'+p.url+'" alt="Boat photo"></div>'
@@ -1229,7 +1263,7 @@ function renderBoats(){
     return '<div class="loc-card">' +
       '<div class="loc-head '+(loc ? 'slip' : 'yard')+'">' +
         '<div><div class="loc-title">'+locLabel+'</div>' +
-        '<div class="loc-sub">'+d.customerName+(d.model?' — '+d.model:'')+(d.loa?' ('+d.loa+')':'')+(d.boatName?' "'+d.boatName+'"':'')+' · '+(boat.currentWorkOrder||'—')+'</div></div>' +
+        '<div class="loc-sub">'+d.customerName+(d.model?' — '+d.model:'')+(d.loa?' ('+d.loa+')':'')+(d.boatName?' "'+d.boatName+'"':'')+' · '+(openWOs.length > 1 ? woEsc_(openWOs.join(' + ')) : (boat.currentWorkOrder||'—'))+'</div></div>' +
         '<button class="btn small danger" onclick="deleteWorkOrder(\''+boat.boatId+'\')" title="Permanently delete this work order and all its tasks">Delete Work Order</button>' +
       '</div>' +
       gallery +
@@ -1239,7 +1273,7 @@ function renderBoats(){
           const taskPhotos = (DATA.photos || []).filter(p => p.taskId === t.taskId);
           const photoBtn = taskPhotos.length === 0 ? '' : '<button class="task-photo-btn" onclick="showTaskPhotos(\''+t.taskId+'\')" title="View attached photos">&#128247; '+taskPhotos.length+'</button>';
           return '<div class="task-line">' +
-          '<span class="name">'+t.name+'<span class="status-tag '+t.status+'">'+t.status+'</span>' +
+          '<span class="name">'+t.name+woTagHtml_(t)+'<span class="status-tag '+t.status+'">'+t.status+'</span>' +
             '<span style="color:var(--slate);font-size:11px;margin-left:6px;">'+(t.billMode==='timed'?'⏱ Timed':'✅ Completion')+'</span>' + photoBtn + '</span>' +
           '<span>' +
             '<select class="task-draft-priority p'+(t.priority||2)+'" style="margin-bottom:0;" onchange="updateTaskPriority(\''+t.taskId+'\', this)">' +
@@ -1466,7 +1500,7 @@ function qbPostWarnings_(){
   const st = qbPostState, out = [];
   if (st.boatId && st.boatId !== '__new__'){
     const unfinished = DATA.tasks.filter(t => t.boatId === st.boatId && t.status !== 'done');
-    if (unfinished.length) out.push('This boat has ' + unfinished.length + ' unfinished task(s) from before. Posting moves them to Completed Tasks and replaces them with this list.');
+    if (unfinished.length) out.push('This boat still has ' + unfinished.length + ' unfinished task(s) from ' + (openWorkOrders_(st.boatId).join(', ') || 'before') + '. They stay as they are; these tasks are added alongside them.');
   }
   if (st.locId && st.locId !== '__yard__'){
     const loc = DATA.locations.find(l => l.slipId === st.locId);
@@ -1892,12 +1926,10 @@ function renderBillingDetailInner(boatId, workOrder){
   // entirely just because its Completed Tasks record isn't there yet.
   const allTaskIds = Array.from(new Set([...Object.keys(completedByTaskId), ...Object.keys(hoursByTaskId)]));
 
-  // If this is the boat's CURRENT work order, any tasks still active mean
-  // the job isn't actually finished yet -- flag that clearly rather than
-  // silently showing a partial bill as if it were the whole thing.
-  const stillActive = (boat && String(boat.currentWorkOrder) === String(workOrder))
-    ? DATA.tasks.filter(t => t.boatId === boatId)
-    : [];
+  // Any of THIS work order's tasks still open mean the job isn't finished
+  // yet -- flag that clearly rather than silently showing a partial bill.
+  // Matched per task, since a boat can have more than one open WO.
+  const stillActive = DATA.tasks.filter(t => t.boatId === boatId && woLabel_(t.workOrder) === woLabel_(workOrder));
 
   let totalHours = 0;
   const rows = allTaskIds.map(taskId => {
@@ -2323,8 +2355,9 @@ async function deleteWorkOrder(boatId){
   const boat = boatById(boatId);
   const taskCount = DATA.tasks.filter(t => t.boatId === boatId).length;
   const label = boat ? (boat.model + (boat.boatName ? ' "'+boat.boatName+'"' : '')) : 'this boat';
-  const wo = boat ? boat.currentWorkOrder : '';
-  if (!confirm('Delete work order' + (wo ? ' ' + wo : '') + ' for ' + label + '? This permanently deletes all ' + taskCount + ' task(s) under it -- not archived, gone entirely. This cannot be undone.')) return;
+  const openWOs = openWorkOrders_(boatId);
+  const wo = openWOs.length > 1 ? openWOs.join(' and ') : (boat ? boat.currentWorkOrder : '');
+  if (!confirm('Delete work order' + (openWOs.length > 1 ? 's' : '') + (wo ? ' ' + wo : '') + ' for ' + label + '? This permanently deletes all ' + taskCount + ' task(s) under it -- not archived, gone entirely. This cannot be undone.')) return;
   await run('adminDeleteWorkOrder', boatId);
   await loadAll();
 }

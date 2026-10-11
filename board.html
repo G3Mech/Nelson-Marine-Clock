@@ -201,6 +201,7 @@
   .wo-boat{ font-size:13px; color:var(--slate); margin-top:2px; }
   .wo-badges{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex-shrink:0; }
   .wo-num{ font-size:12.5px; font-weight:800; color:var(--white); background:var(--ink); padding:3px 10px; border-radius:20px; white-space:nowrap; }
+  .wo-tag{ display:inline-block; margin-left:6px; font-size:11px; font-weight:800; color:var(--slip-accent); background:var(--slip-bg); border:1px solid var(--line); padding:1px 7px; border-radius:10px; white-space:nowrap; vertical-align:middle; }
   .wo-loc{ font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
   .wo-loc.slip{ background:var(--slip-bg); color:var(--slip-accent); }
   .wo-loc.yard{ background:var(--yard-bg); color:var(--yard-accent); }
@@ -884,6 +885,38 @@ function boatById(id){ return DATA.boats.find(b => b.boatId === id); }
 function customerById(id){ return DATA.customers.find(c => c.customerId === id); }
 function slipForBoat(boatId){ return DATA.locations.find(l => l.boatId === boatId); }
 function findTaskById(taskId){ return DATA.tasks.find(t => t.taskId === taskId); }
+
+// A boat can carry more than one open work order: posting a new one adds
+// its tasks alongside any unfinished ones instead of archiving them. Each
+// task already stamps its own workOrder, so these just read that. The WO
+// tag only appears when a boat really has more than one open, so a boat
+// with a single job looks exactly the same as before.
+function woLabel_(wo){
+  const s = String(wo == null ? '' : wo).trim().replace(/^WO\s*/i, '').replace(/^#\s*/, '').trim();
+  return s ? 'WO ' + s : '';
+}
+function woEsc_(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+// Distinct open work orders on a boat, oldest first (Active Tasks row order).
+function openWorkOrders_(boatId){
+  const seen = {}, out = [];
+  DATA.tasks.forEach(t => {
+    if (t.boatId !== boatId || t.status === 'done') return;
+    const l = woLabel_(t.workOrder);
+    if (!l || seen[l]) return;
+    seen[l] = true; out.push(l);
+  });
+  return out;
+}
+function woTagHtml_(t){
+  const l = woLabel_(t.workOrder);
+  return (l && openWorkOrders_(t.boatId).length > 1) ? '<span class="wo-tag">' + woEsc_(l) + '</span>' : '';
+}
+// Keeps a boat's tasks clustered by work order (oldest WO first) when it
+// has more than one; otherwise a no-op.
+function woRank_(t){
+  const i = openWorkOrders_(t.boatId).indexOf(woLabel_(t.workOrder));
+  return i < 0 ? 999 : i;
+}
 function workOrderSortKey(wo){ const n = parseFloat(String(wo).replace(/[^0-9.]/g, '')); return isNaN(n) ? Infinity : n; }
 
 // Elapsed time is entirely server-truth now: accumulatedMs is the total
@@ -1417,7 +1450,7 @@ function taskRowHtml(t){
 
   return '<div class="task-row" data-rowid="' + t.taskId + '">' +
     '<div class="task-row-main">' +
-      '<div class="task-main-content"><div class="task-name"><span class="priority-dot ' + priorityDotClass(t) + '" title="Priority ' + (t.priority || 2) + '"></span>' + t.name + '</div>' +
+      '<div class="task-main-content"><div class="task-name"><span class="priority-dot ' + priorityDotClass(t) + '" title="Priority ' + (t.priority || 2) + '"></span>' + t.name + woTagHtml_(t) + '</div>' +
       (t.status === 'active' && t.activeEmployee ? '<div class="active-by-label">Active — ' + t.activeEmployee + '</div>' : '') +
       '</div>' +
       mainRight +
@@ -1442,7 +1475,7 @@ function renderWorkOrders(){
       const cust = customerById(boat.customerId);
       const haystack = [
         cust ? cust.name : '', boat.model, boat.boatName, boat.currentWorkOrder
-      ].filter(Boolean).join(' ').toLowerCase();
+      ].concat(openWorkOrders_(boat.boatId)).filter(Boolean).join(' ').toLowerCase();
       return haystack.indexOf(term) !== -1;
     });
   }
@@ -1459,14 +1492,18 @@ function renderWorkOrders(){
     const slip = slipForBoat(boat.boatId);
     const locType = slip ? 'slip' : 'yard';
     const locLabel = slip ? ('Slip ' + (slip.slipId.match(/\d+/) || ['?'])[0]) : 'Yard';
-    const sortedTasks = tasks.slice().sort((a, b) => (a.priority || 2) - (b.priority || 2) || (a.order || 0) - (b.order || 0));
+    const sortedTasks = tasks.slice().sort((a, b) => woRank_(a) - woRank_(b) || (a.priority || 2) - (b.priority || 2) || (a.order || 0) - (b.order || 0));
+    const openWOs = openWorkOrders_(boat.boatId);
+    const woBadges = openWOs.length > 1
+      ? openWOs.map(w => '<div class="wo-num">' + woEsc_(w) + '</div>').join('')
+      : '<div class="wo-num">WO ' + boat.currentWorkOrder + '</div>';
     const custLabel = (cust ? cust.name : '—') + ' — ' + (boat.model || '');
 
     return '<div class="wo-card ' + locType + '">' +
       '<div class="wo-head">' +
         '<div><div class="wo-cust">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div>' +
         '<div class="wo-boat">' + (cust ? cust.name : '—') + '</div></div>' +
-        '<div class="wo-badges"><div class="wo-num">WO ' + boat.currentWorkOrder + '</div>' +
+        '<div class="wo-badges">' + woBadges +
         '<div class="wo-loc ' + locType + '">' + locLabel + '</div></div>' +
       '</div>' +
       '<div class="wo-tasks">' + sortedTasks.map(taskRowHtml).join('') + '</div>' +
@@ -1594,7 +1631,9 @@ function renderBoatProfile(){
           '<div class="profile-boatline">' + (boat.model || '') + (boat.boatName ? ' "' + boat.boatName + '"' : '') + (boat.loa ? ' (' + boat.loa + ')' : '') + '</div>' +
           '<div class="profile-badges">' +
             '<span class="wo-loc ' + locType + '">' + locLabel + '</span>' +
-            (boat.currentWorkOrder ? '<span class="wo-num">WO ' + boat.currentWorkOrder + '</span>' : '<span class="status-pill pending">No active work order</span>') +
+            (openWorkOrders_(boat.boatId).length > 1
+              ? openWorkOrders_(boat.boatId).map(w => '<span class="wo-num">' + woEsc_(w) + '</span>').join('')
+              : (boat.currentWorkOrder ? '<span class="wo-num">WO ' + boat.currentWorkOrder + '</span>' : '<span class="status-pill pending">No active work order</span>')) +
           '</div>' +
         '</div>' +
       '</div>' +
