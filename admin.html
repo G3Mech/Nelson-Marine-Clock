@@ -234,8 +234,8 @@
 </div>
 
 <div class="tabs">
-  <button class="tab-btn active" data-tab="assign">Manual Work Order</button>
-  <button class="tab-btn" data-tab="qbimports">QuickBooks Imports</button>
+  <button class="tab-btn active" data-tab="qbimports">QuickBooks Imports</button>
+  <button class="tab-btn" data-tab="assign">Manual Work Order</button>
   <button class="tab-btn" data-tab="billing">Billing</button>
   <button class="tab-btn" data-tab="log">Today's Log</button>
   <button class="tab-btn" data-tab="photos">Photos</button>
@@ -246,7 +246,7 @@
 </div>
 
 <!-- ASSIGN WORK ORDER -->
-<div class="panel show" id="panel-assign">
+<div class="panel" id="panel-assign">
   <h2>Manual Work Order</h2>
   <p class="subtext">Find the customer, pick the boat and slip, enter the work order number, add the tasks, then press Review &amp; Save.</p>
 
@@ -296,7 +296,7 @@
 </div>
 
 <!-- QUICKBOOKS IMPORTS -->
-<div class="panel" id="panel-qbimports">
+<div class="panel show" id="panel-qbimports">
   <h2>QuickBooks Imports</h2>
   <p class="subtext">Click an estimate, then press "Use This" to start a work order from it. Nothing is saved until you press Review &amp; Save.</p>
   <div id="qbImportDetail"></div>
@@ -2256,6 +2256,12 @@ document.addEventListener('visibilitychange', () => {
 });
 
 let initialLoadPromise = startAdmin_();
+// QuickBooks Imports is the tab the page opens on, and its list is
+// fetched separately from the main data (see loadQBImportsTab) -- so load
+// it as soon as the main data is in. Chained after initialLoadPromise
+// rather than called inside startAdmin_, because loadQBImportsTab itself
+// awaits initialLoadPromise and would wait on itself forever.
+initialLoadPromise.then(() => { if (activeTab_() === 'qbimports') loadQBImportsTab(); });
 </script>
 </body>
 </html>
