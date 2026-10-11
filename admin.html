@@ -394,7 +394,7 @@
 <!-- CUSTOMERS -->
 <div class="panel" id="panel-customers">
   <h2>Customers</h2>
-  <p class="subtext">Add a new customer below. To add a boat, press "+ Add Boat" under the customer's name.</p>
+  <p class="subtext">Add a new customer below. Use the search bar to find a customer. To add a boat, press "+ Add Boat" under the customer's name.</p>
   <h2>Add a New Customer</h2>
   <div class="form-grid">
     <input type="text" id="custName" placeholder="Customer name">
@@ -407,6 +407,8 @@
   </div>
   <button class="btn primary" style="margin-top:10px;" onclick="addCustomerTab()">Add Customer</button>
   <hr class="divider">
+  <input type="text" id="custSearch" data-nodirty placeholder="Search by name, phone, email, address or boat…" autocomplete="off">
+  <div id="custSearchCount" class="subtext" style="margin:6px 0 10px;"></div>
   <div id="customersWrap" class="loading">Loading…</div>
 </div>
 
@@ -712,6 +714,8 @@ document.getElementById('dateFilter').addEventListener('change', renderLog);
 document.getElementById('empFilter').addEventListener('change', renderLog);
 document.getElementById('locFilter').addEventListener('change', renderLog);
 document.getElementById('logSearch').addEventListener('input', renderLog);
+document.getElementById('custSearch').addEventListener('input', () => { if (DATA) renderCustomers(); });
+document.getElementById('custSearch').addEventListener('keydown', e => { if (e.key === 'Escape'){ e.target.value = ''; if (DATA) renderCustomers(); } });
 
 function fmtDT(iso){
   if (!iso) return '—';
@@ -2160,21 +2164,38 @@ async function updateTaskPriority(id, selectEl){
 
 // ================== CUSTOMERS & BOATS ==================
 
+// Search matches any word you type against the customer's name, phone,
+// email, address and their boats' model/name/length -- every word must
+// match somewhere, so "smith grady" finds Smith's Grady-White.
+function customerSearchText_(c){
+  const boats = DATA.boats.filter(b => b.customerId === c.customerId);
+  return [c.name, c.phone, String(c.phone || '').replace(/\D/g, ''), c.email, c.address]
+    .concat(boats.map(b => [b.model, b.boatName, b.loa].join(' ')))
+    .join(' ').toLowerCase();
+}
 function renderCustomers(){
   const wrap = document.getElementById('customersWrap');
-  if (DATA.customers.length === 0){ wrap.innerHTML = '<div class="empty-note">No customers yet.</div>'; return; }
-  wrap.innerHTML = DATA.customers.map(c=>{
+  const countEl = document.getElementById('custSearchCount');
+  if (DATA.customers.length === 0){ wrap.innerHTML = '<div class="empty-note">No customers yet.</div>'; countEl.textContent = ''; return; }
+  const words = document.getElementById('custSearch').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = words.length === 0 ? DATA.customers : DATA.customers.filter(c => {
+    const text = customerSearchText_(c);
+    return words.every(w => text.includes(w) || (/\d/.test(w) && text.includes(w.replace(/\D/g, ''))));
+  });
+  countEl.textContent = words.length ? ('Showing ' + shown.length + ' of ' + DATA.customers.length + ' customers') : (DATA.customers.length + ' customers');
+  if (shown.length === 0){ wrap.innerHTML = '<div class="empty-note">No customers match that search.</div>'; return; }
+  wrap.innerHTML = shown.map(c=>{
     const boats = DATA.boats.filter(b=>b.customerId===c.customerId);
     return '<div class="loc-card">' +
       '<div class="loc-head customer">' +
-        '<div><div class="loc-title">'+c.name+'</div>' +
-        '<div class="loc-sub">'+(c.phone?((c.phoneType?c.phoneType+' ':'')+c.phone):'—')+' · '+(c.email||'—')+'<br>'+(c.address||'—')+'</div></div>' +
+        '<div><div class="loc-title">'+escapeHtml(c.name)+'</div>' +
+        '<div class="loc-sub">'+escapeHtml(c.phone?((c.phoneType?c.phoneType+' ':'')+c.phone):'—')+' · '+escapeHtml(c.email||'—')+'<br>'+escapeHtml(c.address||'—')+'</div></div>' +
         '<div><button class="btn small" onclick="editCustomer(\''+c.customerId+'\')">Edit</button>' +
         '<button class="btn small danger" onclick="deleteCustomer(\''+c.customerId+'\')">Delete</button></div>' +
       '</div>' +
       '<div class="loc-body">' +
         (boats.length===0 ? '<div class="empty-note">No boats on file.</div>' : '') +
-        boats.map(b=>'<div class="task-line"><span class="name">'+b.model+(b.loa?' ('+b.loa+')':'')+(b.boatName?' — "'+b.boatName+'"':'')+'</span>' +
+        boats.map(b=>'<div class="task-line"><span class="name">'+escapeHtml(b.model+(b.loa?' ('+b.loa+')':'')+(b.boatName?' — "'+b.boatName+'"':''))+'</span>' +
           '<span><button class="btn small" onclick="editBoat(\''+b.boatId+'\')">Edit</button>' +
           '<button class="btn small danger" onclick="deleteBoat(\''+b.boatId+'\')">Delete</button></span></div>').join('') +
         '<div class="add-row">' +
@@ -2269,7 +2290,7 @@ let formDirtySince = 0;   // set when someone types/changes a field; cleared by 
 const DIRTY_HOLD_MS = 5 * 60000;
 
 ['input', 'change'].forEach(evt => document.addEventListener(evt, (e) => {
-  if (e.target && e.target.closest && e.target.closest('#loginOverlay')) return;
+  if (e.target && e.target.closest && e.target.closest('#loginOverlay, [data-nodirty]')) return;
   formDirtySince = Date.now();
 }, true));
 
