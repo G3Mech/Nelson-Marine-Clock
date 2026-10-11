@@ -298,7 +298,7 @@
 <!-- QUICKBOOKS IMPORTS -->
 <div class="panel show" id="panel-qbimports">
   <h2>QuickBooks Imports</h2>
-  <p class="subtext">Click an estimate, then press "Use This" to start a work order from it. Nothing is saved until you press Review &amp; Save.</p>
+  <p class="subtext">Click an estimate to open it. Edit to fix the name or tasks. Post Work Order to pick the boat and slip. Delete to remove it from this list.</p>
   <div id="qbImportDetail"></div>
   <div id="qbImportsList" class="loading">Loading…</div>
 </div>
@@ -1365,30 +1365,127 @@ function renderQBImportsTab(){
     const lineCount = (imp.lineItems || []).length;
     const when = imp.qbDate ? new Date(imp.qbDate).toLocaleDateString() : '—';
     return '<div class="billing-row" onclick="previewQBImport(\''+imp.importId+'\')">' +
-      '<div><div class="b-who">'+(imp.rawCustomerName || '—')+'</div>' +
-      '<div class="b-meta">Estimate '+(imp.qbNum || '—')+' · '+when+' · '+lineCount+' task(s)</div></div>' +
+      '<div><div class="b-who">'+escapeHtml(imp.rawCustomerName || '—')+'</div>' +
+      '<div class="b-meta">Estimate '+escapeHtml(imp.qbNum || '—')+' · '+when+' · '+lineCount+' task(s)</div></div>' +
     '</div>';
   }).join('');
+}
+// Import data arrives through the public watcher endpoint, so it is
+// escaped before it goes into the page -- a crafted "customer name" must
+// never be able to run script inside the admin dashboard.
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function closeQBImportDetail(){
+  qbEditDraft = null;
+  document.getElementById('qbImportDetail').innerHTML = '';
 }
 function previewQBImport(importId){
   const imp = (DATA.qbPendingImports || []).find(i => i.importId === importId);
   if (!imp) return;
+  qbEditDraft = null;
   const rows = (imp.lineItems || []).map(li =>
-    '<tr><td>'+li.name+'</td><td>'+(li.billModeGuess === 'complete' ? 'Completion' : 'Timed')+'</td>' +
+    '<tr><td>'+escapeHtml(li.name)+'</td><td>'+(li.billModeGuess === 'complete' ? 'Completion' : 'Timed')+'</td>' +
     '<td>'+(li.quotedAmount != null && li.quotedAmount !== '' ? '$'+Number(li.quotedAmount).toFixed(2) : '—')+'</td></tr>'
+  ).join('');
+  const id = escapeAttr(importId);
+  document.getElementById('qbImportDetail').innerHTML =
+    '<div class="billing-detail">' +
+      '<button class="billing-close" onclick="closeQBImportDetail()" title="Close">&times;</button>' +
+      '<h3>Estimate '+escapeHtml(imp.qbNum || '—')+'</h3>' +
+      '<div class="b-contact">'+escapeHtml(imp.rawCustomerName || '—')+(imp.qbDate ? ' · '+new Date(imp.qbDate).toLocaleDateString() : '')+'</div>' +
+      '<table class="billing-table"><thead><tr><th>Task</th><th>Billing (best guess)</th><th>Quoted</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="3">No line items came through for this one.</td></tr>') +
+      '</tbody></table>' +
+      '<button class="btn primary" onclick="useQBImport(\''+id+'\')">Post Work Order</button> ' +
+      '<button class="btn" onclick="editQBImport(\''+id+'\')">Edit</button> ' +
+      '<button class="btn danger" onclick="deleteQBImport(\''+id+'\')">Delete</button>' +
+    '</div>';
+}
+
+// ---- Edit: fix the customer name and tasks before posting ----
+// The draft lives here (not in DATA) so an auto-refresh of the list can't
+// wipe out half-finished edits.
+let qbEditDraft = null;
+function editQBImport(importId){
+  const imp = (DATA.qbPendingImports || []).find(i => i.importId === importId);
+  if (!imp) return;
+  qbEditDraft = {
+    importId: importId,
+    qbNum: imp.qbNum,
+    rawCustomerName: imp.rawCustomerName || '',
+    lineItems: (imp.lineItems || []).map(li => ({
+      name: li.name || '',
+      billModeGuess: li.billModeGuess === 'complete' ? 'complete' : 'timed',
+      quotedAmount: li.quotedAmount
+    }))
+  };
+  if (qbEditDraft.lineItems.length === 0) qbEditDraft.lineItems.push({ name:'', billModeGuess:'timed', quotedAmount:null });
+  renderQBEdit();
+}
+function renderQBEdit(){
+  const d = qbEditDraft;
+  if (!d) return;
+  const rows = d.lineItems.map((li, i) =>
+    '<div class="task-draft-box">' +
+      '<span class="task-draft-num">'+(i+1)+'</span>' +
+      '<input class="task-draft-name" value="'+escapeAttr(li.name)+'" placeholder="Task description" oninput="qbEditDraft.lineItems['+i+'].name=this.value">' +
+      '<select class="task-draft-mode" onchange="qbEditDraft.lineItems['+i+'].billModeGuess=this.value">' +
+        '<option value="timed"'+(li.billModeGuess==='timed'?' selected':'')+'>Timed</option>' +
+        '<option value="complete"'+(li.billModeGuess==='complete'?' selected':'')+'>Completion</option>' +
+      '</select>' +
+      '<button class="task-draft-delete" title="Remove this task" onclick="qbEditRemoveTask('+i+')">&times;</button>' +
+    '</div>'
   ).join('');
   document.getElementById('qbImportDetail').innerHTML =
     '<div class="billing-detail">' +
-      '<button class="billing-close" onclick="document.getElementById(\'qbImportDetail\').innerHTML=\'\';" title="Close">&times;</button>' +
-      '<h3>Estimate '+(imp.qbNum || '—')+'</h3>' +
-      '<div class="b-contact">'+(imp.rawCustomerName || '—')+(imp.qbDate ? ' · '+new Date(imp.qbDate).toLocaleDateString() : '')+'</div>' +
-      '<table class="billing-table"><thead><tr><th>Task</th><th>Billing (best guess — adjust after)</th><th>Quoted</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="3">No line items came through for this one.</td></tr>') +
-      '</tbody></table>' +
-      '<button class="btn primary" onclick="useQBImport(\''+importId+'\')">Use This — Go to Manual Work Order</button> ' +
-      '<button class="btn danger" onclick="dismissQBImport(\''+importId+'\')">Dismiss</button>' +
+      '<button class="billing-close" onclick="closeQBImportDetail()" title="Close">&times;</button>' +
+      '<h3>Edit Estimate '+escapeHtml(d.qbNum || '—')+'</h3>' +
+      '<label>Customer name</label>' +
+      '<input id="qbEditCustomer" value="'+escapeAttr(d.rawCustomerName)+'" oninput="qbEditDraft.rawCustomerName=this.value">' +
+      '<label>Tasks</label>' + rows +
+      '<button class="btn small" onclick="qbEditAddTask()">+ Add Task</button>' +
+      '<div style="margin-top:14px;">' +
+        '<button class="btn primary" onclick="saveQBImportEdit()">Save Changes</button> ' +
+        '<button class="btn" onclick="previewQBImport(\''+escapeAttr(d.importId)+'\')">Cancel</button>' +
+      '</div>' +
     '</div>';
 }
+function qbEditAddTask(){
+  qbEditDraft.lineItems.push({ name:'', billModeGuess:'timed', quotedAmount:null });
+  renderQBEdit();
+  const inputs = document.querySelectorAll('#qbImportDetail .task-draft-name');
+  if (inputs.length) inputs[inputs.length - 1].focus();
+}
+function qbEditRemoveTask(i){
+  qbEditDraft.lineItems.splice(i, 1);
+  renderQBEdit();
+}
+async function saveQBImportEdit(){
+  const d = qbEditDraft;
+  if (!d) return;
+  const name = d.rawCustomerName.trim();
+  const lineItems = d.lineItems
+    .map(li => ({ name: li.name.trim(), billModeGuess: li.billModeGuess, quotedAmount: li.quotedAmount }))
+    .filter(li => li.name);
+  if (!name){ alert('Enter a customer name.'); return; }
+  if (lineItems.length === 0){ alert('Add at least one task.'); return; }
+  try {
+    const res = await run('adminUpdateQBImport', d.importId, { rawCustomerName: name, lineItems: lineItems });
+    if (res && res.error){ alert('Could not save: ' + res.error); return; }
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    alert(msg === 'unknown op'
+      ? 'Could not save: the Apps Script needs its latest version deployed (Manage Deployments → edit → New version).'
+      : 'Could not save: ' + msg);
+    return;
+  }
+  const importId = d.importId;
+  qbEditDraft = null;
+  await loadQBImportsTab();
+  previewQBImport(importId);
+}
+
 // Tracks which pending import (if any) is currently being turned into a
 // work order, so confirmAssign() knows to mark it "used" afterward --
 // and so cancelAssign() knows to clear it if the review gets abandoned,
@@ -1431,13 +1528,13 @@ function useQBImport(importId){
   if (taskDrafts.length === 0) taskDrafts = [{ name:'', billMode:lastBillMode, priority:2 }];
   renderTaskDrafts();
 
-  document.getElementById('qbImportDetail').innerHTML = '';
+  closeQBImportDetail();
   alert('Estimate ' + (imp.qbNum || '') + ' loaded. Pick the boat, check the customer, then press Review & Save. Nothing is saved yet.');
 }
-async function dismissQBImport(importId){
-  if (!confirm('Dismiss this import? It will stop showing up here, but nothing in QuickBooks is affected.')) return;
+async function deleteQBImport(importId){
+  if (!confirm('Delete this estimate from the list? Nothing in QuickBooks is affected.')) return;
   await run('adminDismissQBImport', importId);
-  document.getElementById('qbImportDetail').innerHTML = '';
+  closeQBImportDetail();
   await loadQBImportsTab();
 }
 function renderPhotosTab(){
