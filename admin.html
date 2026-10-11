@@ -1,0 +1,2128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nelson Marine — Office</title>
+<style>
+  :root{
+    --ink:#0f2438; --slate:#3d5568; --line:#d7dfe4; --paper:#f3f6f7; --white:#ffffff;
+    --go:#1c6e4a; --go-dark:#154f37; --pause-blue:#1565a8; --amber:#a5690a; --amber-bg:#fbf1de;
+    --slip-accent:#1c4f72; --slip-bg:#eaf2f7; --yard-accent:#8a5a2b; --yard-bg:#f7f0e4;
+    --danger:#a5342a; --danger-bg:#fbeceb; --cust-bg:#eaf2f7;
+    --caution-bg:#fff6cf; --caution-border:#e8cf5a; --caution-text:#7a5f0a;
+  }
+  *{box-sizing:border-box;}
+  body{ font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; margin:0; background:var(--paper); color:var(--ink); zoom:1.15; }
+  .tabs{ display:flex; background:var(--white); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .tab-btn{ flex:1; padding:13px 0; text-align:center; font-size:13px; font-weight:700; color:var(--slate); background:none; border:none; cursor:pointer; border-bottom:3px solid transparent; min-width:110px; }
+  .tab-btn.active{ color:var(--ink); border-bottom-color:var(--go); }
+  .panel{ display:none; padding:20px 24px 30px; }
+  .panel.show{ display:block; }
+  h2{ font-size:17px; margin:0 0 4px; }
+  .subtext{ color:var(--slate); font-size:13px; margin:0 0 18px; }
+
+  label{ display:block; font-size:12.5px; font-weight:700; color:var(--slate); margin:14px 0 5px; }
+  label:first-of-type{ margin-top:0; }
+  input[type="text"], select, textarea{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-size:14px; font-family:inherit;
+  }
+  textarea{ resize:vertical; line-height:1.5; }
+
+  .btn{ padding:10px 18px; border-radius:10px; font-size:13.5px; font-weight:700; cursor:pointer; border:1px solid var(--line); background:var(--white); color:var(--ink); margin-right:8px; }
+  .btn.primary{ background:var(--go); color:var(--white); border-color:var(--go); }
+  .btn.danger{ background:var(--white); color:var(--danger); border-color:var(--danger); }
+  .btn.small{ padding:5px 11px; font-size:11.5px; border-radius:14px; margin-right:5px; }
+  .suggestions-list{ display:none; position:absolute; left:0; right:0; top:100%; z-index:15; border:1px solid var(--line); border-radius:8px; max-height:230px; overflow-y:auto; background:var(--white); box-shadow:0 8px 18px rgba(10,26,43,.14); }
+  .suggestions-list.show{ display:block; }
+  .suggestion-item{ padding:10px 12px; cursor:pointer; font-size:14px; border-bottom:1px solid var(--line); }
+  .suggestion-item:last-child{ border-bottom:none; }
+  .suggestion-item:hover{ background:var(--paper); }
+  .suggestion-item.new-item{ color:var(--go); font-weight:700; }
+  .suggestion-item.no-match{ color:var(--slate); cursor:default; }
+  .suggestion-item.no-match:hover{ background:none; }
+  .move-notice{ color:var(--danger); font-weight:700; font-size:13px; margin:10px 0 -4px; }
+  .task-draft-header{ display:flex; align-items:center; gap:8px; padding:0 10px; margin-bottom:6px; }
+  .task-draft-header span{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--slate); }
+  .task-draft-header .h-num{ min-width:18px; }
+  .task-draft-header .h-name{ flex:1; }
+  .task-draft-header .h-mode{ min-width:122px; }
+  .task-draft-header .h-priority{ min-width:112px; }
+  .task-draft-header .h-del{ min-width:32px; }
+  .task-draft-box{ display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:8px; background:var(--white); }
+  .task-draft-num{ font-weight:700; color:var(--slate); min-width:18px; text-align:right; flex-shrink:0; font-size:13px; }
+  .task-draft-name{ flex:1; min-width:0; padding:9px 10px; border:1px solid var(--line); border-radius:7px; font-size:14px; font-family:inherit; margin-bottom:0; }
+  .task-draft-mode, .task-draft-priority{ width:auto; padding:9px 8px; border:1px solid var(--line); border-radius:7px; font-size:13px; font-family:inherit; flex-shrink:0; margin-bottom:0; }
+  .task-draft-mode{ min-width:122px; }
+  .task-draft-priority{ min-width:112px; font-weight:700; }
+  .task-draft-priority.p1{ background:var(--danger-bg); color:var(--danger); border-color:var(--danger); }
+  .task-draft-priority.p2{ background:var(--amber-bg); color:var(--amber); border-color:var(--amber); }
+  .task-draft-priority.p3{ background:var(--paper); color:var(--slate); border-color:var(--line); }
+  .task-draft-delete{ background:var(--white); color:var(--danger); border:1px solid var(--danger); border-radius:7px; width:32px; height:32px; font-weight:800; font-size:16px; cursor:pointer; flex-shrink:0; line-height:1; }
+  .auto-task-badge{ background:var(--paper); border:1px dashed var(--line); border-radius:8px; padding:9px 12px; font-size:13px; color:var(--ink); margin:10px 0 -4px; }
+  .auto-task-badge b{ color:var(--slate); font-weight:700; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; margin-right:8px; }
+  .btn.big{ width:100%; padding:15px 0; font-size:15px; margin-top:18px; }
+
+  .review-box{ margin-top:18px; border:1.5px solid var(--pause-blue); border-radius:10px; padding:16px 18px; background:#f3f8fb; }
+  .billing-row{ display:flex; justify-content:space-between; align-items:center; border:1px solid var(--line); border-radius:8px; padding:11px 14px; margin-bottom:8px; cursor:pointer; background:var(--white); }
+  .billing-row:hover{ background:var(--paper); }
+  .billing-row .b-who{ font-weight:700; font-size:14px; }
+  .billing-row .b-meta{ font-size:12px; color:var(--slate); margin-top:2px; }
+  .billing-row .b-hours{ font-weight:700; color:var(--slip-accent); font-size:14px; flex-shrink:0; margin-left:12px; }
+  .billing-detail{ margin-top:18px; border:1.5px solid var(--slip-accent); border-radius:10px; padding:18px 20px; background:var(--slip-bg); position:relative; }
+  .billing-close{ position:absolute; top:10px; right:12px; width:30px; height:30px; border-radius:50%; border:none; background:var(--white); color:var(--slate); font-size:18px; font-weight:800; cursor:pointer; line-height:1; }
+  .billing-close:hover{ background:var(--paper); }
+  .billing-detail h3{ margin:0 0 4px; font-size:16px; }
+  .billing-detail .b-contact{ font-size:13px; color:var(--slate); line-height:1.6; margin-bottom:14px; }
+  .billing-detail .b-part-num{ color:var(--slate); font-size:12px; }
+  .billing-outstanding{ background:var(--danger-bg); color:var(--danger); font-weight:700; font-size:13px; padding:10px 12px; border-radius:8px; margin-bottom:14px; }
+  table.billing-table{ width:100%; border-collapse:collapse; font-size:13.5px; margin-bottom:12px; }
+  table.billing-table th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--slate); padding:6px 8px; border-bottom:2px solid var(--line); }
+  table.billing-table td{ padding:8px; border-bottom:1px solid var(--line); }
+  table.billing-table tr:last-child td{ border-bottom:none; }
+  .billing-total{ text-align:right; font-weight:700; font-size:15px; padding:10px 0 4px; }
+  .missing-wo-section{ margin-top:26px; }
+  .missing-wo-box{ border:1.5px solid var(--danger); border-radius:10px; padding:14px 16px; background:var(--danger-bg); }
+  .missing-wo-title{ font-weight:800; color:var(--danger); font-size:13px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
+  .missing-wo-box .billing-row{ border-color:var(--danger); }
+  .missing-wo-box .b-hours{ color:var(--danger); }
+  .flagged-tasks-box{ border:1.5px solid var(--caution-border); border-radius:10px; padding:14px 16px; background:var(--caution-bg); }
+  .flagged-tasks-title{ font-weight:800; color:var(--caution-text); font-size:13px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
+  .flagged-tasks-box .billing-row{ border-color:var(--caution-border); }
+  .photo-gallery{ display:flex; flex-wrap:wrap; gap:8px; padding:12px 16px 0; }
+  .photo-thumb{ position:relative; width:64px; height:64px; border-radius:8px; overflow:hidden; border:1px solid var(--line); cursor:pointer; }
+  .photo-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .task-photo-btn{ background:none; border:none; cursor:pointer; font-size:12px; color:var(--slate); padding:0 0 0 6px; }
+  .photo-lightbox{ position:fixed; inset:0; background:rgba(10,26,43,.9); z-index:200; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; padding:30px; }
+  .photo-lightbox img{ max-width:90vw; max-height:75vh; border-radius:8px; }
+  #lightboxContent{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+  #lightboxContent .btn{ width:220px; text-align:center; }
+  .lightbox-close{ position:absolute; top:18px; right:22px; width:44px; height:44px; border-radius:50%; border:none; background:var(--white); color:var(--ink); font-size:22px; font-weight:800; cursor:pointer; }
+  .photo-date-group{ margin-bottom:22px; }
+  .photo-date-heading{ font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--slate); margin-bottom:10px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .photo-grid{ display:flex; flex-wrap:wrap; gap:14px; }
+  .photo-card{ width:150px; cursor:pointer; }
+  .photo-card .photo-card-img{ width:150px; height:150px; border-radius:9px; overflow:hidden; border:1px solid var(--line); }
+  .photo-card img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-card-label{ font-size:11.5px; color:var(--slate); margin-top:5px; line-height:1.4; }
+  .photo-card-label b{ color:var(--ink); }
+  .review-box .warn{ color:var(--danger); font-weight:700; font-size:13.5px; background:var(--danger-bg); padding:9px 12px; border-radius:8px; margin-bottom:12px; }
+  .review-box p{ margin:6px 0; font-size:13.5px; }
+  .review-box ul{ margin:6px 0 14px; padding-left:20px; font-size:13.5px; }
+
+  .filters{ display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .filters select, .filters input{ width:auto; padding:8px 10px; font-size:13px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:13px; }
+  th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--slate); padding:8px 10px; border-bottom:2px solid var(--line); }
+  td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tr:hover td{ background:#fafcfc; }
+
+  .summary-row{ margin-top:14px; font-size:13px; color:var(--slate); }
+  .summary-row b{ color:var(--ink); }
+
+  .loc-card{ border:1px solid var(--line); border-radius:10px; margin-bottom:16px; overflow:hidden; }
+  .loc-head{ padding:12px 16px; display:flex; justify-content:space-between; align-items:center; border-left:4px solid var(--slate); }
+  .loc-head.slip{ border-left-color:var(--slip-accent); background:var(--slip-bg); }
+  .loc-head.yard{ border-left-color:var(--yard-accent); background:var(--yard-bg); }
+  .loc-head.customer{ border-left-color:var(--pause-blue); background:var(--cust-bg); }
+  .loc-title{ font-weight:700; font-size:14.5px; }
+  .loc-sub{ font-size:12px; color:var(--slate); margin-top:2px; line-height:1.5; }
+  .loc-body{ padding:12px 16px; }
+  .task-line{ display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px dashed var(--line); font-size:13px; }
+  .task-line:last-child{ border-bottom:none; }
+  .task-line .name{ flex:1; }
+  .status-tag{ font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:8px; }
+  .status-tag.pending{ background:var(--paper); color:var(--slate); }
+  .status-tag.active{ background:var(--go); color:var(--white); }
+  .status-tag.paused{ background:var(--amber-bg); color:var(--amber); }
+  .status-tag.done{ background:#e3f2ea; color:var(--go); }
+  .status-tag.flagged{ background:var(--caution-bg); color:var(--caution-text); border:1px solid var(--caution-border); }
+
+  .add-row{ display:flex; gap:8px; margin-top:10px; }
+  .add-row input{ flex:1; }
+
+  .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:4px; }
+  .empty-note{ color:var(--slate); font-size:13px; padding:10px 0; }
+  .loading{ color:var(--slate); font-size:13px; padding:20px 0; }
+  hr.divider{ border:none; border-top:1px solid var(--line); margin:26px 0; }
+
+  .chart-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:10px; }
+  .slip-box{ border:1.5px solid var(--slip-accent); border-radius:8px; padding:8px 10px; background:var(--slip-bg); cursor:pointer; font-size:12.5px; }
+  .slip-box.empty{ border-style:dashed; border-color:var(--line); background:var(--white); color:var(--slate); }
+  .slip-box.drag-over{ box-shadow:0 0 0 2.5px var(--go); }
+  .slip-box .slip-label{ font-weight:700; font-size:11.5px; color:var(--slip-accent); margin-bottom:3px; }
+  .slip-box.empty .slip-label{ color:var(--slate); }
+  .slip-box .slip-boat{ font-weight:700; }
+  .slip-box .slip-owner{ color:var(--slate); font-size:11.5px; }
+
+  .yard-dropzone{ border:2px dashed var(--yard-accent); border-radius:10px; padding:16px; text-align:center; color:var(--yard-accent); font-size:13px; font-weight:700; margin-bottom:14px; }
+  .yard-dropzone.drag-over{ background:var(--yard-bg); box-shadow:0 0 0 2.5px var(--go); }
+
+  .yard-pool{ display:flex; flex-wrap:wrap; gap:10px; }
+  .yard-pool .slip-box{ border-color:var(--yard-accent); background:var(--yard-bg); min-width:140px; }
+  .yard-pool .slip-box .slip-label{ color:var(--yard-accent); }
+  .yard-pool .slip-box.empty{ border-style:dashed; border-color:var(--line); background:var(--white); }
+
+  details.manage-box{ margin-top:22px; border:1px solid var(--line); border-radius:10px; padding:4px 16px; }
+  details.manage-box summary{ cursor:pointer; font-weight:700; font-size:13px; padding:10px 0; color:var(--slate); }
+  details.manage-box .form-grid{ margin-top:6px; }
+
+  /* ---------- GitHub Pages additions: status bar, passcode screen, stale-build strip ---------- */
+  .status-bar{ display:flex; align-items:center; gap:12px; padding:8px 16px; background:var(--ink); color:#dfe8ee; font-size:12.5px; }
+  .status-bar .brand{ font-weight:800; color:var(--white); margin-right:auto; letter-spacing:.2px; }
+  .status-bar .stamp{ opacity:.85; }
+  .status-bar .stamp.warn{ color:#ffd27a; opacity:1; font-weight:700; }
+  .status-bar button{ background:transparent; color:var(--white); border:1px solid rgba(255,255,255,.35); border-radius:6px; padding:5px 11px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .status-bar button:hover{ background:rgba(255,255,255,.1); }
+  .build-stale-strip{ display:none; align-items:center; gap:12px; padding:10px 16px; background:var(--amber-bg); color:var(--amber); font-size:13px; font-weight:700; border-bottom:1px solid var(--caution-border); }
+  .build-stale-strip.show{ display:flex; }
+  .build-stale-strip button{ margin-left:auto; }
+  .login-overlay{ display:none; position:fixed; inset:0; background:var(--paper); z-index:1000; align-items:center; justify-content:center; padding:16px; }
+  .login-overlay.show{ display:flex; }
+  .login-card{ background:var(--white); border:1px solid var(--line); border-radius:14px; padding:28px 28px 24px; width:100%; max-width:380px; box-shadow:0 8px 30px rgba(15,36,56,.08); }
+  .login-card h1{ font-size:19px; margin:0 0 6px; }
+  .login-card p{ color:var(--slate); font-size:13.5px; margin:0 0 18px; line-height:1.45; }
+  .login-card input{ width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:8px; font-size:16px; font-family:inherit; }
+  .login-card input:focus{ outline:2px solid var(--go); outline-offset:1px; border-color:var(--go); }
+  .login-card .btn{ width:100%; margin-top:14px; padding:12px; font-size:15px; }
+  .login-msg{ min-height:18px; margin-top:12px; font-size:13px; font-weight:700; color:var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="build-stale-strip" id="buildStaleStrip">
+  A newer version of this page is available.
+  <button class="btn small primary" id="buildStaleReloadBtn">Reload now</button>
+</div>
+
+<div class="status-bar">
+  <span class="brand">Nelson Marine — Office</span>
+  <span class="stamp" id="updatedStamp">Loading…</span>
+  <button id="refreshBtn" title="Get the latest data now">Refresh</button>
+  <button id="logoutBtn" title="Forget the passcode on this computer">Log out</button>
+</div>
+
+<div class="login-overlay" id="loginOverlay">
+  <form class="login-card" id="loginForm" autocomplete="off">
+    <h1>Nelson Marine — Office</h1>
+    <p>Enter the office passcode. This computer will remember it, so you only need to do this once.</p>
+    <input type="password" id="loginKey" placeholder="Passcode" autocomplete="current-password">
+    <button type="submit" class="btn primary" id="loginBtn">Open dashboard</button>
+    <div class="login-msg" id="loginMsg"></div>
+  </form>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="assign">Assign Work Order</button>
+  <button class="tab-btn" data-tab="qbimports">QuickBooks Imports</button>
+  <button class="tab-btn" data-tab="billing">Billing</button>
+  <button class="tab-btn" data-tab="log">Today's Log</button>
+  <button class="tab-btn" data-tab="photos">Photos</button>
+  <button class="tab-btn" data-tab="chart">Slip Chart</button>
+  <button class="tab-btn" data-tab="boats">Active Work Orders</button>
+  <button class="tab-btn" data-tab="customers">Customers</button>
+  <button class="tab-btn" data-tab="employees">Employees</button>
+</div>
+
+<!-- ASSIGN WORK ORDER -->
+<div class="panel show" id="panel-assign">
+  <h2>Assign a Work Order</h2>
+  <p class="subtext">Pick the customer and boat (or add new ones on the spot), pick the slip, then paste the task list — one line per task. Review before it saves.</p>
+
+  <label>Customer</label>
+  <div style="position:relative;">
+    <input type="text" id="assignCustomerSearch" placeholder="Search customers…" autocomplete="off"
+      oninput="renderCustomerSuggestions()" onfocus="renderCustomerSuggestions(); this.select();">
+    <div class="suggestions-list" id="customerSuggestions"></div>
+  </div>
+  <select id="assignCustomerSelect" onchange="onCustomerChange()" style="display:none;"></select>
+  <div id="newCustomerFields" style="display:none;padding:12px;background:var(--cust-bg);border-radius:8px;margin-top:8px;">
+    <button class="btn danger" onclick="cancelNewCustomer()">Cancel</button>
+    <label>Customer Name</label><input type="text" id="newCustName">
+    <label>Phone</label><input type="text" id="newCustPhone">
+    <label>Phone Type</label>
+    <select id="newCustPhoneType">
+      <option value="">—</option><option>Cell</option><option>Home</option><option>Work</option><option>Office</option>
+    </select>
+    <label>Email</label><input type="text" id="newCustEmail">
+    <label>Address</label><input type="text" id="newCustAddress">
+  </div>
+
+  <label>Boat</label>
+  <select id="assignBoatSelect" onchange="onBoatChange()"></select>
+  <div id="newBoatFields" style="display:none;padding:12px;background:var(--cust-bg);border-radius:8px;margin-top:8px;">
+    <button class="btn danger" onclick="cancelNewBoat()">Cancel</button>
+    <label>Boat Model</label><input type="text" id="newBoatModel" placeholder="e.g. Sea Ray 240 Sundancer">
+    <label>Boat Name (optional)</label><input type="text" id="newBoatName" placeholder="e.g. Salt Life">
+    <label>LOA / Length (optional)</label><input type="text" id="newBoatLoa" placeholder="e.g. 24'">
+  </div>
+
+  <label>Slip / Stand</label>
+  <select id="assignLoc" onchange="onSlipSelectionChange()"></select>
+
+  <label>Work Order #</label>
+  <input type="text" id="assignWO" placeholder="e.g. WO #4471" onblur="onWorkOrderBlur()" onfocus="this.select();">
+
+  <div class="move-notice" id="moveNotice" style="display:none;"></div>
+  <div class="auto-task-badge" id="autoTaskBadge" style="display:none;"></div>
+  <label>Tasks</label>
+  <p class="subtext" style="margin-top:-8px;">Type a task, hit Enter for the next one. Pick Timed or Completion per task — it defaults to whatever you picked last.</p>
+  <div id="taskBuilder"></div>
+  <datalist id="taskNameSuggestions"></datalist>
+
+  <button class="btn primary big" onclick="reviewAssign()">Review &amp; Save</button>
+  <div id="assignReview"></div>
+</div>
+
+<!-- QUICKBOOKS IMPORTS -->
+<div class="panel" id="panel-qbimports">
+  <h2>QuickBooks Imports</h2>
+  <p class="subtext">Estimates picked up automatically from QuickBooks by the watcher script on the office PC, waiting to be turned into a real work order. Nothing here is live until you pick one and confirm it — QuickBooks has no idea which boat a job is for, and its customer names don't always match yours exactly, so every import still goes through the normal Assign Work Order review, just pre-filled.</p>
+  <div id="qbImportDetail"></div>
+  <div id="qbImportsList" class="loading">Loading…</div>
+</div>
+
+<!-- BILLING -->
+<div class="panel" id="panel-billing">
+  <h2>Billing</h2>
+  <p class="subtext">Everything needed to fill out a QuickBooks bill for a finished job — customer info, the task breakdown, and total hours. Search below, then pick a job to see the full detail.</p>
+  <input type="text" id="billingSearch" placeholder="Search by customer, boat, or work order…" oninput="renderBillingList()">
+  <div id="billingDetail"></div>
+  <div id="billingList" class="loading">Loading…</div>
+
+  <div class="missing-wo-section">
+    <p class="subtext">Tasks can get finished before a work order ever existed for that boat — an ad hoc task added from the phone before the office set one up, for example. Those wait here instead of vanishing; once a work order is created for that boat, they're automatically added to its bill.</p>
+    <div id="missingWoBox" class="missing-wo-box" style="display:none;">
+      <div class="missing-wo-title">Missing Work Orders</div>
+      <div id="missingWoList"></div>
+    </div>
+    <div id="missingWoDetail"></div>
+
+    <div id="flaggedTasksBox" class="flagged-tasks-box" style="display:none;margin-top:16px;">
+      <div class="flagged-tasks-title">&#9888;&#65039; Flagged — Can't Complete</div>
+      <div id="flaggedTasksList"></div>
+    </div>
+    <div id="flaggedTasksDetail"></div>
+  </div>
+</div>
+
+<!-- LOG -->
+<div class="panel" id="panel-log">
+  <h2>Hours Log</h2>
+  <div class="filters">
+    <input type="date" id="dateFilter">
+    <select id="empFilter"><option value="">All employees</option></select>
+    <select id="locFilter"><option value="">All boats</option></select>
+    <input type="text" id="logSearch" placeholder="Search boats or customers…">
+  </div>
+  <div id="logTableWrap" class="loading">Loading…</div>
+  <div class="summary-row" id="summaryRow"></div>
+</div>
+
+<!-- PHOTOS -->
+<div class="panel" id="panel-photos">
+  <h2>Photos</h2>
+  <p class="subtext">Every uploaded photo, grouped by the day it was taken. Each one shows which job it belongs to.</p>
+  <div style="display:flex;gap:10px;">
+    <input type="text" id="photosSearch" placeholder="Search by customer, boat, or work order…" oninput="renderPhotosTab()" style="flex:1;">
+    <select id="photosGroupBy" onchange="renderPhotosTab()" style="width:auto;">
+      <option value="date">Group by Date</option>
+      <option value="customer">Group by Customer</option>
+    </select>
+  </div>
+  <div id="photosWrap" class="loading">Loading…</div>
+</div>
+
+<!-- SLIP CHART -->
+<div class="panel" id="panel-chart">
+  <h2>Slip Chart</h2>
+  <p class="subtext">Drag a boat onto an empty slip to move it there, or click a boat and choose where it's going. Slips always exist — an unoccupied one just shows empty.</p>
+  <div id="chartWrap" class="loading">Loading…</div>
+
+  <h2 style="margin-top:26px;">Yard / Land Storage</h2>
+  <p class="subtext">There's always room on land — drag a boat here (or click it and choose "Send to yard") and a spot for it is created automatically.</p>
+  <div id="yardDropZone" class="yard-dropzone" ondragover="onSlipDragOver(event)" ondragleave="onSlipDragLeave(event)" ondrop="onYardDrop(event)">
+    Drop a boat here to send it to land storage
+  </div>
+  <input type="text" id="yardFilter" placeholder="Search by owner, model, or boat name…" oninput="renderChart()" style="margin-bottom:10px;">
+  <div id="yardWrap" class="loading">Loading…</div>
+
+  <details class="manage-box">
+    <summary>Manage slips</summary>
+    <p class="subtext">If you already know how many slips there are, generate them all at once. IDs come out as slip1, slip2, etc. Slips are permanent — there's no delete option here on purpose.</p>
+    <div class="form-grid">
+      <div><label>Total number of slips</label><input type="text" id="slipCount" placeholder="e.g. 67" value="67"></div>
+    </div>
+    <button class="btn primary" onclick="generateSlips()">Generate Slips 1–N</button>
+    <hr class="divider">
+    <p class="subtext">Or add one at a time (e.g. a newly built slip):</p>
+    <div class="form-grid">
+      <div><label>Slip number</label><input type="text" id="newSlipNum" placeholder="e.g. 68"></div>
+    </div>
+    <button class="btn primary" onclick="addSlip()">+ Add Single Slip</button>
+  </details>
+</div>
+
+<!-- BOATS & SLIPS -->
+<div class="panel" id="panel-boats">
+  <h2>Active Work Orders</h2>
+  <p class="subtext">Every boat with an active work order, wherever it's sitting. Spot-fix a task here. To swap in a whole new boat and task list, use "Assign Work Order" instead. To change WHERE a boat is, use the Slip Chart.</p>
+  <div id="boatsWrap" class="loading">Loading…</div>
+</div>
+
+<!-- CUSTOMERS -->
+<div class="panel" id="panel-customers">
+  <h2>Customers</h2>
+  <p class="subtext">Each customer can have more than one boat on file — add as many as they own underneath their entry.</p>
+  <h2>Add a New Customer</h2>
+  <div class="form-grid">
+    <input type="text" id="custName" placeholder="Customer name">
+    <input type="text" id="custPhone" placeholder="Phone number">
+    <select id="custPhoneType">
+      <option value="">Phone type —</option><option>Cell</option><option>Home</option><option>Work</option><option>Office</option>
+    </select>
+    <input type="text" id="custEmail" placeholder="Email">
+    <input type="text" id="custAddress" placeholder="Address">
+  </div>
+  <button class="btn primary" style="margin-top:10px;" onclick="addCustomerTab()">Add Customer</button>
+  <hr class="divider">
+  <div id="customersWrap" class="loading">Loading…</div>
+</div>
+
+<!-- EMPLOYEES -->
+<div class="panel" id="panel-employees">
+  <h2>Employees</h2>
+  <div id="empWrap" class="loading">Loading…</div>
+  <div class="add-row" style="margin-top:16px;">
+    <input type="text" id="newEmpName" placeholder="New employee name">
+    <button class="btn primary" onclick="addEmployee()">Add</button>
+  </div>
+</div>
+
+<div class="photo-lightbox" id="photoLightbox" style="display:none;">
+  <button class="lightbox-close" onclick="closeLightbox()" title="Close">&times;</button>
+  <div id="lightboxContent"></div>
+</div>
+
+<script>
+/* ==========================================================================
+ * NELSON MARINE DATABASIN — ADMIN DASHBOARD  (this file: Admin.html)
+ * ==========================================================================
+ * WHAT THIS FILE IS
+ *   The office-facing dashboard: assign work orders, review billing, see
+ *   today's hours log, browse photos, manage the slip chart, and maintain
+ *   customers/boats/employees. It's a plain GitHub Pages page (admin.html),
+ *   ported from the Apps Script Admin.html that runs inside the Sheet's
+ *   "Marina Admin" menu dialog. That version still works; this one exists
+ *   so the office can open the dashboard from a normal bookmark, with no
+ *   Sheet and no Google sign-in, and so it can refresh itself.
+ *
+ * HOW IT TALKS TO CODE.GS: fetch() to doPost's 'admin' route
+ *   Every call goes through run(fnName, ...args), the same helper name the
+ *   Apps Script version used, so none of the screens had to change. Here
+ *   run() POSTs { action:'admin', key, op: fnName, args } to WEBAPP_URL,
+ *   and Code.gs's routeAdmin_() checks the passcode and calls the same
+ *   adminXxx() function google.script.run used to reach directly.
+ *   The passcode is typed once and kept in this browser's localStorage --
+ *   never in this file, since the repo and the page are public.
+ *
+ * AUTO-REFRESH
+ *   Data reloads every 30 seconds, whenever the window regains focus, and
+ *   on the Refresh button -- but automatic reloads are skipped while
+ *   someone is typing in or has unsaved input in a form, so a refresh can
+ *   never wipe a half-filled form. Saving anything clears that hold.
+ *
+ * TAB STRUCTURE & LAZY-LOADED DATA
+ *   Assign Work Order / Slip Chart / Active Work Orders / Customers /
+ *   Employees / Today's Log all render from the single DATA object
+ *   fetched once via adminGetAllData() (loadAll(), called on page load
+ *   and after almost every mutation to keep everything in sync).
+ *   Billing and Photos are the two exceptions: both need Completed
+ *   Tasks, which loadAll()'s adminGetAllData() deliberately leaves OUT
+ *   (see getAllDataLean_ in Code.gs) since most dashboard visits never
+ *   open either tab. loadBillingData()/loadPhotosTab() fetch
+ *   adminGetCompletedTasks() lazily, only the first time their tab is
+ *   opened in a session (and awaited alongside initialLoadPromise, so a
+ *   fast click into Billing right after page load can't race the main
+ *   fetch and silently clobber it -- see the comment on loadBillingData).
+ * ========================================================================== */
+let DATA = { locations: [], tasks: [], employees: [], entries: [], customers: [], boats: [] };
+
+// ======================= CONFIG =======================
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
+// Stamped at ship time -- must match version.json's "build". See
+// checkForStaleBuild_ below (same mechanism as the technician pages).
+const BUILD_VERSION = '2026-10-11T05:09:09Z';
+
+// ======================= passcode =======================
+// Kept in localStorage so it survives closing the browser. Every access is
+// wrapped in try/catch: storage can be blocked (private windows, strict
+// privacy settings), in which case the page still works and just asks for
+// the passcode again next visit.
+const KEY_STORAGE = 'nmAdminKey';
+function getStoredKey_(){ try { return localStorage.getItem(KEY_STORAGE) || ''; } catch(e){ return ''; } }
+function storeKey_(k){ try { localStorage.setItem(KEY_STORAGE, k); } catch(e){} }
+function clearStoredKey_(){ try { localStorage.removeItem(KEY_STORAGE); } catch(e){} }
+let ADMIN_KEY = getStoredKey_();
+
+async function callAdmin_(op, args, key){
+  // text/plain (not application/json) keeps this a "simple" request, so
+  // the browser doesn't send a CORS preflight Apps Script can't answer --
+  // same reason the technician pages post this way.
+  const res = await fetch(WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'admin', key: key, op: op, args: args })
+  });
+  if (!res.ok) throw new Error('Server returned ' + res.status);
+  return res.json();
+}
+
+// Drop-in replacement for the Apps Script version's run(): same name,
+// same arguments, resolves with whatever the adminXxx() function returned
+// (including { error } objects, which the screens already check for).
+// Rejects only on a network failure or a passcode problem.
+function run(fnName, ...args){
+  return callAdmin_(fnName, args, ADMIN_KEY).then(body => {
+    if (body && body.ok){
+      if (!/^(adminGet|checkKey)/.test(fnName)) formDirtySince = 0; // a save clears the auto-refresh hold
+      return body.result;
+    }
+    if (body && (body.error === 'bad_key' || body.error === 'locked' || body.error === 'not_configured')){
+      if (body.error === 'bad_key'){ clearStoredKey_(); ADMIN_KEY = ''; }
+      showLogin_(body.message);
+    }
+    throw new Error((body && (body.message || body.error)) || 'Unexpected server response');
+  });
+}
+
+let loginResolver = null;
+function loginVisible_(){ return document.getElementById('loginOverlay').classList.contains('show'); }
+function showLogin_(msg){
+  document.getElementById('loginMsg').textContent = msg || '';
+  document.getElementById('loginOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('loginKey').focus(), 0);
+}
+function waitForLogin_(msg){
+  showLogin_(msg);
+  return new Promise(resolve => { loginResolver = resolve; });
+}
+document.getElementById('loginForm').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const input = document.getElementById('loginKey');
+  const btn = document.getElementById('loginBtn');
+  const msg = document.getElementById('loginMsg');
+  const key = input.value.trim();
+  if (!key){ msg.textContent = 'Type the passcode first.'; return; }
+  btn.disabled = true; msg.textContent = 'Checking…';
+  try {
+    const body = await callAdmin_('checkKey', [], key);
+    if (body && body.ok){
+      ADMIN_KEY = key; storeKey_(key);
+      input.value = ''; msg.textContent = '';
+      document.getElementById('loginOverlay').classList.remove('show');
+      if (loginResolver){ const r = loginResolver; loginResolver = null; r(); }
+    } else {
+      msg.textContent = (body && body.message) || 'Wrong passcode.';
+    }
+  } catch(e){
+    msg.textContent = 'Could not reach the server. Check the internet connection and try again.';
+  } finally {
+    btn.disabled = false;
+  }
+});
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  if (!confirm('Log out on this computer? You will need the passcode to get back in.')) return;
+  clearStoredKey_(); ADMIN_KEY = '';
+  location.reload();
+});
+
+// ======================= build-staleness check =======================
+// Same as the technician pages: a cached copy of this page can outlive a
+// deploy, so poll version.json and offer a reload when it moves on.
+const BUILD_CHECK_URL = 'https://raw.githubusercontent.com/g3mech/Nelson-Marine-Clock/main/version.json';
+async function checkForStaleBuild_(){
+  try{
+    const res = await fetch(BUILD_CHECK_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return;
+    const json = await res.json();
+    if (json.build && json.build !== BUILD_VERSION){
+      document.getElementById('buildStaleStrip').classList.add('show');
+    }
+  } catch(e){ /* offline or GitHub unreachable -- not evidence either way */ }
+}
+document.getElementById('buildStaleReloadBtn').addEventListener('click', () => {
+  window.location.href = window.location.pathname + '?v=' + Date.now();
+});
+checkForStaleBuild_();
+setInterval(checkForStaleBuild_, 5 * 60000);
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('show'));
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('show');
+    if (btn.dataset.tab === 'billing') loadBillingData();
+    if (btn.dataset.tab === 'photos') loadPhotosTab();
+    if (btn.dataset.tab === 'qbimports') loadQBImportsTab();
+  });
+});
+// Completed Tasks is only fetched when the Billing tab is actually
+// opened -- it's not needed by anything else in the dashboard, so there's
+// no reason to pay for that extra sheet read on every single dashboard
+// open the way the rest of the data is. Refetched each time the tab is
+// opened, so it stays reasonably current without slowing down every tab.
+async function loadBillingData(){
+  document.getElementById('billingList').innerHTML = '<div class="loading">Loading…</div>';
+  // Wait for the dashboard's initial data load to fully finish first --
+  // otherwise, if Billing is opened quickly after the dashboard itself,
+  // this fetch and the initial one can race each other, and whichever
+  // finishes last silently overwrites the other's result in the shared
+  // DATA object (showing sometimes-correct, sometimes-partial results
+  // depending purely on network timing).
+  await initialLoadPromise;
+  DATA.completedTasks = await run('adminGetCompletedTasks');
+  renderBillingList();
+  renderMissingWoList();
+  renderFlaggedTasksList();
+}
+
+async function loadAll(){
+  DATA = await run('adminGetAllData');
+  populateFilters();
+  populateAssignCustomerSelect();
+  populateAssignLocSelect();
+  populateTaskNameSuggestions();
+  renderLog();
+  renderChart();
+  renderBoats();
+  renderCustomers();
+  renderEmployees();
+  // If someone started typing in the customer search box before this
+  // initial fetch resolved, DATA.customers was still empty at the time,
+  // so nothing matched -- that's the "no results the first time" bug.
+  // Refresh it now that real data is in, but only if they're still
+  // actually using the field (focused, or the dropdown is already open),
+  // so this doesn't pop the suggestions open for someone who's since
+  // moved on to a different part of the form.
+  const searchEl = document.getElementById('assignCustomerSearch');
+  const suggestionsBox = document.getElementById('customerSuggestions');
+  if (document.activeElement === searchEl || suggestionsBox.classList.contains('show')){
+    renderCustomerSuggestions();
+  }
+}
+// Speeds up entry by suggesting task names that have actually been used
+// before, across every boat -- most jobs repeat common items (oil change,
+// zincs, bottom paint, etc).
+function populateTaskNameSuggestions(){
+  const names = [...new Set(DATA.tasks.map(t => t.name).filter(Boolean))].sort();
+  document.getElementById('taskNameSuggestions').innerHTML = names.map(n => '<option value="'+escapeAttr(n)+'">').join('');
+}
+
+// ---------- lookups ----------
+function boatById(id){ return DATA.boats.find(b=>b.boatId===id); }
+function customerById(id){ return DATA.customers.find(c=>c.customerId===id); }
+function describeBoat(boat){
+  if (!boat) return { customerName:'— empty —', model:'', boatName:'', loa:'' };
+  const cust = customerById(boat.customerId);
+  return { customerName: cust ? cust.name : '—', model: boat.model, boatName: boat.boatName, loa: boat.loa };
+}
+function describeLocation(loc){
+  return describeBoat(boatById(loc.boatId));
+}
+
+function populateFilters(){
+  const empFilter = document.getElementById('empFilter');
+  const locFilter = document.getElementById('locFilter');
+  const dateFilter = document.getElementById('dateFilter');
+  // Keep whatever filters are already picked -- this re-runs on every
+  // data reload, including the 30-second auto-refresh, which would
+  // otherwise snap the Today's Log filters back to their defaults.
+  const prevEmp = empFilter.value, prevLoc = locFilter.value;
+  empFilter.innerHTML = '<option value="">All employees</option>' +
+    DATA.employees.map(n=>'<option value="'+n+'">'+n+'</option>').join('');
+  locFilter.innerHTML = '<option value="">All boats</option>' +
+    DATA.boats.map(b=>{ const d=describeBoat(b); return '<option value="'+b.boatId+'">'+d.customerName+' — '+d.model+'</option>'; }).join('');
+  if (prevEmp) empFilter.value = prevEmp;
+  if (prevLoc) locFilter.value = prevLoc;
+  if (!dateFilter.value) dateFilter.value = new Date().toISOString().slice(0,10);
+}
+document.getElementById('dateFilter').addEventListener('change', renderLog);
+document.getElementById('empFilter').addEventListener('change', renderLog);
+document.getElementById('locFilter').addEventListener('change', renderLog);
+document.getElementById('logSearch').addEventListener('input', renderLog);
+
+function fmtDT(iso){
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+// ================== ASSIGN WORK ORDER ==================
+
+function populateAssignCustomerSelect(){
+  const sel = document.getElementById('assignCustomerSelect');
+  const prevVal = sel.value; // keep a half-filled Assign form intact across reloads
+  sel.innerHTML = '<option value="">— Select customer —</option>' +
+    DATA.customers.map(c=>'<option value="'+c.customerId+'">'+c.name+'</option>').join('') +
+    '<option value="__new__">+ New Customer</option>';
+  if (prevVal) sel.value = prevVal;
+}
+function renderCustomerSuggestions(){
+  const box = document.getElementById('customerSuggestions');
+  const term = document.getElementById('assignCustomerSearch').value.trim().toLowerCase();
+  const matches = !term ? [] : DATA.customers.filter(c => c.name.toLowerCase().includes(term)).slice(0, 8);
+
+  let html = '';
+  if (term && matches.length === 0){
+    html += '<div class="suggestion-item no-match">No customers match "'+term+'"</div>';
+  } else {
+    html += matches.map(c => '<div class="suggestion-item" onmousedown="event.preventDefault(); selectCustomerSuggestion(\''+c.customerId+'\', \''+c.name.replace(/'/g,"\\'")+'\')">'+c.name+'</div>').join('');
+  }
+  html += '<div class="suggestion-item new-item" onmousedown="event.preventDefault(); selectCustomerSuggestion(\'__new__\', \'\')">+ New Customer</div>';
+  box.innerHTML = html;
+  box.classList.add('show');
+}
+function selectCustomerSuggestion(customerId, displayName){
+  document.getElementById('assignCustomerSelect').value = customerId;
+  document.getElementById('assignCustomerSearch').value = customerId === '__new__' ? '' : displayName;
+  document.getElementById('assignCustomerSearch').placeholder = customerId === '__new__' ? 'New customer' : 'Search customers…';
+  document.getElementById('customerSuggestions').classList.remove('show');
+  onCustomerChange();
+}
+document.addEventListener('click', (e)=>{
+  const wrap = document.getElementById('assignCustomerSearch');
+  const box = document.getElementById('customerSuggestions');
+  if (wrap && box && e.target !== wrap && !box.contains(e.target)) box.classList.remove('show');
+});
+function onCustomerChange(){
+  const val = document.getElementById('assignCustomerSelect').value;
+  document.getElementById('newCustomerFields').style.display = (val === '__new__') ? 'block' : 'none';
+  populateAssignBoatSelect(val);
+  if (val && val !== '__new__'){
+    const boats = DATA.boats.filter(b => b.customerId === val);
+    if (boats.length === 1){
+      document.getElementById('assignBoatSelect').value = boats[0].boatId;
+      onBoatChange();
+    }
+  }
+}
+// Shared by every "reverse" auto-fill direction (picking a Slip/Stand or
+// typing a Work Order before choosing a customer/boat): sets up Customer
+// + Boat the same way picking them directly would, then hands off to
+// onBoatChange() to fill in Slip/Stand and set up move-tracking.
+function selectCustomerAndBoat(customerId, boatId){
+  document.getElementById('assignCustomerSelect').value = customerId;
+  const cust = customerById(customerId);
+  document.getElementById('assignCustomerSearch').value = cust ? cust.name : '';
+  populateAssignBoatSelect(customerId);
+  document.getElementById('assignBoatSelect').value = boatId;
+  onBoatChange();
+}
+// Typing a work order number that matches a boat's CURRENT job fills in
+// Customer + Boat (and Slip/Stand, via onBoatChange) -- but only if
+// nothing's been picked yet, so it never overrides a deliberate choice.
+function onWorkOrderBlur(){
+  const boatSel = document.getElementById('assignBoatSelect').value;
+  if (boatSel && boatSel !== '__new__') return;
+  const wo = document.getElementById('assignWO').value.trim();
+  if (!wo) return;
+  const match = DATA.boats.find(b => b.currentWorkOrder && String(b.currentWorkOrder).trim().toLowerCase() === wo.toLowerCase());
+  if (match) selectCustomerAndBoat(match.customerId, match.boatId);
+}
+function cancelNewCustomer(){
+  document.getElementById('assignCustomerSelect').value = '';
+  document.getElementById('assignCustomerSearch').value = '';
+  document.getElementById('assignCustomerSearch').placeholder = 'Search customers…';
+  ['newCustName','newCustPhone','newCustEmail','newCustAddress'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('newCustPhoneType').value = '';
+  document.getElementById('newCustomerFields').style.display = 'none';
+  populateAssignBoatSelect('');
+}
+let boatOriginalLocation = null;   // where the currently-selected existing boat is right now: a slipId, '__yard__', or null (new boat / none selected)
+let autoInsertedMoveLine = null;   // the exact auto-added task line, if any, so re-selecting can replace it instead of stacking duplicates
+
+function resetMoveTracking(){
+  autoInsertedMoveLine = null;
+  document.getElementById('moveNotice').style.display = 'none';
+  document.getElementById('autoTaskBadge').style.display = 'none';
+}
+
+// ---------- task builder (Timed vs Completion, priority, per-task delete) ----------
+let taskDrafts = [{ name:'', billMode:'timed', priority:2 }];
+let lastBillMode = 'timed';  // a new box defaults to whichever mode was most recently picked, on any box
+
+function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+function resetTaskDrafts(){
+  taskDrafts = [{ name:'', billMode:lastBillMode, priority:2 }];
+  renderTaskDrafts();
+}
+
+function renderTaskDrafts(){
+  const wrap = document.getElementById('taskBuilder');
+  const header = '<div class="task-draft-header">' +
+    '<span class="h-num"></span><span class="h-name">Task Name</span>' +
+    '<span class="h-mode">Billing</span><span class="h-priority">Priority</span><span class="h-del"></span>' +
+    '</div>';
+  wrap.innerHTML = header + taskDrafts.map((t, i) =>
+    '<div class="task-draft-box">' +
+      '<span class="task-draft-num">'+(i+1)+'.</span>' +
+      '<input type="text" class="task-draft-name" placeholder="Task name" value="'+escapeAttr(t.name)+'" data-idx="'+i+'" list="taskNameSuggestions" autocomplete="off">' +
+      '<select class="task-draft-mode" data-idx="'+i+'" title="Timed or Completion">' +
+        '<option value="timed"'+(t.billMode==='timed'?' selected':'')+'>⏱ Timed</option>' +
+        '<option value="complete"'+(t.billMode==='complete'?' selected':'')+'>✅ Completion</option>' +
+      '</select>' +
+      '<select class="task-draft-priority p'+t.priority+'" data-idx="'+i+'" title="Priority">' +
+        '<option value="1"'+(t.priority===1?' selected':'')+'>1 — High</option>' +
+        '<option value="2"'+(t.priority===2?' selected':'')+'>2 — Normal</option>' +
+        '<option value="3"'+(t.priority===3?' selected':'')+'>3 — Low</option>' +
+      '</select>' +
+      '<button type="button" class="task-draft-delete" data-idx="'+i+'" title="Remove this task">&times;</button>' +
+    '</div>'
+  ).join('') + '<button type="button" class="btn" style="width:100%;margin-top:2px;" onclick="addTaskDraft()">+ Add Task</button>';
+
+  wrap.querySelectorAll('.task-draft-name').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ taskDrafts[parseInt(inp.dataset.idx,10)].name = inp.value; });
+    inp.addEventListener('keydown', (e)=>{
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const idx = parseInt(inp.dataset.idx,10);
+      taskDrafts[idx].name = inp.value;
+      taskDrafts.splice(idx+1, 0, { name:'', billMode:lastBillMode, priority:2 });
+      renderTaskDrafts();
+      focusTaskDraft(idx+1);
+    });
+  });
+  wrap.querySelectorAll('.task-draft-mode').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const idx = parseInt(sel.dataset.idx,10);
+      taskDrafts[idx].billMode = sel.value;
+      lastBillMode = sel.value;
+    });
+  });
+  wrap.querySelectorAll('.task-draft-priority').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const idx = parseInt(sel.dataset.idx,10);
+      taskDrafts[idx].priority = parseInt(sel.value,10);
+      sel.className = 'task-draft-priority p'+sel.value;
+    });
+  });
+  wrap.querySelectorAll('.task-draft-delete').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const idx = parseInt(btn.dataset.idx,10);
+      taskDrafts.splice(idx,1);
+      if (taskDrafts.length === 0) taskDrafts.push({ name:'', billMode:lastBillMode, priority:2 });
+      renderTaskDrafts();
+    });
+  });
+}
+function focusTaskDraft(idx){
+  setTimeout(()=>{
+    const inp = document.getElementById('taskBuilder').querySelector('.task-draft-name[data-idx="'+idx+'"]');
+    if (inp) inp.focus();
+  }, 0);
+}
+function addTaskDraft(){
+  taskDrafts.push({ name:'', billMode:lastBillMode, priority:2 });
+  renderTaskDrafts();
+  focusTaskDraft(taskDrafts.length-1);
+}
+function collectTaskDrafts(){
+  return taskDrafts.filter(t => t.name.trim()).map(t => ({ name: t.name.trim(), billMode: t.billMode, priority: t.priority }));
+}
+renderTaskDrafts();
+function populateAssignBoatSelect(customerId){
+  const sel = document.getElementById('assignBoatSelect');
+  document.getElementById('newBoatFields').style.display = 'none';
+  boatOriginalLocation = null;
+  resetMoveTracking();
+  resetTaskDrafts();
+  document.getElementById('assignLoc').value = '';
+  if (!customerId){
+    // No customer picked yet -- let the boat be chosen directly instead;
+    // onBoatChange() will fill in the customer once one is selected.
+    sel.innerHTML = '<option value="">— Select boat (or pick a customer first) —</option>' +
+      DATA.boats.map(b => {
+        const cust = customerById(b.customerId);
+        return '<option value="'+b.boatId+'">'+(cust?cust.name:'—')+' — '+b.model+(b.boatName?' "'+b.boatName+'"':'')+'</option>';
+      }).join('');
+    return;
+  }
+  if (customerId === '__new__'){
+    sel.innerHTML = '<option value="__new__" selected>+ New Boat</option>';
+    document.getElementById('newBoatFields').style.display = 'block';
+    return;
+  }
+  const boats = DATA.boats.filter(b => b.customerId === customerId);
+  sel.innerHTML = '<option value="">— Select boat —</option>' +
+    boats.map(b=>'<option value="'+b.boatId+'">'+b.model+(b.loa?' ('+b.loa+')':'')+(b.boatName?' — "'+b.boatName+'"':'')+'</option>').join('') +
+    '<option value="__new__">+ New Boat</option>';
+}
+function cancelNewBoat(){
+  document.getElementById('assignBoatSelect').value = '';
+  ['newBoatModel','newBoatName','newBoatLoa'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('newBoatFields').style.display = 'none';
+  document.getElementById('assignLoc').value = '';
+  boatOriginalLocation = null;
+  resetMoveTracking();
+}
+function onBoatChange(){
+  const val = document.getElementById('assignBoatSelect').value;
+  document.getElementById('newBoatFields').style.display = (val === '__new__') ? 'block' : 'none';
+  resetMoveTracking();
+  resetTaskDrafts();
+  if (val && val !== '__new__'){
+    const boat = boatById(val);
+    // If this boat was picked directly (before choosing a customer),
+    // fill in the customer to match -- just the value/label, not a full
+    // repopulate, so the boat selection itself isn't disturbed.
+    const custSel = document.getElementById('assignCustomerSelect');
+    if (boat && custSel.value !== boat.customerId){
+      custSel.value = boat.customerId;
+      const cust = customerById(boat.customerId);
+      document.getElementById('assignCustomerSearch').value = cust ? cust.name : '';
+    }
+    const currentSlip = DATA.locations.find(l => l.boatId === val);
+    boatOriginalLocation = currentSlip ? currentSlip.slipId : '__yard__';
+    document.getElementById('assignLoc').value = boatOriginalLocation;
+    // Auto-fill with this boat's existing work order, if it has one --
+    // the field stays editable (see onfocus below), so typing a new
+    // number just replaces it for a fresh work order.
+    document.getElementById('assignWO').value = (boat && boat.currentWorkOrder) ? boat.currentWorkOrder : '';
+  } else {
+    boatOriginalLocation = null;
+    document.getElementById('assignLoc').value = '';
+  }
+}
+function locDisplayLabel(id){ return id === '__yard__' ? 'Yard / Land Storage' : slipLabel(id); }
+// Picking a different slip/stand than where the boat actually is right now
+// means the boat needs to physically move -- add a task for that
+// automatically. It's shown as its own read-only line rather than typed
+// into the textarea, so there's no risk of it getting edited or deleted
+// by hand and drifting out of sync with the notice above it.
+function onSlipSelectionChange(){
+  const boatSel = document.getElementById('assignBoatSelect').value;
+  const newLoc = document.getElementById('assignLoc').value;
+  const notice = document.getElementById('moveNotice');
+  const badge = document.getElementById('autoTaskBadge');
+
+  // Reverse auto-fill: if no boat is picked yet and the chosen slip has
+  // an occupant, use that to fill in Customer + Boat -- same result as
+  // picking them directly, just starting from the other end.
+  if ((!boatSel || boatSel === '__new__') && newLoc && newLoc !== '__yard__'){
+    const loc = DATA.locations.find(l => l.slipId === newLoc);
+    const boat = loc && loc.boatId ? boatById(loc.boatId) : null;
+    if (boat){
+      selectCustomerAndBoat(boat.customerId, boat.boatId);
+      return; // onBoatChange() above already set assignLoc back to this same slip and handled move-tracking
+    }
+  }
+
+  if (!boatSel || boatSel === '__new__' || boatOriginalLocation === null) return; // nothing to move FROM
+
+  if (newLoc === boatOriginalLocation){
+    autoInsertedMoveLine = null;
+    notice.style.display = 'none';
+    badge.style.display = 'none';
+    return;
+  }
+
+  const fromLabel = locDisplayLabel(boatOriginalLocation);
+  const toLabel = locDisplayLabel(newLoc);
+  autoInsertedMoveLine = newLoc === '__yard__' ? 'Haul and block up boat' : ('Move from ' + fromLabel + ' to ' + toLabel);
+
+  notice.textContent = 'Moving boat from ' + fromLabel + ' to ' + toLabel + ' selected';
+  notice.style.display = 'block';
+  badge.innerHTML = '<b>Auto-added</b>' + autoInsertedMoveLine;
+  badge.style.display = 'block';
+}
+
+function populateAssignLocSelect(){
+  const sel = document.getElementById('assignLoc');
+  const prevVal = sel.value;
+  sel.innerHTML = '<option value="">— Select slip/stand —</option>' +
+    '<option value="__yard__">Yard / Land Storage</option>' +
+    DATA.locations.map(l => {
+      const d = describeLocation(l);
+      return '<option value="'+l.slipId+'">'+slipLabel(l.slipId)+' — currently '+d.customerName+(d.model?' / '+d.model:'')+'</option>';
+    }).join('');
+  if (prevVal) sel.value = prevVal;
+}
+
+function reviewAssign(){
+  const locId = document.getElementById('assignLoc').value;
+  const custSel = document.getElementById('assignCustomerSelect').value;
+  const boatSel = document.getElementById('assignBoatSelect').value;
+  const wo = document.getElementById('assignWO').value.trim();
+  const drafts = collectTaskDrafts();
+  const tasks = autoInsertedMoveLine ? [{ name: autoInsertedMoveLine, billMode: lastBillMode, priority: 2 }].concat(drafts) : drafts;
+
+  if (!locId){ alert('Pick a slip or stand first.'); return; }
+  if (!custSel){ alert('Pick or add a customer.'); return; }
+  if (!boatSel){ alert('Pick or add a boat.'); return; }
+  if (!wo){ alert('Work order # is required.'); return; }
+  if (tasks.length === 0){ alert('Add at least one task.'); return; }
+
+  let custName;
+  if (custSel === '__new__'){
+    custName = document.getElementById('newCustName').value.trim();
+    if (!custName){ alert('The new customer needs at least a name.'); return; }
+  } else {
+    custName = customerById(custSel).name;
+  }
+
+  let boatModel, boatName, boatLoa;
+  if (boatSel === '__new__'){
+    boatModel = document.getElementById('newBoatModel').value.trim();
+    boatName = document.getElementById('newBoatName').value.trim();
+    boatLoa = document.getElementById('newBoatLoa').value.trim();
+    if (!boatModel){ alert('The new boat needs at least a model.'); return; }
+  } else {
+    const b = boatById(boatSel);
+    boatModel = b.model; boatName = b.boatName; boatLoa = b.loa;
+  }
+
+  const toYard = locId === '__yard__';
+  const loc = toYard ? null : DATA.locations.find(l => l.slipId === locId);
+  let warnHtml = '';
+  if (boatSel !== '__new__'){
+    const unfinished = DATA.tasks.filter(t => t.boatId === boatSel && t.status !== 'done');
+    if (unfinished.length > 0){
+      warnHtml += '<div class="warn">This boat still has ' + unfinished.length + ' unfinished task(s) from before. Saving will archive them (under their old work order, in Completed Tasks) and replace the active list with what\'s below.</div>';
+    }
+  }
+  if (toYard){
+    if (boatSel !== '__new__'){
+      const currentSlip = DATA.locations.find(l => l.boatId === boatSel);
+      if (currentSlip){
+        warnHtml += '<div class="warn">This boat is currently in ' + slipLabel(currentSlip.slipId) + ' — it will be pulled out of that slip and sent to the yard.</div>';
+      }
+    }
+  } else if (loc.boatId && loc.boatId !== boatSel){
+    const bumpedBoat = boatById(loc.boatId);
+    const bd = describeBoat(bumpedBoat);
+    warnHtml += '<div class="warn">' + slipLabel(locId) + ' currently has ' + bd.customerName + ' (' + bd.model + ') in it — that boat will be moved to the yard to make room.</div>';
+  }
+
+  const destLabel = toYard ? 'Yard / Land Storage' : slipLabel(loc.slipId);
+  document.getElementById('assignReview').innerHTML =
+    '<div class="review-box">' + warnHtml +
+    '<p><b>' + destLabel + '</b> will be set to:</p>' +
+    '<p>' + custName + ' — ' + boatModel + (boatLoa ? ' (' + boatLoa + ')' : '') + (boatName ? ' "' + boatName + '"' : '') + ' (' + wo + ')</p>' +
+    '<p>' + tasks.length + ' task(s):</p>' +
+    '<ul>' + tasks.map(t => '<li>' + t.name + ' <span style="color:var(--slate);">— ' +
+      (t.billMode==='timed'?'Timed':'Completion') + ', Priority ' + t.priority + '</span></li>').join('') + '</ul>' +
+    '<button class="btn primary big" onclick="confirmAssign()">Yes — Post this Work Order</button>' +
+    '<button class="btn" style="width:100%;margin-top:8px;" onclick="cancelAssign()">Cancel, Go Back</button>' +
+    '</div>';
+}
+
+async function confirmAssign(){
+  const rawLoc = document.getElementById('assignLoc').value;
+  const locationId = rawLoc === '__yard__' ? '' : rawLoc;
+  const workOrder = document.getElementById('assignWO').value.trim();
+  const drafts = collectTaskDrafts();
+  const tasks = autoInsertedMoveLine ? [{ name: autoInsertedMoveLine, billMode: lastBillMode, priority: 2 }].concat(drafts) : drafts;
+
+  // Previously nothing here was wrapped in error handling -- if any step
+  // failed (a thrown server error, a stale reference, anything), the
+  // button click would just silently do nothing with no visible sign of
+  // what went wrong. Everything below is now wrapped so a failure always
+  // surfaces as an alert instead of looking like a dead button.
+  try {
+    let customerId = document.getElementById('assignCustomerSelect').value;
+    if (customerId === '__new__'){
+      const res = await run('adminAddCustomer', {
+        name: document.getElementById('newCustName').value.trim(),
+        phone: document.getElementById('newCustPhone').value.trim(),
+        phoneType: document.getElementById('newCustPhoneType').value,
+        email: document.getElementById('newCustEmail').value.trim(),
+        address: document.getElementById('newCustAddress').value.trim()
+      });
+      if (res && res.error){ alert('Could not add the new customer: ' + res.error); return; }
+      customerId = res.id;
+    }
+
+    let boatId = document.getElementById('assignBoatSelect').value;
+    if (boatId === '__new__'){
+      const res = await run('adminAddBoat', {
+        customerId: customerId,
+        model: document.getElementById('newBoatModel').value.trim(),
+        boatName: document.getElementById('newBoatName').value.trim(),
+        loa: document.getElementById('newBoatLoa').value.trim()
+      });
+      if (res && res.error){ alert('Could not add the new boat: ' + res.error); return; }
+      boatId = res.id;
+    }
+
+    const result = await run('adminAssignWorkOrder', { locationId, boatId, workOrder, tasks });
+    if (result && result.error){
+      alert('Could not post this work order: ' + result.error);
+      return;
+    }
+
+    ['newCustName','newCustPhone','newCustPhoneType','newCustEmail','newCustAddress','newBoatModel','newBoatName','newBoatLoa','assignWO','assignCustomerSearch'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('assignCustomerSearch').placeholder = 'Search customers…';
+    boatOriginalLocation = null;
+    resetMoveTracking();
+    resetTaskDrafts();
+    document.getElementById('newCustomerFields').style.display = 'none';
+    document.getElementById('newBoatFields').style.display = 'none';
+    document.getElementById('assignReview').innerHTML = '';
+    // This work order actually saved -- if it came from a QuickBooks
+    // import, mark that import used now so it drops off the pending list
+    // (see loadQBImportsTab) instead of sitting there indefinitely.
+    if (pendingQBImportId){
+      await run('adminMarkQBImportUsed', pendingQBImportId);
+      pendingQBImportId = null;
+    }
+    await loadAll();
+    alert(locationId ? 'Saved — the slip is set up with the new work order.' : 'Saved — the boat is set up in the yard with the new work order.');
+  } catch (err) {
+    alert('Something went wrong posting this work order: ' + (err && err.message ? err.message : err));
+  }
+}
+// Abandoning the review here means whatever was pre-filled from a
+// QuickBooks import didn't actually get saved -- clear the tracking so a
+// LATER, unrelated manual entry doesn't get mistakenly marked as if it
+// had come from this import.
+function cancelAssign(){ pendingQBImportId = null; document.getElementById('assignReview').innerHTML = ''; }
+
+// ================== LOG ==================
+
+function renderLog(){
+  const dateVal = document.getElementById('dateFilter').value;
+  const empVal = document.getElementById('empFilter').value;
+  const locVal = document.getElementById('locFilter').value;
+  const searchVal = document.getElementById('logSearch').value.trim().toLowerCase();
+
+  let rows = DATA.entries.slice();
+  if (dateVal) rows = rows.filter(r => r.segStart && String(r.segStart).slice(0,10) === dateVal);
+  if (empVal) rows = rows.filter(r => r.employee === empVal);
+  if (locVal) rows = rows.filter(r => r.boatId === locVal);
+  if (searchVal) rows = rows.filter(r => { const d = describeBoat(boatById(r.boatId)); return (d.customerName+' '+d.model).toLowerCase().includes(searchVal); });
+  rows.sort((a,b)=> new Date(b.segStart) - new Date(a.segStart));
+
+  const wrap = document.getElementById('logTableWrap');
+  if (rows.length === 0){
+    wrap.innerHTML = '<div class="empty-note">No entries match these filters.</div>';
+    document.getElementById('summaryRow').innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = '<table><thead><tr>' +
+    '<th>Employee</th><th>Boat</th><th>Work Order</th><th>Task</th><th>Start</th><th>End</th><th>Min</th><th></th>' +
+    '</tr></thead><tbody>' +
+    rows.map(r => { const d = describeBoat(boatById(r.boatId)); return '<tr>' +
+      '<td>'+r.employee+'</td><td>'+d.customerName+' — '+d.model+'</td><td>'+(r.workOrder||'—')+'</td><td>'+r.taskName+'</td>' +
+      '<td>'+fmtDT(r.segStart)+'</td><td>'+fmtDT(r.segEnd)+'</td><td>'+r.durationMin+'</td>' +
+      '<td><button class="btn small" onclick="editEntry(\''+r.taskId+'\')">Edit</button>' +
+      '<button class="btn small danger" onclick="deleteEntry(\''+r.taskId+'\')">Delete</button></td></tr>'; }).join('') +
+    '</tbody></table>';
+
+  const totals = {};
+  rows.forEach(r => { totals[r.employee] = (totals[r.employee]||0) + Number(r.durationMin || 0); });
+  document.getElementById('summaryRow').innerHTML = 'Totals shown: ' +
+    Object.entries(totals).map(([n,m]) => '<b>'+n+'</b>: '+m+' min').join(' &nbsp;·&nbsp; ');
+}
+async function editEntry(id){
+  const entry = DATA.entries.find(e => e.taskId === id);
+  const newEmp = prompt('Employee:', entry.employee); if (newEmp === null) return;
+  const newStart = prompt('Start (YYYY-MM-DDTHH:MM):', entry.segStart ? entry.segStart.slice(0,16) : ''); if (newStart === null) return;
+  const newEnd = prompt('End (YYYY-MM-DDTHH:MM):', entry.segEnd ? entry.segEnd.slice(0,16) : ''); if (newEnd === null) return;
+  const mins = Math.round((new Date(newEnd) - new Date(newStart)) / 60000);
+  await run('adminEditEntry', { id, employee:newEmp, segStart:newStart, segEnd:newEnd, durationMin:mins });
+  await loadAll();
+}
+async function deleteEntry(id){
+  if (!confirm('Delete this time entry? This cannot be undone from here.')) return;
+  await run('adminDeleteEntry', id);
+  await loadAll();
+}
+
+// ================== BOATS & SLIPS ==================
+
+function renderBoats(){
+  const wrap = document.getElementById('boatsWrap');
+  // currentWorkOrder is a label stamped on a boat at assignment time --
+  // it's only ever cleared by the explicit "Delete Work Order" action
+  // below, NOT when a boat's tasks simply get finished through the
+  // normal workflow. The old `b.currentWorkOrder ||` half of this filter
+  // meant any boat that had EVER had a work order kept showing up here
+  // forever, long after the work was actually done. Whether it has any
+  // row at all in Active Tasks is what genuinely means there's open work.
+  const active = DATA.boats.filter(b => DATA.tasks.some(t => t.boatId === b.boatId));
+  wrap.innerHTML = active.length === 0 ? '<div class="empty-note">No boats currently have an active work order.</div>' : active.map(boat => {
+    const d = describeBoat(boat);
+    const loc = DATA.locations.find(l => l.boatId === boat.boatId);
+    const locLabel = loc ? slipLabel(loc.slipId) : 'In Yard';
+    const tasks = DATA.tasks.filter(t => t.boatId === boat.boatId).sort((a,b)=> a.order - b.order);
+    const boatPhotos = (DATA.photos || []).filter(p => p.boatId === boat.boatId && !p.taskId);
+    const gallery = boatPhotos.length === 0 ? '' : '<div class="photo-gallery">' + boatPhotos.map(p =>
+      '<div class="photo-thumb" onclick="openLightbox(\''+p.photoId+'\',\''+(p.url||'').replace(/'/g,"\\'")+'\')"><img src="'+p.url+'" alt="Boat photo"></div>'
+    ).join('') + '</div>';
+    return '<div class="loc-card">' +
+      '<div class="loc-head '+(loc ? 'slip' : 'yard')+'">' +
+        '<div><div class="loc-title">'+locLabel+'</div>' +
+        '<div class="loc-sub">'+d.customerName+(d.model?' — '+d.model:'')+(d.loa?' ('+d.loa+')':'')+(d.boatName?' "'+d.boatName+'"':'')+' · '+(boat.currentWorkOrder||'—')+'</div></div>' +
+        '<button class="btn small danger" onclick="deleteWorkOrder(\''+boat.boatId+'\')" title="Permanently delete this work order and all its tasks">Delete Work Order</button>' +
+      '</div>' +
+      gallery +
+      '<div class="loc-body">' +
+        (tasks.length === 0 ? '<div class="empty-note">No tasks assigned yet.</div>' : '') +
+        tasks.map(t => {
+          const taskPhotos = (DATA.photos || []).filter(p => p.taskId === t.taskId);
+          const photoBtn = taskPhotos.length === 0 ? '' : '<button class="task-photo-btn" onclick="showTaskPhotos(\''+t.taskId+'\')" title="View attached photos">&#128247; '+taskPhotos.length+'</button>';
+          return '<div class="task-line">' +
+          '<span class="name">'+t.name+'<span class="status-tag '+t.status+'">'+t.status+'</span>' +
+            '<span style="color:var(--slate);font-size:11px;margin-left:6px;">'+(t.billMode==='timed'?'⏱ Timed':'✅ Completion')+'</span>' + photoBtn + '</span>' +
+          '<span>' +
+            '<select class="task-draft-priority p'+(t.priority||2)+'" style="margin-bottom:0;" onchange="updateTaskPriority(\''+t.taskId+'\', this)">' +
+              '<option value="1"'+(t.priority===1?' selected':'')+'>1 — High</option>' +
+              '<option value="2"'+((t.priority||2)===2?' selected':'')+'>2 — Normal</option>' +
+              '<option value="3"'+(t.priority===3?' selected':'')+'>3 — Low</option>' +
+            '</select>' +
+            '<button class="btn small" onclick="editTask(\''+t.taskId+'\')">Edit</button>' +
+            '<button class="btn small danger" onclick="deleteTask(\''+t.taskId+'\')">Delete</button>' +
+          '</span></div>';
+        }).join('') +
+      '</div></div>';
+  }).join('');
+}
+
+// ---- Photo viewing: a single full-size view, or (for a task with more
+// than one attached photo-note) a small gallery of thumbnails that each
+// open into the full-size view when clicked.
+function openLightbox(photoId, url){
+  const photo = (DATA.photos || []).find(p => p.photoId === photoId);
+  // The thumbnail URL used for display isn't a real download link -- the
+  // browser's download attribute doesn't force cross-origin downloads,
+  // it just navigates. Drive's own export=download URL is what actually
+  // triggers a proper file save.
+  const downloadUrl = photo && photo.driveFileId ? ('https://drive.google.com/uc?export=download&id=' + photo.driveFileId) : url;
+  // Reverted: export=view doesn't reliably load as an embedded image at
+  // all (the same problem that led away from it originally) -- back to
+  // the thumbnail endpoint, which loads reliably even though it's not
+  // the source of the color issue.
+  const viewUrl = url;
+  document.getElementById('lightboxContent').innerHTML =
+    '<img src="'+viewUrl+'" alt="Photo">' +
+    '<a class="btn primary" href="'+downloadUrl+'" target="_blank" rel="noopener" style="text-decoration:none;display:inline-block;">Download Photo</a>' +
+    '<button class="btn danger" onclick="deletePhotoFromLightbox(\''+photoId+'\')">Delete Photo</button>';
+  document.getElementById('photoLightbox').style.display = 'flex';
+}
+function closeLightbox(){
+  document.getElementById('photoLightbox').style.display = 'none';
+}
+async function deletePhotoFromLightbox(photoId){
+  if (!confirm('Delete this photo? This cannot be undone.')) return;
+  await run('adminDeletePhoto', photoId);
+  DATA.photos = (DATA.photos || []).filter(p => p.photoId !== photoId);
+  closeLightbox();
+  renderBoats();
+  renderPhotosTab();
+}
+// ================== PHOTOS TAB ==================
+// Photos aren't tagged with a work order directly (only boatId, and
+// optionally taskId) -- so it's derived here: a task photo uses that
+// task's own stamped work order (checking both Active and Completed
+// Tasks, since the task may have finished since the photo was taken);
+// a general boat photo falls back to the boat's current work order.
+function photoWorkOrderInfo(p){
+  let workOrder = '';
+  if (p.taskId){
+    const task = DATA.tasks.find(t => t.taskId === p.taskId) || (DATA.completedTasks||[]).find(t => t.taskId === p.taskId);
+    if (task) workOrder = task.workOrder || '';
+  }
+  if (!workOrder){
+    const boat = boatById(p.boatId);
+    workOrder = boat ? (boat.currentWorkOrder || '') : '';
+  }
+  return workOrder;
+}
+async function loadPhotosTab(){
+  document.getElementById('photosWrap').innerHTML = '<div class="loading">Loading…</div>';
+  await initialLoadPromise;
+  if (!DATA.completedTasks) DATA.completedTasks = await run('adminGetCompletedTasks');
+  renderPhotosTab();
+}
+
+// ================== QUICKBOOKS IMPORTS ==================
+// Pending imports are fetched lazily, same pattern as Billing/Photos --
+// this tab won't be opened every session, so there's no reason to pay
+// for the extra sheet read on every dashboard load.
+async function loadQBImportsTab(){
+  document.getElementById('qbImportsList').innerHTML = '<div class="loading">Loading…</div>';
+  await initialLoadPromise;
+  DATA.qbPendingImports = await run('adminGetPendingQBImports');
+  renderQBImportsTab();
+}
+function renderQBImportsTab(){
+  const wrap = document.getElementById('qbImportsList');
+  const imports = DATA.qbPendingImports || [];
+  if (imports.length === 0){
+    wrap.innerHTML = '<div class="empty-note">Nothing waiting to be imported right now.</div>';
+    return;
+  }
+  wrap.innerHTML = imports.map(imp => {
+    const lineCount = (imp.lineItems || []).length;
+    const when = imp.qbDate ? new Date(imp.qbDate).toLocaleDateString() : '—';
+    return '<div class="billing-row" onclick="previewQBImport(\''+imp.importId+'\')">' +
+      '<div><div class="b-who">'+(imp.rawCustomerName || '—')+'</div>' +
+      '<div class="b-meta">Estimate '+(imp.qbNum || '—')+' · '+when+' · '+lineCount+' task(s)</div></div>' +
+    '</div>';
+  }).join('');
+}
+function previewQBImport(importId){
+  const imp = (DATA.qbPendingImports || []).find(i => i.importId === importId);
+  if (!imp) return;
+  const rows = (imp.lineItems || []).map(li =>
+    '<tr><td>'+li.name+'</td><td>'+(li.billModeGuess === 'complete' ? 'Completion' : 'Timed')+'</td>' +
+    '<td>'+(li.quotedAmount != null && li.quotedAmount !== '' ? '$'+Number(li.quotedAmount).toFixed(2) : '—')+'</td></tr>'
+  ).join('');
+  document.getElementById('qbImportDetail').innerHTML =
+    '<div class="billing-detail">' +
+      '<button class="billing-close" onclick="document.getElementById(\'qbImportDetail\').innerHTML=\'\';" title="Close">&times;</button>' +
+      '<h3>Estimate '+(imp.qbNum || '—')+'</h3>' +
+      '<div class="b-contact">'+(imp.rawCustomerName || '—')+(imp.qbDate ? ' · '+new Date(imp.qbDate).toLocaleDateString() : '')+'</div>' +
+      '<table class="billing-table"><thead><tr><th>Task</th><th>Billing (best guess — adjust after)</th><th>Quoted</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="3">No line items came through for this one.</td></tr>') +
+      '</tbody></table>' +
+      '<button class="btn primary" onclick="useQBImport(\''+importId+'\')">Use This — Go to Assign Work Order</button> ' +
+      '<button class="btn danger" onclick="dismissQBImport(\''+importId+'\')">Dismiss</button>' +
+    '</div>';
+}
+// Tracks which pending import (if any) is currently being turned into a
+// work order, so confirmAssign() knows to mark it "used" afterward --
+// and so cancelAssign() knows to clear it if the review gets abandoned,
+// rather than marking some LATER, unrelated manual entry as if it had
+// come from this import.
+let pendingQBImportId = null;
+function useQBImport(importId){
+  const imp = (DATA.qbPendingImports || []).find(i => i.importId === importId);
+  if (!imp) return;
+  pendingQBImportId = importId;
+
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('show'));
+  document.querySelector('.tab-btn[data-tab="assign"]').classList.add('active');
+  document.getElementById('panel-assign').classList.add('show');
+
+  // Try an exact-text match against existing customers first -- anything
+  // less than exact is exactly the kind of mismatch a human needs to
+  // catch (QuickBooks' own name formatting won't reliably line up), so
+  // this deliberately doesn't try to be clever/fuzzy about it.
+  const rawName = (imp.rawCustomerName || '').trim();
+  const match = DATA.customers.find(c => c.name.trim().toLowerCase() === rawName.toLowerCase());
+  if (match){
+    selectCustomerSuggestion(match.customerId, match.name);
+  } else {
+    selectCustomerSuggestion('__new__', '');
+    document.getElementById('newCustName').value = rawName;
+  }
+  // Boat is deliberately left unset -- QuickBooks has no field for it at
+  // all (see this tab's own intro text), so this always needs a manual
+  // pick here regardless of how good the customer match was.
+
+  document.getElementById('assignWO').value = imp.qbNum ? ('WO #' + imp.qbNum) : '';
+
+  taskDrafts = (imp.lineItems || []).map(li => ({
+    name: li.name,
+    billMode: li.billModeGuess === 'complete' ? 'complete' : 'timed',
+    priority: 2
+  }));
+  if (taskDrafts.length === 0) taskDrafts = [{ name:'', billMode:lastBillMode, priority:2 }];
+  renderTaskDrafts();
+
+  document.getElementById('qbImportDetail').innerHTML = '';
+  alert('Pulled in from QuickBooks Estimate ' + (imp.qbNum || '') + ' — nothing is saved yet. Pick the boat, double-check the customer match, and adjust billing per task before hitting Review & Save.');
+}
+async function dismissQBImport(importId){
+  if (!confirm('Dismiss this import? It will stop showing up here, but nothing in QuickBooks is affected.')) return;
+  await run('adminDismissQBImport', importId);
+  document.getElementById('qbImportDetail').innerHTML = '';
+  await loadQBImportsTab();
+}
+function renderPhotosTab(){
+  const wrap = document.getElementById('photosWrap');
+  if (!DATA) return;
+  const term = document.getElementById('photosSearch').value.trim().toLowerCase();
+  const groupBy = document.getElementById('photosGroupBy').value;
+  const photos = (DATA.photos || []).slice().sort((a,b) => (b.uploadedAt||'').localeCompare(a.uploadedAt||''));
+
+  const groups = {};
+  photos.forEach(p => {
+    const boat = boatById(p.boatId);
+    const cust = boat ? customerById(boat.customerId) : null;
+    const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
+    const workOrder = photoWorkOrderInfo(p);
+    const haystack = (who + ' ' + workOrder).toLowerCase();
+    if (term && haystack.indexOf(term) === -1) return;
+
+    let key, heading;
+    if (groupBy === 'customer'){
+      const custName = cust ? cust.name : 'Unknown Customer';
+      // Sort key is "Last, First" so groups land in last-name order,
+      // even though the heading itself still shows the natural name --
+      // matches how the Technician Photos Drive folders are named too.
+      const parts = custName.trim().split(/\s+/);
+      key = parts.length > 1 ? (parts[parts.length-1] + ', ' + parts.slice(0,-1).join(' ')) : custName;
+      heading = custName;
+    } else {
+      key = p.uploadedAt ? p.uploadedAt.slice(0,10) : 'zzz-unknown';
+      heading = key === 'zzz-unknown' ? 'Unknown date' : new Date(key + 'T00:00:00').toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+    }
+    if (!groups[key]) groups[key] = { heading, items: [] };
+    groups[key].items.push({ p, who, workOrder });
+  });
+
+  const sortedKeys = Object.keys(groups).sort((a,b) => groupBy === 'customer' ? a.localeCompare(b) : b.localeCompare(a));
+  if (sortedKeys.length === 0){
+    wrap.innerHTML = '<div class="empty-note">' + (term ? 'No matching photos.' : 'No photos uploaded yet.') + '</div>';
+    return;
+  }
+
+  wrap.innerHTML = sortedKeys.map(key => {
+    const group = groups[key];
+    const cards = group.items.map(g => {
+      const label = '<b>'+g.who+'</b><br>' + (g.workOrder ? 'WO '+g.workOrder : 'No work order') + (g.p.taskId ? ' · task photo' : '');
+      return '<div class="photo-card" onclick="openLightbox(\''+g.p.photoId+'\',\''+(g.p.url||'').replace(/'/g,"\\'")+'\')">' +
+        '<div class="photo-card-img"><img src="'+g.p.url+'" alt="Photo"></div>' +
+        '<div class="photo-card-label">'+label+'</div>' +
+      '</div>';
+    }).join('');
+    return '<div class="photo-date-group"><div class="photo-date-heading">'+group.heading+'</div><div class="photo-grid">'+cards+'</div></div>';
+  }).join('');
+}
+
+function showTaskPhotos(taskId){
+  const photos = (DATA.photos || []).filter(p => p.taskId === taskId);
+  if (photos.length === 0) return;
+  if (photos.length === 1){ openLightbox(photos[0].photoId, photos[0].url); return; }
+  document.getElementById('lightboxContent').innerHTML =
+    '<div class="photo-gallery" style="padding:0;">' + photos.map(p =>
+      '<div class="photo-thumb" style="width:120px;height:120px;" onclick="openLightbox(\''+p.photoId+'\',\''+(p.url||'').replace(/'/g,"\\'")+'\')"><img src="'+p.url+'" alt="Task photo"></div>'
+    ).join('') + '</div>';
+  document.getElementById('photoLightbox').style.display = 'flex';
+}
+
+// ================== BILLING ==================
+// Pulls together everything needed to fill out a QuickBooks bill for a
+// finished job: the customer's contact info, the itemized task list
+// (hours for Timed work, flat for Completion work), and total hours.
+// Sourced entirely from Completed Tasks + Recorded Times -- both already
+// tag each row with the work order it belongs to, so a "job" here means
+// one boatId + workOrder combination.
+
+function billingJobs(){
+  const byKey = {};
+  (DATA.completedTasks || []).forEach(t => {
+    if (!t.boatId) return;
+    const wo = String(t.workOrder || '');
+    const key = t.boatId + '||' + wo;
+    if (!byKey[key]) byKey[key] = { boatId: t.boatId, workOrder: wo, tasks: [], lastActivity: '' };
+    byKey[key].tasks.push(t);
+    if (t.completedAt && t.completedAt > byKey[key].lastActivity) byKey[key].lastActivity = t.completedAt;
+  });
+  (DATA.entries || []).forEach(e => {
+    if (!e.boatId) return;
+    const wo = String(e.workOrder || '');
+    const key = e.boatId + '||' + wo;
+    if (!byKey[key]) byKey[key] = { boatId: e.boatId, workOrder: wo, tasks: [], lastActivity: '' };
+    if (e.loggedAt && e.loggedAt > byKey[key].lastActivity) byKey[key].lastActivity = e.loggedAt;
+  });
+  return Object.values(byKey).filter(j => j.workOrder); // a blank work order isn't a real billable job
+}
+function billingJobHours(boatId, workOrder){
+  return (DATA.entries || [])
+    .filter(e => e.boatId === boatId && String(e.workOrder) === String(workOrder))
+    .reduce((sum, e) => sum + Number(e.durationMin || 0), 0) / 60;
+}
+function renderBillingList(){
+  const wrap = document.getElementById('billingList');
+  if (!DATA) return;
+  const term = document.getElementById('billingSearch').value.trim().toLowerCase();
+  const jobs = billingJobs().sort((a,b) => (b.lastActivity||'').localeCompare(a.lastActivity||''));
+
+  const rows = jobs.map(j => {
+    const boat = boatById(j.boatId);
+    const cust = boat ? customerById(boat.customerId) : null;
+    const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
+    const haystack = (who + ' ' + j.workOrder).toLowerCase();
+    if (term && haystack.indexOf(term) === -1) return null;
+    const hours = billingJobHours(j.boatId, j.workOrder);
+    const hasFlat = j.tasks.some(t => String(t.billMode||'').trim().toLowerCase() === 'complete');
+    return { j, who, hours, hasFlat };
+  }).filter(Boolean);
+
+  if (rows.length === 0){
+    wrap.innerHTML = '<div class="empty-note">' + (term ? 'No matching jobs.' : 'Nothing to bill yet.') + '</div>';
+    return;
+  }
+  wrap.innerHTML = rows.map(r =>
+    '<div class="billing-row" onclick="renderBillingDetail(\''+r.j.boatId+'\',\''+String(r.j.workOrder).replace(/'/g,"\\'")+'\')">' +
+      '<div><div class="b-who">'+r.who+'</div>' +
+      '<div class="b-meta">WO '+r.j.workOrder+' · '+r.j.tasks.length+' task(s)'+(r.hasFlat?' · includes flat-fee item(s)':'')+'</div></div>' +
+      '<div class="b-hours">'+r.hours.toFixed(2)+' hrs</div>' +
+    '</div>'
+  ).join('');
+}
+// Always refetches before showing detail -- the dashboard doesn't
+// auto-refresh on its own, so without this, clicking a job right after
+// completing its tasks (via the phone, in a separate session) would show
+// stale data that doesn't include what was just finished.
+function renderBillingDetail(boatId, workOrder){
+  renderBillingDetailInner(boatId, workOrder);
+}
+function renderBillingDetailInner(boatId, workOrder){
+  const boat = boatById(boatId);
+  const cust = boat ? customerById(boat.customerId) : null;
+  const completed = (DATA.completedTasks || []).filter(t => t.boatId === boatId && String(t.workOrder) === String(workOrder));
+  const entries = (DATA.entries || []).filter(e => e.boatId === boatId && String(e.workOrder) === String(workOrder));
+
+  const completedByTaskId = {};
+  completed.forEach(t => { completedByTaskId[t.taskId] = t; });
+  const hoursByTaskId = {};
+  const nameFromEntry = {};
+  entries.forEach(e => {
+    hoursByTaskId[e.taskId] = (hoursByTaskId[e.taskId] || 0) + Number(e.durationMin || 0);
+    nameFromEntry[e.taskId] = e.taskName;
+  });
+
+  // Union of every taskId appearing in EITHER source. Completed Tasks and
+  // Recorded Times are two independent things the phone sends separately
+  // when a task finishes -- if one succeeds and the other lags or fails,
+  // a task with real logged time could otherwise vanish from this view
+  // entirely just because its Completed Tasks record isn't there yet.
+  const allTaskIds = Array.from(new Set([...Object.keys(completedByTaskId), ...Object.keys(hoursByTaskId)]));
+
+  // If this is the boat's CURRENT work order, any tasks still active mean
+  // the job isn't actually finished yet -- flag that clearly rather than
+  // silently showing a partial bill as if it were the whole thing.
+  const stillActive = (boat && String(boat.currentWorkOrder) === String(workOrder))
+    ? DATA.tasks.filter(t => t.boatId === boatId)
+    : [];
+
+  let totalHours = 0;
+  const rows = allTaskIds.map(taskId => {
+    const ct = completedByTaskId[taskId];
+    const mins = hoursByTaskId[taskId] || 0;
+    const name = ct ? ct.name : (nameFromEntry[taskId] || '(unnamed task)');
+    const isTimed = ct ? String(ct.billMode||'').trim().toLowerCase() !== 'complete' : (taskId in hoursByTaskId);
+    if (isTimed) totalHours += mins / 60;
+    return '<tr><td>'+name+'</td><td>'+(isTimed?'Timed':'Flat fee')+'</td>' +
+      '<td>'+(isTimed ? (mins/60).toFixed(2)+' hrs' : '—')+'</td></tr>';
+  }).join('');
+
+  // Parts logged against this same boat + work order -- list price is
+  // entered fresh each time a part gets logged (it changes day to day,
+  // so nothing here is looked up from a catalog), multiplied by whatever
+  // quantity was logged for that line.
+  const parts = (DATA.parts || []).filter(p => p.boatId === boatId && String(p.workOrder) === String(workOrder));
+  let partsTotal = 0;
+  const partsRows = parts.map(p => {
+    const qty = Number(p.quantity) || 1;
+    const price = Number(p.listPrice) || 0;
+    const lineTotal = qty * price;
+    partsTotal += lineTotal;
+    return '<tr><td>'+p.partName+(p.partNumber ? ' <span class="b-part-num">('+p.partNumber+')</span>' : '')+'</td>' +
+      '<td>'+(p.quantity || 1)+'</td>' +
+      '<td>'+(price ? '$'+price.toFixed(2) : '—')+'</td>' +
+      '<td>'+(lineTotal ? '$'+lineTotal.toFixed(2) : '—')+'</td></tr>';
+  }).join('');
+
+  const contact = cust ? [cust.name, cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—';
+  const boatDesc = boat ? (boat.model + (boat.boatName ? ' "'+boat.boatName+'"' : '') + (boat.loa ? ' ('+boat.loa+')' : '')) : '—';
+
+  document.getElementById('billingDetail').innerHTML =
+    '<div class="billing-detail">' +
+      '<button class="billing-close" onclick="document.getElementById(\'billingDetail\').innerHTML=\'\';" title="Close">&times;</button>' +
+      (stillActive.length > 0 ? '<div class="billing-outstanding">This is the boat\'s current work order, and it still has '+stillActive.length+' task(s) not yet finished — this bill may be incomplete.</div>' : '') +
+      '<h3>Work Order '+workOrder+'</h3>' +
+      '<div class="b-contact">'+contact+'<br>'+boatDesc+'</div>' +
+      '<table class="billing-table"><thead><tr><th>Task</th><th>Type</th><th>Hours</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="3">No completed tasks recorded for this work order.</td></tr>') +
+      '</tbody></table>' +
+      '<div class="billing-total">Total billable hours: '+totalHours.toFixed(2)+'</div>' +
+      '<h3 style="margin-top:18px;">Parts</h3>' +
+      '<table class="billing-table"><thead><tr><th>Part</th><th>Qty</th><th>List Price</th><th>Total</th></tr></thead><tbody>' +
+      (partsRows || '<tr><td colspan="4">No parts logged for this work order.</td></tr>') +
+      '</tbody></table>' +
+      '<div class="billing-total">Parts total: $'+partsTotal.toFixed(2)+'</div>' +
+      '<button class="btn primary" onclick="copyBillingSummary(\''+boatId+'\',\''+String(workOrder).replace(/'/g,"\\'")+'\')">Copy Summary</button>' +
+    '</div>';
+}
+
+// ---- Missing Work Orders: completed tasks with no work order attached
+// at all (an ad hoc phone task finished before the boat ever had one).
+// These wait here instead of just vanishing from Billing entirely --
+// assignWorkOrder_ retroactively attaches them the next time a work
+// order is created for that boat.
+function missingWorkOrderJobs(){
+  const byBoat = {};
+  (DATA.completedTasks || []).forEach(t => {
+    if (!t.boatId || t.workOrder) return;
+    if (!byBoat[t.boatId]) byBoat[t.boatId] = { boatId: t.boatId, tasks: [], lastActivity: '' };
+    byBoat[t.boatId].tasks.push(t);
+    if (t.completedAt && t.completedAt > byBoat[t.boatId].lastActivity) byBoat[t.boatId].lastActivity = t.completedAt;
+  });
+  return Object.values(byBoat);
+}
+function renderMissingWoList(){
+  const wrap = document.getElementById('missingWoList');
+  const box = document.getElementById('missingWoBox');
+  if (!DATA) return;
+  const jobs = missingWorkOrderJobs().sort((a,b) => (b.lastActivity||'').localeCompare(a.lastActivity||''));
+
+  if (jobs.length === 0){
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  wrap.innerHTML = jobs.map(j => {
+    const boat = boatById(j.boatId);
+    const cust = boat ? customerById(boat.customerId) : null;
+    const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
+    return '<div class="billing-row" onclick="renderMissingWoDetail(\''+j.boatId+'\')">' +
+      '<div><div class="b-who">'+who+'</div>' +
+      '<div class="b-meta">'+j.tasks.length+' task(s) waiting on a work order</div></div>' +
+    '</div>';
+  }).join('');
+}
+function renderMissingWoDetail(boatId){
+  const boat = boatById(boatId);
+  const cust = boat ? customerById(boat.customerId) : null;
+  const completed = (DATA.completedTasks || []).filter(t => t.boatId === boatId && !t.workOrder);
+  const entries = (DATA.entries || []).filter(e => e.boatId === boatId && !e.workOrder);
+
+  const hoursByTaskId = {};
+  entries.forEach(e => { hoursByTaskId[e.taskId] = (hoursByTaskId[e.taskId] || 0) + Number(e.durationMin || 0); });
+
+  let totalHours = 0;
+  const rows = completed.map(t => {
+    const mins = hoursByTaskId[t.taskId] || 0;
+    const isTimed = String(t.billMode||'').trim().toLowerCase() !== 'complete';
+    if (isTimed) totalHours += mins / 60;
+    return '<tr><td>'+t.name+'</td><td>'+(isTimed?'Timed':'Flat fee')+'</td>' +
+      '<td>'+(isTimed ? (mins/60).toFixed(2)+' hrs' : '—')+'</td></tr>';
+  }).join('');
+
+  const contact = cust ? [cust.name, cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—';
+  const boatDesc = boat ? (boat.model + (boat.boatName ? ' "'+boat.boatName+'"' : '') + (boat.loa ? ' ('+boat.loa+')' : '')) : '—';
+
+  document.getElementById('missingWoDetail').innerHTML =
+    '<div class="billing-detail" style="border-color:var(--danger);background:var(--danger-bg);">' +
+      '<button class="billing-close" onclick="document.getElementById(\'missingWoDetail\').innerHTML=\'\';" title="Close">&times;</button>' +
+      '<h3>No work order yet</h3>' +
+      '<div class="b-contact">'+contact+'<br>'+boatDesc+'</div>' +
+      '<table class="billing-table"><thead><tr><th>Task</th><th>Type</th><th>Hours</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="3">Nothing here.</td></tr>') +
+      '</tbody></table>' +
+      '<div class="billing-total">Total hours so far: '+totalHours.toFixed(2)+'</div>' +
+    '</div>';
+}
+// ---- Flagged as Incompletable: tasks the phone crew marked as unable to
+// complete as-is. These live in Active Tasks (status: 'flagged') rather
+// than Completed Tasks -- the job isn't done, it's blocked -- so this
+// reads straight from DATA.tasks (already loaded for every dashboard
+// tab) instead of the Billing-only Completed Tasks fetch above.
+function flaggedTaskJobs(){
+  const byKey = {};
+  (DATA.tasks || []).filter(t => t.status === 'flagged').forEach(t => {
+    if (!t.boatId) return;
+    const wo = String(t.workOrder || '');
+    const key = t.boatId + '||' + wo;
+    if (!byKey[key]) byKey[key] = { boatId: t.boatId, workOrder: wo, tasks: [] };
+    byKey[key].tasks.push(t);
+  });
+  return Object.values(byKey);
+}
+function renderFlaggedTasksList(){
+  const wrap = document.getElementById('flaggedTasksList');
+  const box = document.getElementById('flaggedTasksBox');
+  if (!DATA) return;
+  const jobs = flaggedTaskJobs();
+
+  if (jobs.length === 0){
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  wrap.innerHTML = jobs.map(j => {
+    const boat = boatById(j.boatId);
+    const cust = boat ? customerById(boat.customerId) : null;
+    const who = (cust ? cust.name : '—') + (boat && boat.model ? ' — ' + boat.model : '');
+    return '<div class="billing-row" onclick="renderFlaggedTaskDetail(\''+j.boatId+'\',\''+String(j.workOrder).replace(/'/g,"\\'")+'\')">' +
+      '<div><div class="b-who">'+who+'</div>' +
+      '<div class="b-meta">'+(j.workOrder ? 'WO '+j.workOrder+' · ' : 'No work order · ')+j.tasks.length+' task(s) flagged as incompletable</div></div>' +
+    '</div>';
+  }).join('');
+}
+function renderFlaggedTaskDetail(boatId, workOrder){
+  const boat = boatById(boatId);
+  const cust = boat ? customerById(boat.customerId) : null;
+  const tasks = (DATA.tasks || []).filter(t => t.boatId === boatId && t.status === 'flagged' && String(t.workOrder || '') === String(workOrder));
+
+  const rows = tasks.map(t => '<tr><td>'+t.name+'</td><td>'+(t.note ? t.note : '—')+'</td></tr>').join('');
+  const contact = cust ? [cust.name, cust.phone, cust.email, cust.address].filter(Boolean).join(' · ') : '—';
+  const boatDesc = boat ? (boat.model + (boat.boatName ? ' "'+boat.boatName+'"' : '') + (boat.loa ? ' ('+boat.loa+')' : '')) : '—';
+
+  document.getElementById('flaggedTasksDetail').innerHTML =
+    '<div class="billing-detail" style="border-color:var(--caution-border);background:var(--caution-bg);">' +
+      '<button class="billing-close" onclick="document.getElementById(\'flaggedTasksDetail\').innerHTML=\'\';" title="Close">&times;</button>' +
+      '<h3>Flagged — Can\'t Complete</h3>' +
+      '<div class="b-contact">'+contact+'<br>'+boatDesc+'</div>' +
+      '<table class="billing-table"><thead><tr><th>Task</th><th>Note</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="2">Nothing here.</td></tr>') +
+      '</tbody></table>' +
+    '</div>';
+}
+async function copyBillingSummary(boatId, workOrder){
+  const boat = boatById(boatId);
+  const cust = boat ? customerById(boat.customerId) : null;
+  const completed = (DATA.completedTasks || []).filter(t => t.boatId === boatId && String(t.workOrder) === String(workOrder));
+  const entries = (DATA.entries || []).filter(e => e.boatId === boatId && String(e.workOrder) === String(workOrder));
+
+  const completedByTaskId = {};
+  completed.forEach(t => { completedByTaskId[t.taskId] = t; });
+  const hoursByTaskId = {};
+  const nameFromEntry = {};
+  entries.forEach(e => {
+    hoursByTaskId[e.taskId] = (hoursByTaskId[e.taskId] || 0) + Number(e.durationMin || 0);
+    nameFromEntry[e.taskId] = e.taskName;
+  });
+  const allTaskIds = Array.from(new Set([...Object.keys(completedByTaskId), ...Object.keys(hoursByTaskId)]));
+
+  let totalHours = 0;
+  const lines = allTaskIds.map(taskId => {
+    const ct = completedByTaskId[taskId];
+    const mins = hoursByTaskId[taskId] || 0;
+    const name = ct ? ct.name : (nameFromEntry[taskId] || '(unnamed task)');
+    const isTimed = ct ? String(ct.billMode||'').trim().toLowerCase() !== 'complete' : (taskId in hoursByTaskId);
+    if (isTimed) totalHours += mins / 60;
+    return '  - ' + name + ': ' + (isTimed ? (mins/60).toFixed(2) + ' hrs' : 'Flat fee');
+  });
+
+  const parts = (DATA.parts || []).filter(p => p.boatId === boatId && String(p.workOrder) === String(workOrder));
+  let partsTotal = 0;
+  const partLines = parts.map(p => {
+    const qty = Number(p.quantity) || 1;
+    const price = Number(p.listPrice) || 0;
+    const lineTotal = qty * price;
+    partsTotal += lineTotal;
+    return '  - ' + p.partName + (p.partNumber ? ' (' + p.partNumber + ')' : '') + ': ' + qty + ' @ ' + (price ? '$'+price.toFixed(2) : '—') + (lineTotal ? ' = $'+lineTotal.toFixed(2) : '');
+  });
+
+  const text = [
+    'Work Order ' + workOrder,
+    cust ? cust.name : '',
+    cust ? [cust.phone, cust.email].filter(Boolean).join(' · ') : '',
+    cust ? cust.address : '',
+    boat ? (boat.model + (boat.boatName ? ' "'+boat.boatName+'"' : '')) : '',
+    '',
+    'Tasks:',
+    lines.join('\n'),
+    '',
+    'Total billable hours: ' + totalHours.toFixed(2),
+    '',
+    'Parts:',
+    partLines.length ? partLines.join('\n') : '  - None logged',
+    '',
+    'Parts total: $' + partsTotal.toFixed(2)
+  ].filter(Boolean).join('\n');
+
+  try{
+    await navigator.clipboard.writeText(text);
+    alert('Copied to clipboard.');
+  } catch(e){
+    prompt('Copy this summary:', text);
+  }
+}
+
+// ================== SLIP CHART ==================
+// Drag payloads are tagged with their source: "loc:<id>" for a boat sitting
+// in a slip, "boat:<id>" for a boat sitting in the yard (which has no
+// location row at all -- it's just a boat with no slip). The click-to-move
+// fallback reads the same distinction off DATA directly.
+
+function slipNumOf(l){
+  return parseInt((l.slipId.match(/\d+/) || ['0'])[0], 10);
+}
+function slipLabel(slipId){
+  const n = (slipId.match(/\d+/) || ['?'])[0];
+  return 'Slip ' + n;
+}
+function emptySlipsSorted(){
+  return DATA.locations.filter(l => !l.boatId).sort((a,b)=>slipNumOf(a)-slipNumOf(b));
+}
+function yardBoats(){
+  // any boat not currently sitting in a slip is, by definition, in the yard
+  const slipBoatIds = new Set(DATA.locations.filter(l => l.boatId).map(l => l.boatId));
+  return DATA.boats.filter(b => !slipBoatIds.has(b.boatId));
+}
+async function moveBoatUI(fromLocId, toLocId){
+  const res = await run('adminMoveBoat', { fromLocationId: fromLocId, toLocationId: toLocId });
+  if (res && res.error){ alert(res.error); return; }
+  await loadAll();
+}
+async function clearSlipUI(locId){
+  const res = await run('adminClearSlip', { locationId: locId });
+  if (res && res.error){ alert(res.error); return; }
+  await loadAll();
+}
+async function placeBoatInSlipUI(boatId, toLocId){
+  const res = await run('adminPlaceBoatInSlip', { boatId: boatId, toLocationId: toLocId });
+  if (res && res.error){ alert(res.error); return; }
+  await loadAll();
+}
+function onSlipDragStart(ev, locId){
+  ev.dataTransfer.setData('text/plain', 'loc:' + locId);
+}
+function onYardCardDragStart(ev, boatId){
+  ev.dataTransfer.setData('text/plain', 'boat:' + boatId);
+}
+function onSlipDragOver(ev){
+  ev.preventDefault();
+  ev.currentTarget.classList.add('drag-over');
+}
+function onSlipDragLeave(ev){
+  ev.currentTarget.classList.remove('drag-over');
+}
+// Only empty SLIPS are droppable targets -- land storage isn't a fixed
+// set of spots, so it uses the single yard drop zone below instead.
+async function onSlipDrop(ev, toLocId){
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drag-over');
+  const payload = ev.dataTransfer.getData('text/plain');
+  if (!payload) return;
+  const [kind, id] = payload.split(':');
+  if (kind === 'loc'){
+    if (id === toLocId) return;
+    await moveBoatUI(id, toLocId);
+  } else if (kind === 'boat'){
+    await placeBoatInSlipUI(id, toLocId);
+  }
+}
+async function onYardDrop(ev){
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drag-over');
+  const payload = ev.dataTransfer.getData('text/plain');
+  if (!payload) return;
+  const [kind, id] = payload.split(':');
+  if (kind === 'loc') await clearSlipUI(id);
+  // kind === 'boat' means it's already in the yard -- nothing to do
+}
+// Click-to-move fallback for anyone who'd rather not drag -- same pattern
+// as the prompt()-based edit flows used elsewhere in this dashboard.
+// The typed number IS the slip number (slip 1 -> enter 1, slip 42 -> enter
+// 42), with 0 reserved for the yard -- not a positional index into a list,
+// so the number you type always means the same slip regardless of which
+// others happen to be free.
+async function onSlipClick(locId){
+  const loc = DATA.locations.find(l => l.slipId === locId);
+  if (!loc || !loc.boatId) return; // nothing occupies an empty slot to move
+  const d = describeLocation(loc);
+  const emptySlips = emptySlipsSorted();
+  const emptyNums = emptySlips.map(slipNumOf).join(', ');
+
+  const pick = prompt('Move '+(d.model||'this boat')+(d.boatName?' "'+d.boatName+'"':'')+
+    ' to which slip? Enter 0 for yard/land storage, or a slip number.\n\nEmpty slips: '+(emptyNums||'none')+'\n\nEnter a number:');
+  if (pick === null) return;
+  const num = parseInt(pick, 10);
+  if (isNaN(num)){ alert('Not a valid choice.'); return; }
+  if (num === 0){ await clearSlipUI(locId); return; }
+  const target = emptySlips.find(l => slipNumOf(l) === num);
+  if (!target){ alert('Slip '+num+' isn\'t empty (or doesn\'t exist).'); return; }
+  await moveBoatUI(locId, target.slipId);
+}
+async function onYardCardClick(boatId){
+  const boat = boatById(boatId);
+  const d = describeBoat(boat);
+  const emptySlips = emptySlipsSorted();
+  if (emptySlips.length === 0){ alert('No empty slips available to move it to.'); return; }
+  const emptyNums = emptySlips.map(slipNumOf).join(', ');
+
+  const pick = prompt('Move '+(d.model||'this boat')+(d.boatName?' "'+d.boatName+'"':'')+
+    ' to which slip?\n\nEmpty slips: '+emptyNums+'\n\nEnter a slip number:');
+  if (pick === null) return;
+  const num = parseInt(pick, 10);
+  if (isNaN(num)){ alert('Not a valid choice.'); return; }
+  const target = emptySlips.find(l => slipNumOf(l) === num);
+  if (!target){ alert('Slip '+num+' isn\'t empty (or doesn\'t exist).'); return; }
+  await placeBoatInSlipUI(boatId, target.slipId);
+}
+function slipBoxHtml(loc){
+  const d = describeLocation(loc);
+  const occupied = !!loc.boatId;
+  const dragAttrs = occupied ? 'draggable="true" ondragstart="onSlipDragStart(event,\''+loc.slipId+'\')"' : '';
+  const dropAttrs = ' ondragover="onSlipDragOver(event)" ondragleave="onSlipDragLeave(event)" ondrop="onSlipDrop(event,\''+loc.slipId+'\')"';
+  return '<div class="slip-box'+(occupied?'':' empty')+'" '+dragAttrs+dropAttrs+
+    ' onclick="onSlipClick(\''+loc.slipId+'\')" title="'+(occupied ? 'Click to move, or drag onto an empty slip' : 'Empty')+'">' +
+    '<div class="slip-label">'+slipLabel(loc.slipId)+'</div>' +
+    (occupied
+      ? '<div class="slip-boat">'+(d.model||'—')+(d.boatName?' "'+d.boatName+'"':'')+'</div><div class="slip-owner">'+d.customerName+'</div>'
+      : '<div>Empty</div>') +
+    '</div>';
+}
+function yardCardHtml(boat){
+  const d = describeBoat(boat);
+  return '<div class="slip-box" draggable="true" ondragstart="onYardCardDragStart(event,\''+boat.boatId+'\')"'+
+    ' onclick="onYardCardClick(\''+boat.boatId+'\')" title="Click to move into a slip, or drag onto an empty slip">' +
+    '<div class="slip-label">'+(d.model||'—')+(d.boatName?' "'+d.boatName+'"':'')+'</div>' +
+    '<div class="slip-owner">'+d.customerName+'</div>' +
+    '</div>';
+}
+function renderChart(){
+  const slips = DATA.locations;
+  // sort by the number in the id/label (slip1, slip2, ... slip10) rather
+  // than plain string order (which would put slip10 before slip2)
+  slips.sort((a,b) => slipNumOf(a) - slipNumOf(b));
+
+  const chartWrap = document.getElementById('chartWrap');
+  chartWrap.innerHTML = slips.length === 0
+    ? '<div class="empty-note">No slips set up yet — add some below under "Manage slips".</div>'
+    : '<div class="chart-grid">' + slips.map(slipBoxHtml).join('') + '</div>';
+
+  const yb = yardBoats();
+  const filterTerm = (document.getElementById('yardFilter').value || '').trim().toLowerCase();
+  const ybFiltered = !filterTerm ? yb : yb.filter(b => {
+    const d = describeBoat(b);
+    return (d.customerName+' '+d.model+' '+d.boatName).toLowerCase().includes(filterTerm);
+  });
+  const yardWrap = document.getElementById('yardWrap');
+  yardWrap.innerHTML = yb.length === 0
+    ? '<div class="empty-note">Nothing in land storage right now.</div>'
+    : (ybFiltered.length === 0
+        ? '<div class="empty-note">No boats in the yard match that search.</div>'
+        : '<div class="yard-pool">' + ybFiltered.map(yardCardHtml).join('') + '</div>');
+}
+async function addSlip(){
+  const num = document.getElementById('newSlipNum').value.trim();
+  if (!num){ alert('Slip number is required.'); return; }
+  const id = 'slip' + num;
+  if (DATA.locations.some(l => l.slipId === id)){ alert('Slip '+num+' already exists.'); return; }
+  await run('adminAddLocation', { id, type:'slip', label:'Slip ' + num });
+  document.getElementById('newSlipNum').value = '';
+  await loadAll();
+}
+async function generateSlips(){
+  const count = parseInt(document.getElementById('slipCount').value, 10);
+  if (!count || count < 1){ alert('Enter a valid number of slips.'); return; }
+  const res = await run('adminGenerateSlips', count);
+  await loadAll();
+  alert('Added ' + res.created + ' new slip(s). Any slip numbers that already existed were left alone.');
+}
+async function editTask(id){
+  const task = DATA.tasks.find(t => t.taskId === id);
+  const name = prompt('Task name:', task.name); if (name === null) return;
+  await run('adminUpdateTask', { id, name });
+  await loadAll();
+}
+async function deleteTask(id){
+  if (!confirm('Delete this task?')) return;
+  await run('adminDeleteTask', id);
+  await loadAll();
+}
+async function deleteWorkOrder(boatId){
+  const boat = boatById(boatId);
+  const taskCount = DATA.tasks.filter(t => t.boatId === boatId).length;
+  const label = boat ? (boat.model + (boat.boatName ? ' "'+boat.boatName+'"' : '')) : 'this boat';
+  const wo = boat ? boat.currentWorkOrder : '';
+  if (!confirm('Delete work order' + (wo ? ' ' + wo : '') + ' for ' + label + '? This permanently deletes all ' + taskCount + ' task(s) under it -- not archived, gone entirely. This cannot be undone.')) return;
+  await run('adminDeleteWorkOrder', boatId);
+  await loadAll();
+}
+async function updateTaskPriority(id, selectEl){
+  const priority = parseInt(selectEl.value, 10);
+  await run('adminUpdateTask', { id, priority });
+  selectEl.className = 'task-draft-priority p' + priority;
+  const task = DATA.tasks.find(t => t.taskId === id);
+  if (task) task.priority = priority;
+}
+
+// ================== CUSTOMERS & BOATS ==================
+
+function renderCustomers(){
+  const wrap = document.getElementById('customersWrap');
+  if (DATA.customers.length === 0){ wrap.innerHTML = '<div class="empty-note">No customers yet.</div>'; return; }
+  wrap.innerHTML = DATA.customers.map(c=>{
+    const boats = DATA.boats.filter(b=>b.customerId===c.customerId);
+    return '<div class="loc-card">' +
+      '<div class="loc-head customer">' +
+        '<div><div class="loc-title">'+c.name+'</div>' +
+        '<div class="loc-sub">'+(c.phone?((c.phoneType?c.phoneType+' ':'')+c.phone):'—')+' · '+(c.email||'—')+'<br>'+(c.address||'—')+'</div></div>' +
+        '<div><button class="btn small" onclick="editCustomer(\''+c.customerId+'\')">Edit</button>' +
+        '<button class="btn small danger" onclick="deleteCustomer(\''+c.customerId+'\')">Delete</button></div>' +
+      '</div>' +
+      '<div class="loc-body">' +
+        (boats.length===0 ? '<div class="empty-note">No boats on file.</div>' : '') +
+        boats.map(b=>'<div class="task-line"><span class="name">'+b.model+(b.loa?' ('+b.loa+')':'')+(b.boatName?' — "'+b.boatName+'"':'')+'</span>' +
+          '<span><button class="btn small" onclick="editBoat(\''+b.boatId+'\')">Edit</button>' +
+          '<button class="btn small danger" onclick="deleteBoat(\''+b.boatId+'\')">Delete</button></span></div>').join('') +
+        '<div class="add-row">' +
+          '<input type="text" id="qNewBoatModel-'+c.customerId+'" placeholder="Boat model">' +
+          '<input type="text" id="qNewBoatName-'+c.customerId+'" placeholder="Boat name (optional)">' +
+          '<input type="text" id="qNewBoatLoa-'+c.customerId+'" placeholder="LOA (optional)" style="max-width:100px;">' +
+          '<button class="btn primary" onclick="addBoatToCustomer(\''+c.customerId+'\')">+ Add Boat</button>' +
+        '</div>' +
+      '</div></div>';
+  }).join('');
+}
+async function addCustomerTab(){
+  const name = document.getElementById('custName').value.trim();
+  if (!name){ alert('Customer name is required.'); return; }
+  await run('adminAddCustomer', {
+    name,
+    phone: document.getElementById('custPhone').value.trim(),
+    phoneType: document.getElementById('custPhoneType').value,
+    email: document.getElementById('custEmail').value.trim(),
+    address: document.getElementById('custAddress').value.trim()
+  });
+  ['custName','custPhone','custPhoneType','custEmail','custAddress'].forEach(f => document.getElementById(f).value = '');
+  await loadAll();
+}
+async function editCustomer(id){
+  const c = customerById(id);
+  const name = prompt('Customer name:', c.name); if (name===null) return;
+  const phone = prompt('Phone:', c.phone); if (phone===null) return;
+  const phoneType = prompt('Phone type (Cell/Home/Work/Office, or blank):', c.phoneType || ''); if (phoneType===null) return;
+  const email = prompt('Email:', c.email); if (email===null) return;
+  const address = prompt('Address:', c.address); if (address===null) return;
+  await run('adminUpdateCustomer', { id, name, phone, phoneType, email, address });
+  await loadAll();
+}
+async function deleteCustomer(id){
+  if (!confirm('Delete this customer? (Blocked if they still have boats on file.)')) return;
+  const res = await run('adminDeleteCustomer', id);
+  if (res && res.error){ alert(res.error); return; }
+  await loadAll();
+}
+async function addBoatToCustomer(customerId){
+  const model = document.getElementById('qNewBoatModel-'+customerId).value.trim();
+  const boatName = document.getElementById('qNewBoatName-'+customerId).value.trim();
+  const loa = document.getElementById('qNewBoatLoa-'+customerId).value.trim();
+  if (!model){ alert('Boat model is required.'); return; }
+  await run('adminAddBoat', { customerId, model, boatName, loa });
+  await loadAll();
+}
+async function editBoat(id){
+  const b = boatById(id);
+  const model = prompt('Boat model:', b.model); if (model===null) return;
+  const boatName = prompt('Boat name:', b.boatName); if (boatName===null) return;
+  const loa = prompt('LOA / length:', b.loa); if (loa===null) return;
+  await run('adminUpdateBoat', { id, model, boatName, loa });
+  await loadAll();
+}
+async function deleteBoat(id){
+  if (!confirm('Delete this boat? (Blocked if it is currently assigned to a slip/stand.)')) return;
+  const res = await run('adminDeleteBoat', id);
+  if (res && res.error){ alert(res.error); return; }
+  await loadAll();
+}
+
+// ================== EMPLOYEES ==================
+
+function renderEmployees(){
+  const wrap = document.getElementById('empWrap');
+  wrap.innerHTML = '<table><tbody>' +
+    DATA.employees.map(n => '<tr><td>'+n+'</td><td style="text-align:right;">' +
+      '<button class="btn small danger" onclick="deleteEmployee(\''+n+'\')">Remove</button></td></tr>').join('') +
+    '</tbody></table>';
+}
+async function addEmployee(){
+  const input = document.getElementById('newEmpName');
+  const name = input.value.trim();
+  if (!name) return;
+  if (DATA.employees.includes(name)){ alert('That name is already on the list.'); return; }
+  await run('adminAddEmployee', name);
+  input.value = '';
+  await loadAll();
+}
+async function deleteEmployee(name){
+  if (!confirm('Remove ' + name + ' from the employee list?')) return;
+  await run('adminDeleteEmployee', name);
+  await loadAll();
+}
+
+// ======================= startup & auto-refresh =======================
+let lastUpdatedAt = 0;
+let refreshInFlight = false;
+let formDirtySince = 0;   // set when someone types/changes a field; cleared by any save (see run())
+const DIRTY_HOLD_MS = 5 * 60000;
+
+['input', 'change'].forEach(evt => document.addEventListener(evt, (e) => {
+  if (e.target && e.target.closest && e.target.closest('#loginOverlay')) return;
+  formDirtySince = Date.now();
+}, true));
+
+function userIsEditing_(){
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return true;
+  return formDirtySince && (Date.now() - formDirtySince) < DIRTY_HOLD_MS;
+}
+function activeTab_(){
+  const b = document.querySelector('.tab-btn.active');
+  return b ? b.dataset.tab : '';
+}
+function updateStamp_(note){
+  const el = document.getElementById('updatedStamp');
+  if (note){ el.textContent = note; el.classList.add('warn'); return; }
+  el.classList.remove('warn');
+  if (!lastUpdatedAt){ el.textContent = 'Loading…'; return; }
+  const secs = Math.round((Date.now() - lastUpdatedAt) / 1000);
+  let ago = secs < 10 ? 'just now' : secs < 60 ? secs + 's ago' : Math.round(secs / 60) + ' min ago';
+  el.textContent = 'Updated ' + ago + (userIsEditing_() && secs >= 60 ? ' · auto-refresh paused while editing' : '');
+}
+
+async function refreshNow_(manual){
+  if (refreshInFlight || !ADMIN_KEY || loginVisible_()) return;
+  if (!manual && (document.visibilityState !== 'visible' || userIsEditing_())){ updateStamp_(); return; }
+  refreshInFlight = true;
+  try {
+    await loadAll();
+    const tab = activeTab_();
+    if (tab === 'billing') await loadBillingData();
+    else if (tab === 'qbimports') await loadQBImportsTab();
+    lastUpdatedAt = Date.now();
+    updateStamp_();
+  } catch(e){
+    if (!loginVisible_()) updateStamp_('Could not refresh — will retry');
+  } finally {
+    refreshInFlight = false;
+  }
+}
+
+async function startAdmin_(){
+  for (;;){
+    if (!ADMIN_KEY) await waitForLogin_();
+    try {
+      await loadAll();
+      lastUpdatedAt = Date.now();
+      updateStamp_();
+      return;
+    } catch(e){
+      if (loginVisible_()){ await waitForLogin_(document.getElementById('loginMsg').textContent); continue; }
+      updateStamp_('Could not load — retrying');
+      await new Promise(r => setTimeout(r, 15000));
+    }
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  if (userIsEditing_() && !confirm('Refresh now? Anything typed but not yet saved may be cleared.')) return;
+  formDirtySince = 0;
+  refreshNow_(true);
+});
+setInterval(() => refreshNow_(false), 30000);
+setInterval(() => updateStamp_(), 5000);
+window.addEventListener('focus', () => { if (Date.now() - lastUpdatedAt > 10000) refreshNow_(false); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - lastUpdatedAt > 10000) refreshNow_(false);
+});
+
+let initialLoadPromise = startAdmin_();
+</script>
+</body>
+</html>
