@@ -298,7 +298,7 @@
 <!-- QUICKBOOKS IMPORTS -->
 <div class="panel show" id="panel-qbimports">
   <h2>QuickBooks Imports</h2>
-  <p class="subtext">Click an estimate to open it. Edit to fix the name or tasks. Post Work Order to pick the boat and slip. Delete to remove it from this list.</p>
+  <p class="subtext">Click an estimate to open it. Edit to fix the name or tasks. Post Work Order to pick the boat and slip and send it to the techs. Delete to remove it from this list.</p>
   <div id="qbImportDetail"></div>
   <div id="qbImportsList" class="loading">Loading…</div>
 </div>
@@ -1382,12 +1382,14 @@ function escapeHtml(s){
 }
 function closeQBImportDetail(){
   qbEditDraft = null;
+  qbPostState = null;
   document.getElementById('qbImportDetail').innerHTML = '';
 }
 function previewQBImport(importId){
   const imp = (DATA.qbPendingImports || []).find(i => i.importId === importId);
   if (!imp) return;
   qbEditDraft = null;
+  qbPostState = null;
   const rows = (imp.lineItems || []).map(li =>
     '<tr><td>'+escapeHtml(li.name)+'</td><td>'+(li.billModeGuess === 'complete' ? 'Completion' : 'Timed')+'</td>' +
     '<td>'+(li.quotedAmount != null && li.quotedAmount !== '' ? '$'+Number(li.quotedAmount).toFixed(2) : '—')+'</td></tr>'
@@ -1401,10 +1403,182 @@ function previewQBImport(importId){
       '<table class="billing-table"><thead><tr><th>Task</th><th>Billing (best guess)</th><th>Quoted</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="3">No line items came through for this one.</td></tr>') +
       '</tbody></table>' +
-      '<button class="btn primary" onclick="useQBImport(\''+id+'\')">Post Work Order</button> ' +
+      '<button class="btn primary" onclick="openQBPost(\''+id+'\')">Post Work Order</button> ' +
       '<button class="btn" onclick="editQBImport(\''+id+'\')">Edit</button> ' +
       '<button class="btn danger" onclick="deleteQBImport(\''+id+'\')">Delete</button>' +
     '</div>';
+}
+
+// ---- Post Work Order: right here on this tab ----
+// A QuickBooks estimate has no boat or slip on it, so those are picked
+// here -- pre-filled whenever the answer is obvious (customer name matches
+// exactly, customer has one boat, boat's current spot). If everything
+// matches, posting is one more click.
+let qbPostState = null;
+function qbCurrentLoc_(boatId){
+  const l = DATA.locations.find(l => l.boatId === boatId);
+  return l ? l.slipId : '__yard__';
+}
+function openQBPost(importId){
+  const imp = (DATA.qbPendingImports || []).find(i => i.importId === importId);
+  if (!imp) return;
+  qbEditDraft = null;
+  const rawName = (imp.rawCustomerName || '').trim();
+  const match = DATA.customers.find(c => c.name.trim().toLowerCase() === rawName.toLowerCase());
+  qbPostState = {
+    importId: importId, newCustName: rawName,
+    newBoatModel: '', newBoatName: '', newBoatLoa: '', posting: false
+  };
+  qbPostSetCustomer_(match ? match.customerId : '__new__');
+  renderQBPost();
+}
+function qbPostSetCustomer_(customerId){
+  const st = qbPostState;
+  st.customerId = customerId;
+  if (customerId === '__new__'){ st.boatId = '__new__'; }
+  else {
+    const boats = DATA.boats.filter(b => b.customerId === customerId);
+    st.boatId = boats.length === 1 ? boats[0].boatId : '';
+  }
+  qbPostSetBoat_(st.boatId);
+}
+function qbPostSetBoat_(boatId){
+  const st = qbPostState;
+  st.boatId = boatId;
+  st.locId = !boatId ? '' : (boatId === '__new__' ? '__yard__' : qbCurrentLoc_(boatId));
+}
+// The task list that will actually be posted: the estimate's tasks, plus
+// a move line when the boat is going somewhere other than where it is
+// now (same rule as Manual Work Order).
+function qbPostTasks_(imp){
+  const st = qbPostState;
+  const tasks = (imp.lineItems || []).map(li => ({ name: li.name, billMode: li.billModeGuess === 'complete' ? 'complete' : 'timed', priority: 2 }));
+  if (st.boatId && st.boatId !== '__new__' && st.locId){
+    const from = qbCurrentLoc_(st.boatId);
+    if (from !== st.locId){
+      const line = st.locId === '__yard__' ? 'Haul and block up boat' : ('Move from ' + locDisplayLabel(from) + ' to ' + locDisplayLabel(st.locId));
+      tasks.unshift({ name: line, billMode: 'timed', priority: 2, auto: true });
+    }
+  }
+  return tasks;
+}
+function qbPostWarnings_(){
+  const st = qbPostState, out = [];
+  if (st.boatId && st.boatId !== '__new__'){
+    const unfinished = DATA.tasks.filter(t => t.boatId === st.boatId && t.status !== 'done');
+    if (unfinished.length) out.push('This boat has ' + unfinished.length + ' unfinished task(s) from before. Posting moves them to Completed Tasks and replaces them with this list.');
+  }
+  if (st.locId && st.locId !== '__yard__'){
+    const loc = DATA.locations.find(l => l.slipId === st.locId);
+    if (loc && loc.boatId && loc.boatId !== st.boatId){
+      const bd = describeBoat(boatById(loc.boatId));
+      out.push(slipLabel(st.locId) + ' currently has ' + bd.customerName + ' (' + bd.model + ') in it. That boat will be moved to the yard.');
+    }
+  }
+  return out;
+}
+function renderQBPost(){
+  const st = qbPostState;
+  if (!st) return;
+  const imp = (DATA.qbPendingImports || []).find(i => i.importId === st.importId);
+  if (!imp){ closeQBImportDetail(); return; }
+  const opt = (v, label, sel) => '<option value="'+escapeAttr(v)+'"'+(sel?' selected':'')+'>'+escapeHtml(label)+'</option>';
+
+  const customers = DATA.customers.slice().sort((a,b) => a.name.localeCompare(b.name));
+  const custSel = opt('__new__', '+ New customer', st.customerId === '__new__') +
+    customers.map(c => opt(c.customerId, c.name, c.customerId === st.customerId)).join('');
+
+  let boatSel;
+  if (st.customerId === '__new__') boatSel = opt('__new__', '+ New boat', true);
+  else {
+    const boats = DATA.boats.filter(b => b.customerId === st.customerId);
+    boatSel = opt('', '— Select boat —', !st.boatId) +
+      boats.map(b => opt(b.boatId, b.model + (b.loa ? ' (' + b.loa + ')' : '') + (b.boatName ? ' — "' + b.boatName + '"' : ''), b.boatId === st.boatId)).join('') +
+      opt('__new__', '+ New boat', st.boatId === '__new__');
+  }
+
+  const cur = st.boatId && st.boatId !== '__new__' ? qbCurrentLoc_(st.boatId) : null;
+  const locSel = opt('', '— Select slip or yard —', !st.locId) +
+    opt('__yard__', 'Yard / Land Storage' + (cur === '__yard__' ? ' (where it is now)' : ''), st.locId === '__yard__') +
+    DATA.locations.slice().sort((a,b) => slipNumOf(a) - slipNumOf(b)).map(l => {
+      const d = describeLocation(l);
+      const label = slipLabel(l.slipId) + (l.slipId === cur ? ' (where it is now)' : (l.boatId ? ' — currently ' + d.customerName + (d.model ? ' / ' + d.model : '') : ' — empty'));
+      return opt(l.slipId, label, l.slipId === st.locId);
+    }).join('');
+
+  const tasks = qbPostTasks_(imp);
+  const warns = qbPostWarnings_();
+  const wo = imp.qbNum ? ('WO #' + imp.qbNum) : '';
+
+  document.getElementById('qbImportDetail').innerHTML =
+    '<div class="billing-detail">' +
+      '<button class="billing-close" onclick="closeQBImportDetail()" title="Close">&times;</button>' +
+      '<h3>Post Estimate ' + escapeHtml(imp.qbNum || '—') + '</h3>' +
+      '<label>Customer</label><select id="qbPostCustomer" onchange="qbPostSetCustomer_(this.value); renderQBPost()">' + custSel + '</select>' +
+      (st.customerId === '__new__' ? '<input type="text" id="qbPostNewCust" placeholder="New customer name" value="' + escapeAttr(st.newCustName) + '" oninput="qbPostState.newCustName=this.value">' : '') +
+      '<label>Boat</label><select id="qbPostBoat" onchange="qbPostSetBoat_(this.value); renderQBPost()">' + boatSel + '</select>' +
+      (st.boatId === '__new__' ?
+        '<div class="form-grid">' +
+          '<input type="text" id="qbPostBoatModel" placeholder="Boat model (required)" value="' + escapeAttr(st.newBoatModel) + '" oninput="qbPostState.newBoatModel=this.value">' +
+          '<input type="text" id="qbPostBoatName" placeholder="Boat name (optional)" value="' + escapeAttr(st.newBoatName) + '" oninput="qbPostState.newBoatName=this.value">' +
+          '<input type="text" id="qbPostBoatLoa" placeholder="LOA (optional)" value="' + escapeAttr(st.newBoatLoa) + '" oninput="qbPostState.newBoatLoa=this.value">' +
+        '</div>' : '') +
+      '<label>Slip or yard</label><select id="qbPostLoc" onchange="qbPostState.locId=this.value; renderQBPost()">' + locSel + '</select>' +
+      '<div class="review-box">' +
+        warns.map(w => '<div class="warn">' + escapeHtml(w) + '</div>').join('') +
+        '<p><b>' + escapeHtml(wo || 'No work order #') + '</b> — ' + tasks.length + ' task(s):</p>' +
+        '<ul>' + tasks.map(t => '<li>' + escapeHtml(t.name) + ' <span style="color:var(--slate);">— ' + (t.billMode === 'timed' ? 'Timed' : 'Completion') + (t.auto ? ', added for the move' : '') + '</span></li>').join('') + '</ul>' +
+        '<button class="btn primary big" id="qbPostBtn" onclick="postQBImport()"' + (st.posting ? ' disabled' : '') + '>' + (st.posting ? 'Posting…' : 'Post Work Order') + '</button>' +
+        '<button class="btn" style="width:100%;margin-top:8px;" onclick="previewQBImport(\'' + escapeAttr(st.importId) + '\')">Cancel</button>' +
+        '<p style="text-align:center;margin-top:10px;"><a href="#" onclick="useQBImport(\'' + escapeAttr(st.importId) + '\'); return false;">Need priorities or other changes? Open in Manual Work Order</a></p>' +
+      '</div>' +
+    '</div>';
+}
+async function postQBImport(){
+  const st = qbPostState;
+  if (!st || st.posting) return;
+  const imp = (DATA.qbPendingImports || []).find(i => i.importId === st.importId);
+  if (!imp) return;
+  if (st.customerId === '__new__' && !st.newCustName.trim()){ alert('Enter the new customer\'s name.'); return; }
+  if (!st.boatId){ alert('Pick the boat.'); return; }
+  if (st.boatId === '__new__' && !st.newBoatModel.trim()){ alert('Enter the new boat\'s model.'); return; }
+  if (!st.locId){ alert('Pick a slip or the yard.'); return; }
+  const tasks = qbPostTasks_(imp).map(t => ({ name: t.name, billMode: t.billMode, priority: t.priority }));
+  if (tasks.length === 0){ alert('This estimate has no tasks. Use Edit to add some.'); return; }
+  const warns = qbPostWarnings_();
+  if (warns.length && !confirm(warns.join('\n\n') + '\n\nPost anyway?')) return;
+
+  st.posting = true; renderQBPost();
+  try {
+    let customerId = st.customerId;
+    if (customerId === '__new__'){
+      const res = await run('adminAddCustomer', { name: st.newCustName.trim(), phone: '', phoneType: '', email: '', address: '' });
+      if (res && res.error) throw new Error('could not add the customer: ' + res.error);
+      customerId = res.id;
+    }
+    let boatId = st.boatId;
+    if (boatId === '__new__'){
+      const res = await run('adminAddBoat', { customerId: customerId, model: st.newBoatModel.trim(), boatName: st.newBoatName.trim(), loa: st.newBoatLoa.trim() });
+      if (res && res.error) throw new Error('could not add the boat: ' + res.error);
+      boatId = res.id;
+    }
+    const result = await run('adminAssignWorkOrder', {
+      locationId: st.locId === '__yard__' ? '' : st.locId,
+      boatId: boatId,
+      workOrder: imp.qbNum ? ('WO #' + imp.qbNum) : '',
+      tasks: tasks
+    });
+    if (result && result.error) throw new Error(result.error);
+    await run('adminMarkQBImportUsed', st.importId);
+  } catch (err) {
+    st.posting = false; renderQBPost();
+    alert('Could not post this work order: ' + (err && err.message ? err.message : err));
+    return;
+  }
+  closeQBImportDetail();
+  await loadAll();
+  await loadQBImportsTab();
+  alert('Posted. The techs will see it on their phones at the next refresh.');
 }
 
 // ---- Edit: fix the customer name and tasks before posting ----
