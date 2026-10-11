@@ -185,12 +185,15 @@
   details.manage-box .form-grid{ margin-top:6px; }
 
   /* ---------- GitHub Pages additions: status bar, passcode screen, stale-build strip ---------- */
-  .status-bar{ display:flex; align-items:center; gap:12px; padding:8px 16px; background:var(--ink); color:#dfe8ee; font-size:12.5px; }
-  .status-bar .brand{ font-weight:800; color:var(--white); margin-right:auto; letter-spacing:.2px; }
-  .status-bar .stamp{ opacity:.85; }
-  .status-bar .stamp.warn{ color:#ffd27a; opacity:1; font-weight:700; }
-  .status-bar button{ background:transparent; color:var(--white); border:1px solid rgba(255,255,255,.35); border-radius:6px; padding:5px 11px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; }
-  .status-bar button:hover{ background:rgba(255,255,255,.1); }
+  /* Same look as the phone page's connection strip (index.html .demo-strip):
+     a slim dark bar with a colored dot -- green Online, red Offline, grey
+     Connecting. */
+  .status-bar{ background:#0a1a2b; color:#cfe0ea; font-size:12px; padding:8px 14px; display:flex; align-items:center; justify-content:space-between; letter-spacing:.02em; }
+  .status-bar .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:6px; position:relative; top:-1px; }
+  .dot.on{ background:#4fd18b; } .dot.off{ background:#e0705a; } .dot.connecting{ background:#a9b7c0; }
+  .status-bar .bar-actions{ display:flex; gap:14px; }
+  .status-bar button{ background:none; border:none; padding:0; color:#cfe0ea; font-size:12px; letter-spacing:.02em; cursor:pointer; font-family:inherit; opacity:.8; }
+  .status-bar button:hover{ opacity:1; text-decoration:underline; }
   .build-stale-strip{ display:none; align-items:center; gap:12px; padding:10px 16px; background:var(--amber-bg); color:var(--amber); font-size:13px; font-weight:700; border-bottom:1px solid var(--caution-border); }
   .build-stale-strip.show{ display:flex; }
   .build-stale-strip button{ margin-left:auto; }
@@ -213,10 +216,11 @@
 </div>
 
 <div class="status-bar">
-  <span class="brand">Nelson Marine — Office</span>
-  <span class="stamp" id="updatedStamp">Loading…</span>
-  <button id="refreshBtn" title="Get the latest data now">Refresh</button>
-  <button id="logoutBtn" title="Forget the passcode on this computer">Log out</button>
+  <span id="connStatus"><span class="dot connecting" id="connDot"></span><span id="connLabel">Connecting…</span></span>
+  <span class="bar-actions">
+    <button id="refreshBtn" title="Get the latest data now">Refresh</button>
+    <button id="logoutBtn" title="Forget the passcode on this computer">Log out</button>
+  </span>
 </div>
 
 <div class="login-overlay" id="loginOverlay">
@@ -2144,29 +2148,43 @@ function activeTab_(){
   const b = document.querySelector('.tab-btn.active');
   return b ? b.dataset.tab : '';
 }
-function updateStamp_(note){
-  const el = document.getElementById('updatedStamp');
-  if (note){ el.textContent = note; el.classList.add('warn'); return; }
-  el.classList.remove('warn');
-  if (!lastUpdatedAt){ el.textContent = 'Loading…'; return; }
-  const secs = Math.round((Date.now() - lastUpdatedAt) / 1000);
-  let ago = secs < 10 ? 'just now' : secs < 60 ? secs + 's ago' : Math.round(secs / 60) + ' min ago';
-  el.textContent = 'Updated ' + ago + (userIsEditing_() && secs >= 60 ? ' · auto-refresh paused while editing' : '');
+// Connection strip, same states and wording as the phone page:
+// Connecting… (grey) until the first load, Online (green) while loads
+// succeed, Offline (red) after one fails -- auto-refresh keeps retrying
+// and flips it back to Online on the next success. Hovering shows when
+// the data was last updated.
+let connState = 'connecting';
+function setConn_(state){
+  connState = state;
+  document.getElementById('connDot').className = 'dot ' + (state === 'online' ? 'on' : state === 'offline' ? 'off' : 'connecting');
+  document.getElementById('connLabel').textContent =
+    state === 'online' ? 'Online' : state === 'offline' ? 'Offline — retrying' : state === 'syncing' ? 'Syncing…' : 'Connecting…';
+  updateStamp_();
 }
+function updateStamp_(){
+  const el = document.getElementById('connStatus');
+  if (!lastUpdatedAt){ el.title = ''; return; }
+  const secs = Math.round((Date.now() - lastUpdatedAt) / 1000);
+  const ago = secs < 10 ? 'just now' : secs < 60 ? secs + ' seconds ago' : Math.round(secs / 60) + ' min ago';
+  el.title = 'Last updated ' + ago + (userIsEditing_() ? ' (auto-refresh paused while you are editing)' : '');
+}
+window.addEventListener('offline', () => setConn_('offline'));
+window.addEventListener('online', () => refreshNow_(true));
 
 async function refreshNow_(manual){
   if (refreshInFlight || !ADMIN_KEY || loginVisible_()) return;
   if (!manual && (document.visibilityState !== 'visible' || userIsEditing_())){ updateStamp_(); return; }
   refreshInFlight = true;
+  if (manual) setConn_('syncing');
   try {
     await loadAll();
     const tab = activeTab_();
     if (tab === 'billing') await loadBillingData();
     else if (tab === 'qbimports') await loadQBImportsTab();
     lastUpdatedAt = Date.now();
-    updateStamp_();
+    setConn_('online');
   } catch(e){
-    if (!loginVisible_()) updateStamp_('Could not refresh — will retry');
+    if (!loginVisible_()) setConn_('offline');
   } finally {
     refreshInFlight = false;
   }
@@ -2178,11 +2196,11 @@ async function startAdmin_(){
     try {
       await loadAll();
       lastUpdatedAt = Date.now();
-      updateStamp_();
+      setConn_('online');
       return;
     } catch(e){
       if (loginVisible_()){ await waitForLogin_(document.getElementById('loginMsg').textContent); continue; }
-      updateStamp_('Could not load — retrying');
+      setConn_('offline');
       await new Promise(r => setTimeout(r, 15000));
     }
   }
