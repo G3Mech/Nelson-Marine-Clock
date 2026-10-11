@@ -234,7 +234,7 @@
 </div>
 
 <div class="tabs">
-  <button class="tab-btn active" data-tab="assign">Assign Work Order</button>
+  <button class="tab-btn active" data-tab="assign">Manual Work Order</button>
   <button class="tab-btn" data-tab="qbimports">QuickBooks Imports</button>
   <button class="tab-btn" data-tab="billing">Billing</button>
   <button class="tab-btn" data-tab="log">Today's Log</button>
@@ -247,7 +247,7 @@
 
 <!-- ASSIGN WORK ORDER -->
 <div class="panel show" id="panel-assign">
-  <h2>Assign a Work Order</h2>
+  <h2>Manual Work Order</h2>
   <p class="subtext">Find the customer, pick the boat and slip, enter the work order number, add the tasks, then press Review &amp; Save.</p>
 
   <label>Customer</label>
@@ -1348,7 +1348,7 @@ function previewQBImport(importId){
       '<table class="billing-table"><thead><tr><th>Task</th><th>Billing (best guess — adjust after)</th><th>Quoted</th></tr></thead><tbody>' +
       (rows || '<tr><td colspan="3">No line items came through for this one.</td></tr>') +
       '</tbody></table>' +
-      '<button class="btn primary" onclick="useQBImport(\''+importId+'\')">Use This — Go to Assign Work Order</button> ' +
+      '<button class="btn primary" onclick="useQBImport(\''+importId+'\')">Use This — Go to Manual Work Order</button> ' +
       '<button class="btn danger" onclick="dismissQBImport(\''+importId+'\')">Dismiss</button>' +
     '</div>';
 }
