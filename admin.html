@@ -1388,14 +1388,21 @@ async function loadQBImportsTab(){
   DATA.qbPendingImports = await run('adminGetPendingQBImports');
   renderQBImportsTab();
 }
+// Failed uploads: when the office PC's watcher can't use an export file,
+// it reports that through the same import route, as an entry whose qbNum
+// starts with "UPLOAD-FAILED-" (file name in rawCustomerName, reason as
+// its one line). Those are never estimates, so they're kept out of the
+// normal list (and its Post/Edit buttons) and shown in the red box below.
+const QB_FAIL_PREFIX = 'UPLOAD-FAILED-';
+function isQBFailure_(imp){ return String(imp.qbNum || '').indexOf(QB_FAIL_PREFIX) === 0; }
 function renderQBImportsTab(){
   const wrap = document.getElementById('qbImportsList');
-  const imports = DATA.qbPendingImports || [];
-  if (imports.length === 0){
-    wrap.innerHTML = '<div class="empty-note">Nothing waiting to be imported right now.</div>';
-    return;
-  }
-  wrap.innerHTML = imports.map(imp => {
+  const all = DATA.qbPendingImports || [];
+  const imports = all.filter(imp => !isQBFailure_(imp));
+  const failures = all.filter(isQBFailure_);
+  const listHtml = imports.length === 0
+    ? '<div class="empty-note">Nothing waiting to be imported right now.</div>'
+    : imports.map(imp => {
     const lineCount = (imp.lineItems || []).length;
     const when = imp.qbDate ? new Date(imp.qbDate).toLocaleDateString() : '—';
     return '<div class="billing-row" onclick="previewQBImport(\''+imp.importId+'\')">' +
@@ -1403,6 +1410,28 @@ function renderQBImportsTab(){
       '<div class="b-meta">Estimate '+escapeHtml(imp.qbNum || '—')+' · '+when+' · '+lineCount+' task(s)</div></div>' +
     '</div>';
   }).join('');
+  wrap.innerHTML = listHtml + renderQBFailures_(failures);
+}
+function renderQBFailures_(failures){
+  if (!failures.length) return '';
+  const n = failures.length;
+  return '<div class="billing-detail" style="border-color:var(--danger);background:var(--danger-bg);">' +
+    '<h3 style="color:var(--danger);">' + n + ' upload' + (n === 1 ? '' : 's') + ' failed</h3>' +
+    failures.map(f => {
+      const reason = ((f.lineItems || [])[0] || {}).name || 'No reason given';
+      const when = f.importedAt ? new Date(f.importedAt).toLocaleString() : '';
+      return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 0;border-top:1px solid var(--line);">' +
+        '<div style="font-size:13.5px;line-height:1.5;"><b>' + escapeHtml(f.rawCustomerName || 'Unknown file') + '</b>' +
+          (when ? ' <span style="color:var(--slate);">· ' + escapeHtml(when) + '</span>' : '') +
+          '<br>' + escapeHtml(reason) + '</div>' +
+        '<button class="btn small" onclick="dismissQBFailure(\'' + escapeAttr(f.importId) + '\')">Dismiss</button>' +
+      '</div>';
+    }).join('') +
+  '</div>';
+}
+async function dismissQBFailure(importId){
+  await run('adminDismissQBImport', importId);
+  await loadQBImportsTab();
 }
 // Import data arrives through the public watcher endpoint, so it is
 // escaped before it goes into the page -- a crafted "customer name" must
