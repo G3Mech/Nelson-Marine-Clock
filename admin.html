@@ -450,7 +450,7 @@
  *   never in this file, since the repo and the page are public.
  *
  * AUTO-REFRESH
- *   Data reloads every 30 seconds, whenever the window regains focus, and
+ *   Data reloads every 15 seconds (an "unchanged" check, so it's cheap), whenever the window regains focus, and
  *   on the Refresh button -- but automatic reloads are skipped while
  *   someone is typing in or has unsaved input in a form, so a refresh can
  *   never wipe a half-filled form. Saving anything clears that hold.
@@ -488,17 +488,42 @@ function storeKey_(k){ try { localStorage.setItem(KEY_STORAGE, k); } catch(e){} 
 function clearStoredKey_(){ try { localStorage.removeItem(KEY_STORAGE); } catch(e){} }
 let ADMIN_KEY = getStoredKey_();
 
+const READ_TIMEOUT_MS = 30000;
+function isReadOp_(op){ return /^(adminGet|checkKey)/.test(op); }
 async function callAdmin_(op, args, key){
   // text/plain (not application/json) keeps this a "simple" request, so
   // the browser doesn't send a CORS preflight Apps Script can't answer --
   // same reason the technician pages post this way.
-  const res = await fetch(WEBAPP_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action: 'admin', key: key, op: op, args: args })
-  });
-  if (!res.ok) throw new Error('Server returned ' + res.status);
-  return res.json();
+  // Reads get a timeout so one hung request can't stall every refresh
+  // behind it. Writes deliberately don't: a write cut off client-side may
+  // still have gone through on the server, and the page can't tell.
+  const ctrl = isReadOp_(op) && typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), READ_TIMEOUT_MS) : null;
+  try {
+    const res = await fetch(WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'admin', key: key, op: op, args: args }),
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    if (!res.ok) throw new Error('Server returned ' + res.status);
+    return await res.json();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+// Reads that fail on the network (timeout, dropped connection, a Google
+// error page) get one quick retry before the page reports Offline, so a
+// single blip doesn't flash the red status. Writes are never retried
+// automatically -- a retry could apply the same change twice.
+async function callAdminWithRetry_(op, args, key){
+  try {
+    return await callAdmin_(op, args, key);
+  } catch (err) {
+    if (!isReadOp_(op)) throw err;
+    await new Promise(r => setTimeout(r, 1500));
+    return callAdmin_(op, args, key);
+  }
 }
 
 // Drop-in replacement for the Apps Script version's run(): same name,
@@ -506,9 +531,12 @@ async function callAdmin_(op, args, key){
 // (including { error } objects, which the screens already check for).
 // Rejects only on a network failure or a passcode problem.
 function run(fnName, ...args){
-  return callAdmin_(fnName, args, ADMIN_KEY).then(body => {
+  return callAdminWithRetry_(fnName, args, ADMIN_KEY).then(body => {
     if (body && body.ok){
-      if (!/^(adminGet|checkKey)/.test(fnName)) formDirtySince = 0; // a save clears the auto-refresh hold
+      if (!isReadOp_(fnName)){
+        formDirtySince = 0;   // a save clears the auto-refresh hold
+        DATA_VERSION = '';    // and the next load fetches everything fresh
+      }
       return body.result;
     }
     if (body && (body.error === 'bad_key' || body.error === 'locked' || body.error === 'not_configured')){
@@ -611,8 +639,16 @@ async function loadBillingData(){
   renderFlaggedTasksList();
 }
 
+// DATA_VERSION is the server's data version this page last loaded (see
+// cachedData_ in Code.gs). Sending it back lets the server answer
+// "unchanged" in a few bytes when nothing has changed, and then nothing
+// here needs re-rendering. Returns true only when new data arrived.
+let DATA_VERSION = '';
 async function loadAll(){
-  DATA = await run('adminGetAllData');
+  const res = await run('adminGetAllData', DATA_VERSION);
+  if (res && res.unchanged) return false;
+  DATA = res;
+  DATA_VERSION = (res && res.version) || '';
   populateFilters();
   populateAssignCustomerSelect();
   populateAssignLocSelect();
@@ -634,6 +670,7 @@ async function loadAll(){
   if (document.activeElement === searchEl || suggestionsBox.classList.contains('show')){
     renderCustomerSuggestions();
   }
+  return true;
 }
 // Speeds up entry by suggesting task names that have actually been used
 // before, across every boat -- most jobs repeat common items (oil change,
@@ -2177,10 +2214,10 @@ async function refreshNow_(manual){
   refreshInFlight = true;
   if (manual) setConn_('syncing');
   try {
-    await loadAll();
+    const changed = await loadAll();
     const tab = activeTab_();
-    if (tab === 'billing') await loadBillingData();
-    else if (tab === 'qbimports') await loadQBImportsTab();
+    if (changed && tab === 'billing') await loadBillingData();
+    else if (changed && tab === 'qbimports') await loadQBImportsTab();
     lastUpdatedAt = Date.now();
     setConn_('online');
   } catch(e){
@@ -2211,7 +2248,7 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
   formDirtySince = 0;
   refreshNow_(true);
 });
-setInterval(() => refreshNow_(false), 30000);
+setInterval(() => refreshNow_(false), 15000);   // cheap now: unchanged polls return a few bytes
 setInterval(() => updateStamp_(), 5000);
 window.addEventListener('focus', () => { if (Date.now() - lastUpdatedAt > 10000) refreshNow_(false); });
 document.addEventListener('visibilitychange', () => {
