@@ -477,7 +477,7 @@ let DATA = { locations: [], tasks: [], employees: [], entries: [], customers: []
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbyPOyqiEvgv_qH8ivtO-MU44PO-txgXUDK_gip24RwoJiFt-IIPXc5jrOHyT0bttHRFEw/exec';
 // Stamped at ship time -- must match version.json's "build". See
 // checkForStaleBuild_ below (same mechanism as the technician pages).
-const BUILD_VERSION = '2026-10-11T05:09:09Z';
+const BUILD_VERSION = '2026-10-11T18:42:44Z';
 
 // ======================= passcode =======================
 // Kept in localStorage so it survives closing the browser. Every access is
@@ -649,7 +649,12 @@ let DATA_VERSION = '';
 async function loadAll(){
   const res = await run('adminGetAllData', DATA_VERSION);
   if (res && res.unchanged) return false;
+  // QuickBooks imports are fetched separately (loadQBImportsTab), so carry
+  // them over -- otherwise there's a gap after every refresh where the
+  // open Post panel can't find its import and closes itself.
+  const keepQB = DATA.qbPendingImports;
   DATA = res;
+  if (keepQB && !DATA.qbPendingImports) DATA.qbPendingImports = keepQB;
   DATA_VERSION = (res && res.version) || '';
   populateFilters();
   populateAssignCustomerSelect();
@@ -961,6 +966,31 @@ function onBoatChange(){
   }
 }
 function locDisplayLabel(id){ return id === '__yard__' ? 'Yard / Land Storage' : slipLabel(id); }
+// The one rule for the task a move needs, shared by Manual Work Order and
+// QuickBooks Imports so the two never word it differently:
+//   slip -> yard           "Haul and block up boat"
+//   yard -> slip           "Launch boat and move to Slip N"
+//   slip -> other slip     "Move from Slip A to Slip B"
+// Returns null when there's no move (same spot, or either end unknown).
+function moveLineFor_(from, to){
+  if (!from || !to || from === to) return null;
+  if (to === '__yard__') return 'Haul and block up boat';
+  if (from === '__yard__') return 'Launch boat and move to ' + slipLabel(to);
+  return 'Move from ' + slipLabel(from) + ' to ' + slipLabel(to);
+}
+// Which kind of move a line is, and whether an estimate already covers it.
+// QuickBooks wording varies ("HAUL & BLOCK", "LAUNCH BOAT", "MOVE TO
+// SLIP 14"), so this matches on the key word only. \bmov keeps "REMOVE
+// COVER" from counting as a move.
+function moveKind_(from, to){
+  if (!from || !to || from === to) return null;
+  return to === '__yard__' ? 'haul' : (from === '__yard__' ? 'launch' : 'move');
+}
+const MOVE_KIND_WORDS_ = { haul: /\bhaul/i, launch: /\blaunch/i, move: /\bmov(e|ed|ing)\b|\brelocat/i };
+function estimateHasMove_(lineItems, kind){
+  const re = MOVE_KIND_WORDS_[kind];
+  return !!re && (lineItems || []).some(li => re.test(li.name || ''));
+}
 // Picking a different slip/stand than where the boat actually is right now
 // means the boat needs to physically move -- add a task for that
 // automatically. It's shown as its own read-only line rather than typed
@@ -995,7 +1025,7 @@ function onSlipSelectionChange(){
 
   const fromLabel = locDisplayLabel(boatOriginalLocation);
   const toLabel = locDisplayLabel(newLoc);
-  autoInsertedMoveLine = newLoc === '__yard__' ? 'Haul and block up boat' : ('Move from ' + fromLabel + ' to ' + toLabel);
+  autoInsertedMoveLine = moveLineFor_(boatOriginalLocation, newLoc);
 
   notice.textContent = 'Moving boat from ' + fromLabel + ' to ' + toLabel + ' selected';
   notice.style.display = 'block';
@@ -1442,24 +1472,64 @@ function qbPostSetCustomer_(customerId){
   }
   qbPostSetBoat_(st.boatId);
 }
+// Where the boat goes is picked with a short three-way choice instead of
+// one long list of every slip:
+//   'stay'  leave it where it is now (existing boats only)
+//   'yard'  Yard / Land Storage
+//   'slip'  a slip, typed in by number (st.slipNum)
+// st.locId is always derived from those by qbPostResolveLoc_(), so the
+// rest of the panel (warnings, move line, posting) only ever reads locId.
 function qbPostSetBoat_(boatId){
   const st = qbPostState;
   st.boatId = boatId;
-  st.locId = !boatId ? '' : (boatId === '__new__' ? '__yard__' : qbCurrentLoc_(boatId));
+  st.locMode = !boatId ? '' : (boatId === '__new__' ? 'yard' : 'stay');
+  st.slipNum = '';
+  qbPostResolveLoc_();
+}
+function qbSlipByNum_(n){
+  return DATA.locations.find(l => slipNumOf(l) === n) || null;
+}
+function qbPostResolveLoc_(){
+  const st = qbPostState;
+  if (st.locMode === 'stay') st.locId = st.boatId && st.boatId !== '__new__' ? qbCurrentLoc_(st.boatId) : '';
+  else if (st.locMode === 'yard') st.locId = '__yard__';
+  else if (st.locMode === 'slip'){
+    const n = parseInt(String(st.slipNum).replace(/\D/g, ''), 10);
+    const loc = n ? qbSlipByNum_(n) : null;
+    st.locId = loc ? loc.slipId : '';
+  }
+  else st.locId = '';
+}
+function qbPostSetLocMode_(mode){
+  qbPostState.locMode = mode;
+  qbPostResolveLoc_();
+  renderQBPost();
+  // Picking "A slip" puts the cursor straight in the number box.
+  if (mode === 'slip'){ const el = document.getElementById('qbPostSlipNum'); if (el) el.focus(); }
+}
+function qbPostSetSlipNum_(val){
+  qbPostState.slipNum = val;
+  qbPostResolveLoc_();
+  renderQBPost();
+}
+// The move this post implies (from the boat's current spot to the chosen
+// one), and whether the estimate already has a line for it.
+function qbPostMove_(imp){
+  const st = qbPostState;
+  if (!st.boatId || st.boatId === '__new__' || !st.locId) return null;
+  const from = qbCurrentLoc_(st.boatId);
+  const line = moveLineFor_(from, st.locId);
+  if (!line) return null;
+  const kind = moveKind_(from, st.locId);
+  return { line: line, kind: kind, onEstimate: estimateHasMove_(imp.lineItems, kind) };
 }
 // The task list that will actually be posted: the estimate's tasks, plus
-// a move line when the boat is going somewhere other than where it is
-// now (same rule as Manual Work Order).
+// the move line (moveLineFor_) when the boat is changing spots -- unless
+// the estimate already has a haul / launch / move line of its own.
 function qbPostTasks_(imp){
-  const st = qbPostState;
   const tasks = (imp.lineItems || []).map(li => ({ name: li.name, billMode: li.billModeGuess === 'complete' ? 'complete' : 'timed', priority: 2 }));
-  if (st.boatId && st.boatId !== '__new__' && st.locId){
-    const from = qbCurrentLoc_(st.boatId);
-    if (from !== st.locId){
-      const line = st.locId === '__yard__' ? 'Haul and block up boat' : ('Move from ' + locDisplayLabel(from) + ' to ' + locDisplayLabel(st.locId));
-      tasks.unshift({ name: line, billMode: 'timed', priority: 2, auto: true });
-    }
-  }
+  const mv = qbPostMove_(imp);
+  if (mv && !mv.onEstimate) tasks.unshift({ name: mv.line, billMode: 'timed', priority: 2, auto: true });
   return tasks;
 }
 function qbPostWarnings_(){
@@ -1497,18 +1567,42 @@ function renderQBPost(){
       opt('__new__', '+ New boat', st.boatId === '__new__');
   }
 
+  // Slip or yard: three short choices; "A slip" reveals a number box.
   const cur = st.boatId && st.boatId !== '__new__' ? qbCurrentLoc_(st.boatId) : null;
-  const locSel = opt('', '— Select slip or yard —', !st.locId) +
-    opt('__yard__', 'Yard / Land Storage' + (cur === '__yard__' ? ' (where it is now)' : ''), st.locId === '__yard__') +
-    DATA.locations.slice().sort((a,b) => slipNumOf(a) - slipNumOf(b)).map(l => {
-      const d = describeLocation(l);
-      const label = slipLabel(l.slipId) + (l.slipId === cur ? ' (where it is now)' : (l.boatId ? ' — currently ' + d.customerName + (d.model ? ' / ' + d.model : '') : ' — empty'));
-      return opt(l.slipId, label, l.slipId === st.locId);
-    }).join('');
+  let locSel;
+  if (!st.boatId) locSel = opt('', '— Pick the boat first —', true);
+  else {
+    locSel = (cur ? opt('stay', cur === '__yard__' ? 'Leave it in the yard' : 'Leave it in ' + slipLabel(cur), st.locMode === 'stay') : '') +
+      (cur !== '__yard__' ? opt('yard', 'Yard / Land Storage', st.locMode === 'yard') : '') +
+      opt('slip', cur && cur !== '__yard__' ? 'A different slip…' : 'A slip…', st.locMode === 'slip');
+  }
+  let slipBox = '';
+  if (st.locMode === 'slip'){
+    const n = parseInt(String(st.slipNum).replace(/\D/g, ''), 10);
+    const loc = n ? qbSlipByNum_(n) : null;
+    let hint = '';
+    if (!String(st.slipNum).trim()) hint = 'Type the slip number.';
+    else if (!loc) hint = 'There is no slip ' + escapeHtml(st.slipNum) + '.';
+    else if (loc.slipId === cur) hint = 'That is where it is now.';
+    else if (loc.boatId){ const d = describeLocation(loc); hint = slipLabel(loc.slipId) + ' currently has ' + escapeHtml(d.customerName) + (d.model ? ' / ' + escapeHtml(d.model) : '') + '.'; }
+    else hint = slipLabel(loc.slipId) + ' is empty.';
+    const empties = emptySlipsSorted().map(slipNumOf);
+    slipBox = '<div style="display:flex;align-items:center;gap:10px;margin-top:8px;">' +
+        '<input type="text" inputmode="numeric" id="qbPostSlipNum" placeholder="Slip #" style="max-width:110px;" value="' + escapeAttr(st.slipNum) + '" oninput="qbPostSetSlipNum_(this.value)">' +
+        '<span style="font-size:13px;font-weight:700;">' + hint + '</span>' +
+      '</div>' +
+      '<p class="subtext" style="margin:6px 0 0;">Empty slips: ' + (empties.length ? empties.join(', ') : 'none') + '</p>';
+  }
 
   const tasks = qbPostTasks_(imp);
+  const mv = qbPostMove_(imp);
+  const MOVE_KIND_NAMES = { haul: 'haul-out', launch: 'launch', move: 'move' };
   const warns = qbPostWarnings_();
   const wo = imp.qbNum ? ('WO #' + imp.qbNum) : '';
+
+  // Re-rendering replaces the inputs, so put the cursor back in the slip
+  // number box if that's where someone was typing.
+  const typingSlip = document.activeElement && document.activeElement.id === 'qbPostSlipNum';
 
   document.getElementById('qbImportDetail').innerHTML =
     '<div class="billing-detail">' +
@@ -1523,16 +1617,22 @@ function renderQBPost(){
           '<input type="text" id="qbPostBoatName" placeholder="Boat name (optional)" value="' + escapeAttr(st.newBoatName) + '" oninput="qbPostState.newBoatName=this.value">' +
           '<input type="text" id="qbPostBoatLoa" placeholder="LOA (optional)" value="' + escapeAttr(st.newBoatLoa) + '" oninput="qbPostState.newBoatLoa=this.value">' +
         '</div>' : '') +
-      '<label>Slip or yard</label><select id="qbPostLoc" onchange="qbPostState.locId=this.value; renderQBPost()">' + locSel + '</select>' +
+      '<label>Slip or yard</label><select id="qbPostLoc" onchange="qbPostSetLocMode_(this.value)"' + (st.boatId ? '' : ' disabled') + '>' + locSel + '</select>' +
+      slipBox +
       '<div class="review-box">' +
         warns.map(w => '<div class="warn">' + escapeHtml(w) + '</div>').join('') +
         '<p><b>' + escapeHtml(wo || 'No work order #') + '</b> — ' + tasks.length + ' task(s):</p>' +
+        (mv && mv.onEstimate ? '<p style="color:var(--slate);">The estimate already has a ' + MOVE_KIND_NAMES[mv.kind] + ' line, so no extra one was added.</p>' : '') +
         '<ul>' + tasks.map(t => '<li>' + escapeHtml(t.name) + ' <span style="color:var(--slate);">— ' + (t.billMode === 'timed' ? 'Timed' : 'Completion') + (t.auto ? ', added for the move' : '') + '</span></li>').join('') + '</ul>' +
         '<button class="btn primary big" id="qbPostBtn" onclick="postQBImport()"' + (st.posting ? ' disabled' : '') + '>' + (st.posting ? 'Posting…' : 'Post Work Order') + '</button>' +
         '<button class="btn" style="width:100%;margin-top:8px;" onclick="previewQBImport(\'' + escapeAttr(st.importId) + '\')">Cancel</button>' +
         '<p style="text-align:center;margin-top:10px;"><a href="#" onclick="useQBImport(\'' + escapeAttr(st.importId) + '\'); return false;">Need priorities or other changes? Open in Manual Work Order</a></p>' +
       '</div>' +
     '</div>';
+  if (typingSlip){
+    const el = document.getElementById('qbPostSlipNum');
+    if (el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  }
 }
 async function postQBImport(){
   const st = qbPostState;
@@ -1542,7 +1642,7 @@ async function postQBImport(){
   if (st.customerId === '__new__' && !st.newCustName.trim()){ alert('Enter the new customer\'s name.'); return; }
   if (!st.boatId){ alert('Pick the boat.'); return; }
   if (st.boatId === '__new__' && !st.newBoatModel.trim()){ alert('Enter the new boat\'s model.'); return; }
-  if (!st.locId){ alert('Pick a slip or the yard.'); return; }
+  if (!st.locId){ alert(st.locMode === 'slip' ? 'Enter a slip number that exists.' : 'Pick a slip or the yard.'); return; }
   const tasks = qbPostTasks_(imp).map(t => ({ name: t.name, billMode: t.billMode, priority: t.priority }));
   if (tasks.length === 0){ alert('This estimate has no tasks. Use Edit to add some.'); return; }
   const warns = qbPostWarnings_();
@@ -2509,7 +2609,11 @@ async function refreshNow_(manual){
     const changed = await loadAll();
     const tab = activeTab_();
     if (changed && tab === 'billing') await loadBillingData();
-    else if (changed && tab === 'qbimports') await loadQBImportsTab();
+    else if (changed && tab === 'qbimports'){
+      await loadQBImportsTab();
+      // Redraw an open Post panel so slip occupants and warnings match the new data.
+      if (qbPostState) renderQBPost();
+    }
     lastUpdatedAt = Date.now();
     setConn_('online');
   } catch(e){
