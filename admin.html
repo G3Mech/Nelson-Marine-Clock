@@ -228,7 +228,7 @@
 <!-- ASSIGN WORK ORDER -->
 <div class="panel show" id="panel-assign">
   <h2>Assign a Work Order</h2>
-  <p class="subtext">Pick the customer and boat (or add new ones on the spot), pick the slip, then paste the task list — one line per task. Review before it saves.</p>
+  <p class="subtext">Find the customer, pick the boat and slip, enter the work order number, add the tasks, then press Review &amp; Save.</p>
 
   <label>Customer</label>
   <div style="position:relative;">
@@ -267,7 +267,7 @@
   <div class="move-notice" id="moveNotice" style="display:none;"></div>
   <div class="auto-task-badge" id="autoTaskBadge" style="display:none;"></div>
   <label>Tasks</label>
-  <p class="subtext" style="margin-top:-8px;">Type a task, hit Enter for the next one. Pick Timed or Completion per task — it defaults to whatever you picked last.</p>
+  <p class="subtext" style="margin-top:-8px;">Press Enter after each task to add another.</p>
   <div id="taskBuilder"></div>
   <datalist id="taskNameSuggestions"></datalist>
 
@@ -278,7 +278,7 @@
 <!-- QUICKBOOKS IMPORTS -->
 <div class="panel" id="panel-qbimports">
   <h2>QuickBooks Imports</h2>
-  <p class="subtext">Estimates picked up automatically from QuickBooks by the watcher script on the office PC, waiting to be turned into a real work order. Nothing here is live until you pick one and confirm it — QuickBooks has no idea which boat a job is for, and its customer names don't always match yours exactly, so every import still goes through the normal Assign Work Order review, just pre-filled.</p>
+  <p class="subtext">Click an estimate, then press "Use This" to start a work order from it. Nothing is saved until you press Review &amp; Save.</p>
   <div id="qbImportDetail"></div>
   <div id="qbImportsList" class="loading">Loading…</div>
 </div>
@@ -286,13 +286,13 @@
 <!-- BILLING -->
 <div class="panel" id="panel-billing">
   <h2>Billing</h2>
-  <p class="subtext">Everything needed to fill out a QuickBooks bill for a finished job — customer info, the task breakdown, and total hours. Search below, then pick a job to see the full detail.</p>
+  <p class="subtext">Search for a finished job, then click it to see the hours, tasks, and parts to bill.</p>
   <input type="text" id="billingSearch" placeholder="Search by customer, boat, or work order…" oninput="renderBillingList()">
   <div id="billingDetail"></div>
   <div id="billingList" class="loading">Loading…</div>
 
   <div class="missing-wo-section">
-    <p class="subtext">Tasks can get finished before a work order ever existed for that boat — an ad hoc task added from the phone before the office set one up, for example. Those wait here instead of vanishing; once a work order is created for that boat, they're automatically added to its bill.</p>
+    <p class="subtext">Finished work on boats with no work order yet. Assign a work order to the boat and the work is added to its bill automatically.</p>
     <div id="missingWoBox" class="missing-wo-box" style="display:none;">
       <div class="missing-wo-title">Missing Work Orders</div>
       <div id="missingWoList"></div>
@@ -323,7 +323,7 @@
 <!-- PHOTOS -->
 <div class="panel" id="panel-photos">
   <h2>Photos</h2>
-  <p class="subtext">Every uploaded photo, grouped by the day it was taken. Each one shows which job it belongs to.</p>
+  <p class="subtext">Click a photo to see it full size.</p>
   <div style="display:flex;gap:10px;">
     <input type="text" id="photosSearch" placeholder="Search by customer, boat, or work order…" oninput="renderPhotosTab()" style="flex:1;">
     <select id="photosGroupBy" onchange="renderPhotosTab()" style="width:auto;">
@@ -337,11 +337,11 @@
 <!-- SLIP CHART -->
 <div class="panel" id="panel-chart">
   <h2>Slip Chart</h2>
-  <p class="subtext">Drag a boat onto an empty slip to move it there, or click a boat and choose where it's going. Slips always exist — an unoccupied one just shows empty.</p>
+  <p class="subtext">Drag a boat to an empty slip to move it, or click the boat and choose where it goes.</p>
   <div id="chartWrap" class="loading">Loading…</div>
 
   <h2 style="margin-top:26px;">Yard / Land Storage</h2>
-  <p class="subtext">There's always room on land — drag a boat here (or click it and choose "Send to yard") and a spot for it is created automatically.</p>
+  <p class="subtext">Drag a boat here, or click it and choose "Send to yard."</p>
   <div id="yardDropZone" class="yard-dropzone" ondragover="onSlipDragOver(event)" ondragleave="onSlipDragLeave(event)" ondrop="onYardDrop(event)">
     Drop a boat here to send it to land storage
   </div>
@@ -350,13 +350,13 @@
 
   <details class="manage-box">
     <summary>Manage slips</summary>
-    <p class="subtext">If you already know how many slips there are, generate them all at once. IDs come out as slip1, slip2, etc. Slips are permanent — there's no delete option here on purpose.</p>
+    <p class="subtext">Enter the total number of slips to create them all at once. Existing slips stay as they are. Slips can't be deleted.</p>
     <div class="form-grid">
       <div><label>Total number of slips</label><input type="text" id="slipCount" placeholder="e.g. 67" value="67"></div>
     </div>
     <button class="btn primary" onclick="generateSlips()">Generate Slips 1–N</button>
     <hr class="divider">
-    <p class="subtext">Or add one at a time (e.g. a newly built slip):</p>
+    <p class="subtext">Add a single slip:</p>
     <div class="form-grid">
       <div><label>Slip number</label><input type="text" id="newSlipNum" placeholder="e.g. 68"></div>
     </div>
@@ -367,14 +367,14 @@
 <!-- BOATS & SLIPS -->
 <div class="panel" id="panel-boats">
   <h2>Active Work Orders</h2>
-  <p class="subtext">Every boat with an active work order, wherever it's sitting. Spot-fix a task here. To swap in a whole new boat and task list, use "Assign Work Order" instead. To change WHERE a boat is, use the Slip Chart.</p>
+  <p class="subtext">Every boat with an open work order. Fix tasks here. To move a boat, use the Slip Chart.</p>
   <div id="boatsWrap" class="loading">Loading…</div>
 </div>
 
 <!-- CUSTOMERS -->
 <div class="panel" id="panel-customers">
   <h2>Customers</h2>
-  <p class="subtext">Each customer can have more than one boat on file — add as many as they own underneath their entry.</p>
+  <p class="subtext">Add a new customer below. To add a boat, press "+ Add Boat" under the customer's name.</p>
   <h2>Add a New Customer</h2>
   <div class="form-grid">
     <input type="text" id="custName" placeholder="Customer name">
@@ -991,7 +991,7 @@ function reviewAssign(){
   if (boatSel !== '__new__'){
     const unfinished = DATA.tasks.filter(t => t.boatId === boatSel && t.status !== 'done');
     if (unfinished.length > 0){
-      warnHtml += '<div class="warn">This boat still has ' + unfinished.length + ' unfinished task(s) from before. Saving will archive them (under their old work order, in Completed Tasks) and replace the active list with what\'s below.</div>';
+      warnHtml += '<div class="warn">This boat has ' + unfinished.length + ' unfinished task(s) from before. Saving moves them to Completed Tasks and replaces them with the list below.</div>';
     }
   }
   if (toYard){
@@ -1337,7 +1337,7 @@ function useQBImport(importId){
   renderTaskDrafts();
 
   document.getElementById('qbImportDetail').innerHTML = '';
-  alert('Pulled in from QuickBooks Estimate ' + (imp.qbNum || '') + ' — nothing is saved yet. Pick the boat, double-check the customer match, and adjust billing per task before hitting Review & Save.');
+  alert('Estimate ' + (imp.qbNum || '') + ' loaded. Pick the boat, check the customer, then press Review & Save. Nothing is saved yet.');
 }
 async function dismissQBImport(importId){
   if (!confirm('Dismiss this import? It will stop showing up here, but nothing in QuickBooks is affected.')) return;
